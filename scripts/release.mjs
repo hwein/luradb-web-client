@@ -150,8 +150,8 @@ const tag = `v${version}`
 if (git('tag', '-l', tag)) die(`tag ${tag} already exists`)
 
 if (dryRun) {
-  console.log(`[dry-run] would finalize CHANGELOG → [${version}], bump package.json + Cargo.toml,`)
-  console.log(`[dry-run] merge next → main, tag ${tag}, and push --atomic origin main next ${tag}`)
+  console.log(`[dry-run] would finalize CHANGELOG → [${version}], bump to ${version}, merge next → main,`)
+  console.log(`[dry-run] tag ${tag}, set next to ${bump(version, 'patch')}-dev, push --atomic origin main next ${tag}`)
   process.exit(0)
 }
 
@@ -173,6 +173,13 @@ git('tag', '-a', tag, '-m', `LuraDB Web Client ${tag}`)
 step('next: merge --ff-only main')
 git('checkout', 'next')
 git('merge', '--ff-only', 'main')
+
+// Dev-Zyklus: next auf X.Y.(Z+1)-dev, damit Dev-Builds nie eine Release-Nummer melden.
+const nextDev = `${bump(version, 'patch')}-dev`
+step(`next: begin v${nextDev} cycle`)
+setVersion(nextDev)
+git('add', 'package.json', 'src-tauri/Cargo.toml')
+git('commit', '-m', `chore(release): begin v${nextDev} cycle`)
 
 step(`push --atomic origin main next ${tag}`)
 git('push', '--atomic', 'origin', 'main', 'next', tag)
