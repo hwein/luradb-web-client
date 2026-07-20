@@ -1,0 +1,101 @@
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+
+:root {
+  --font-sans: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* Engine-Hues + Status: themen-unabhängig (Runtime überschreibt nur Flächen-Tokens) */
+  --eng-rel-label: oklch(0.72 0.12 230);
+  --eng-rel-chip-bg: oklch(0.3 0.07 230);
+  --eng-rel-chip-tx: oklch(0.82 0.12 230);
+  --eng-json-label: oklch(0.78 0.13 75);
+  --eng-json-chip-bg: oklch(0.32 0.08 75);
+  --eng-json-chip-tx: oklch(0.85 0.13 75);
+  --eng-kv-label: oklch(0.75 0.12 150);
+  --eng-kv-chip-bg: oklch(0.3 0.07 150);
+  --eng-kv-chip-tx: oklch(0.83 0.12 150);
+  /* Kartenränder (Styleguide "ENGINE HUES" Spezimen): dunkler/gesättigter als die Label-Töne. */
+  --eng-rel-border: oklch(0.6 0.12 230);
+  --eng-json-border: oklch(0.65 0.13 75);
+  --eng-kv-border: oklch(0.6 0.12 150);
+  --ok: oklch(0.75 0.15 150);
+  --err: oklch(0.7 0.16 25);
+  --warn: oklch(0.75 0.13 75);
+
+  --rad-chip: 4px;
+  --rad-input: 7px;
+  --rad: 8px;
+  --rad-card: 10px;
+  --rad-pill: 999px;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0e1014;
+  --panel: #14171d;
+  --panel2: #1a1e26;
+  --edbg: #101319;
+  --bord: #262b34;
+  --tx: #e4e8ee;
+  --mut: #8b93a1;
+  --acc: #7aa7e0;
+  --accT: #0e1014;
+
+  /* Logo-Layer (Logo-Guide 04): fixe Markenfarben, je Theme dunkle/helle Werte */
+  --logo-rel: oklch(0.6 0.12 230);
+  --logo-json: oklch(0.65 0.13 75);
+  --logo-kv: oklch(0.6 0.12 150);
+}
+
+:root[data-theme='light'] {
+  --bg: #f4f4f1;
+  --panel: #ffffff;
+  --panel2: #ebebe6;
+  --edbg: #fbfbf9;
+  --bord: #d8d8d0;
+  --tx: #22252a;
+  --mut: #70757e;
+  --acc: oklch(0.52 0.13 230);
+  --accT: #ffffff;
+
+  --logo-rel: oklch(0.5 0.13 230);
+  --logo-json: oklch(0.55 0.13 75);
+  --logo-kv: oklch(0.5 0.13 150);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--tx);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+/* Placeholder auf Token statt Browser-Grau — deckungsgleich mit .cm-placeholder (CodeEditor); opacity gegen Firefox-Dimmung. */
+::placeholder {
+  color: var(--mut);
+  opacity: 1;
+}
+
+.mono-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.mono-data {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.mono-path {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+}

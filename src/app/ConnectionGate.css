@@ -1,0 +1,202 @@
+.connection-gate {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  overflow-y: auto;
+  background: var(--bg);
+  padding: 24px;
+}
+
+/* margin:auto statt align/justify-center: zentriert und bleibt bei Overflow scrollbar */
+.connection-gate__stack {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+}
+
+.connection-gate__panel {
+  width: clamp(320px, 90vw, 420px);
+  max-height: calc(100vh - 240px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--panel);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-card);
+  padding: 22px;
+}
+
+/* Lockup nach Logo-Guide 02: Mark + Wortmarke + Produkt-Chip, Proportionen ~40:32 hochskaliert */
+.connection-gate__brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px 26px;
+}
+
+.connection-gate__wordmark {
+  margin: 0;
+  font-size: 64px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: var(--tx);
+}
+
+.connection-gate__wordmark-db {
+  color: var(--acc);
+}
+
+.connection-gate__product {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: var(--mut);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  padding: 5px 12px;
+}
+
+.connection-gate__banner {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--rad-input);
+  background: var(--panel2);
+  border: 1px solid var(--bord);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.connection-gate__banner--error {
+  color: var(--err);
+  border-color: var(--err);
+}
+
+.connection-gate__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.connection-gate__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--panel2);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad);
+}
+
+.connection-gate__row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.connection-gate__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx);
+}
+
+.connection-gate__row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.connection-gate__row-actions button {
+  background: transparent;
+  border: 1px solid var(--bord);
+  color: var(--tx);
+  border-radius: var(--rad-input);
+  padding: 4px 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.connection-gate__new {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--acc);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.connection-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.connection-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.connection-form__input {
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  padding: 7px 9px;
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.connection-form__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mut);
+  font-size: 12px;
+}
+
+.connection-form__hint {
+  margin: 0;
+  color: var(--mut);
+}
+
+.connection-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.connection-form__actions button {
+  border-radius: var(--rad-input);
+  padding: 7px 12px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.connection-form__submit {
+  background: var(--acc);
+  color: var(--accT);
+  border: none;
+  font-weight: 600;
+}
+
+.connection-form__actions button[type='button'] {
+  background: transparent;
+  border: 1px solid var(--bord);
+  color: var(--tx);
+}

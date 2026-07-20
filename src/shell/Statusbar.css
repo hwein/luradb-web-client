@@ -1,0 +1,53 @@
+.statusbar {
+  height: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 14px;
+  background: var(--panel);
+  border-top: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+}
+
+.statusbar__connection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.statusbar__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.statusbar__dot--ok {
+  background: var(--ok);
+}
+
+.statusbar__dot--err {
+  background: var(--err);
+}
+
+/* Kein eigenes Warn-Token in tokens.css — nutzt den amber-Farbton des JSON-Engine-Hues (Design-Amber). */
+.statusbar__warning {
+  color: var(--eng-json-label);
+}
+
+.statusbar__server {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

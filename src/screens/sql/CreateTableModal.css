@@ -1,0 +1,283 @@
+/* --- Create-Table-Assistent (spec sql/002) — erstes Modal der App --- */
+
+/* Author-display würde sonst das UA-`display:none` geschlossener Dialoge überstimmen. */
+.ctm:not([open]) {
+  display: none;
+}
+
+.ctm {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 92vw);
+  max-height: min(720px, 88vh);
+  padding: 0;
+  background: var(--panel);
+  color: var(--tx);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-card);
+  font-family: var(--font-sans);
+}
+
+.ctm::backdrop {
+  background: color-mix(in oklch, var(--bg) 65%, transparent);
+}
+
+.ctm__head {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.ctm__title {
+  color: var(--tx);
+}
+
+.ctm__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ctm__field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ctm__label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--mut);
+}
+
+.ctm__name {
+  box-sizing: border-box;
+  width: 100%;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  padding: 7px 10px;
+  outline: none;
+}
+
+.ctm__error {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--err);
+}
+
+.ctm__columns {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ctm__row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--bord);
+  border-radius: var(--rad);
+  background: var(--panel2);
+}
+
+.ctm__row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ctm__row-name {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 9px;
+  outline: none;
+}
+
+.ctm__row-type {
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 5px 6px;
+}
+
+.ctm__row-pk {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+  white-space: nowrap;
+}
+
+.ctm__row-remove {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--mut);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.ctm__row-remove:hover:not(:disabled) {
+  color: var(--err);
+}
+
+.ctm__row-remove:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ctm__row-flags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.ctm__flag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+  white-space: nowrap;
+}
+
+.ctm__flag--implicit {
+  opacity: 0.75;
+}
+
+.ctm__default {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ctm__default-input {
+  width: 140px;
+  box-sizing: border-box;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 7px;
+}
+
+.ctm__row-error {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--err);
+}
+
+.ctm__hint {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--eng-json-label);
+}
+
+.ctm__hint-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  text-decoration: underline;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.ctm__add-column {
+  align-self: flex-start;
+  padding: 6px 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--acc);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ctm__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ctm__preview-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--mut);
+}
+
+.ctm__preview-editor {
+  min-height: 120px;
+  max-height: 220px;
+  overflow: auto;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  padding: 10px 12px;
+}
+
+.ctm__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.ctm__cancel {
+  background: transparent;
+  border: 1px solid var(--bord);
+  color: var(--tx);
+  border-radius: var(--rad-input);
+  padding: 7px 14px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ctm__insert {
+  background: var(--acc);
+  color: var(--accT);
+  border: none;
+  border-radius: var(--rad-input);
+  padding: 7px 16px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ctm__insert:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -1,0 +1,7 @@
+.code-editor .cm-editor {
+  max-height: 220px;
+}
+
+.code-editor .cm-scroller {
+  overflow: auto;
+}

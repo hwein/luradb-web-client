@@ -1,0 +1,533 @@
+.admin {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+/* --- Sektions-Subnav (nur ab 2 registrierten Sektionen, heute unsichtbar) ------ */
+
+.admin__subnav {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--bord);
+  padding: 6px 8px 0;
+}
+
+.admin__subnav-tab {
+  padding: 7px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--mut);
+  text-decoration: none;
+}
+
+.admin__subnav-tab--active {
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-bottom: none;
+  border-radius: var(--rad) var(--rad) 0 0;
+  color: var(--tx);
+}
+
+/* --- Index-Sektion: eigener Scroll-Container, Grid 360px/minmax(520px,1fr) (Prototyp Z. 190f) --- */
+
+.admin-index {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.admin-index--gate {
+  padding: 18px;
+}
+
+.admin-index__gate-text {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--mut);
+}
+
+.admin-index__grid {
+  padding: 18px;
+  display: grid;
+  grid-template-columns: 360px minmax(520px, 1fr);
+  gap: 14px;
+  align-content: start;
+  min-width: 920px;
+}
+
+.admin-index__column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-index__column--right {
+  min-width: 0;
+}
+
+/* --- Karten-Grundgerüst, geteilt von DOMAINS/AUTH (Prototyp Z. 195/206) ------- */
+
+.admin-card {
+  background: var(--panel);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-card);
+}
+
+.admin-card__head {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--mut);
+  border-bottom: 1px solid var(--bord);
+}
+
+.admin-card__head-note {
+  margin-left: auto;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.admin-card__footnote {
+  padding: 9px 16px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--mut);
+}
+
+.admin-card__footnote--tight {
+  padding-top: 0;
+  padding-bottom: 12px;
+}
+
+/* --- DOMAINS-Zeilen (Prototyp Z. 197–199) -------------------------------- */
+
+.admin-domains__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.admin-domains__row--muted {
+  color: var(--mut);
+}
+
+.admin-domains__dots {
+  display: flex;
+  gap: 3px;
+  margin-left: 4px;
+}
+
+.admin-domains__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+}
+
+.admin-domains__dot--rel {
+  background: var(--eng-rel-border);
+}
+
+.admin-domains__dot--json {
+  background: var(--eng-json-border);
+}
+
+.admin-domains__dot--kv {
+  background: var(--eng-kv-border);
+}
+
+.admin-domains__spacer {
+  flex: 1;
+}
+
+.admin-domains__count {
+  color: var(--mut);
+  font-size: 11px;
+}
+
+.admin-domains__trash {
+  padding: 0 0 0 8px;
+  background: none;
+  border: none;
+  color: var(--mut);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.admin-domains__trash:hover {
+  color: var(--tx);
+}
+
+.admin-domains__confirm {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--tx);
+}
+
+.admin-domains__confirm-action {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--err);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-domains__confirm-cancel {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--mut);
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-domains__error {
+  margin-top: 4px;
+  color: var(--err);
+  font-size: 11px;
+}
+
+/* --- Create-Zeile (Prototyp Z. 200–202) --- */
+
+.admin-domains__create {
+  padding: 11px 16px;
+}
+
+.admin-domains__create-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-domains__create-input {
+  flex: 1;
+  min-width: 160px;
+  box-sizing: border-box;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.admin-domains__create-submit {
+  background: var(--acc);
+  color: var(--accT);
+  border: none;
+  border-radius: var(--rad-input);
+  padding: 6px 12px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.admin-domains__create-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- AUTH-Zeilen (Prototyp Z. 208–211) ------------------------------------ */
+
+.admin-auth__row {
+  display: flex;
+  align-items: center;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.admin-auth__row-label {
+  color: var(--mut);
+}
+
+.admin-auth__row-value {
+  margin-left: auto;
+}
+
+.admin-auth__row-value--ok {
+  color: var(--ok);
+}
+
+.admin-auth__row-value--err {
+  color: var(--err);
+}
+
+.admin-auth__row-value--muted {
+  color: var(--mut);
+}
+
+.admin-auth__warning {
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--err);
+}
+
+/* --- USERS & PER-DOMAIN PERMISSIONS matrix (Prototyp Z. 215–222) --------- */
+
+.admin-users__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.admin-users__row--head {
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 10.5px;
+  color: var(--mut);
+}
+
+.admin-users__col-user {
+  flex: 1.4 1 120px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-users__col-domain {
+  flex: 1 1 56px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.admin-users__col-actions {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.admin-users__avatar {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--panel2);
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+}
+
+.admin-users__badge-admin {
+  font-size: 10px;
+  color: var(--accT);
+  background: var(--acc);
+  border-radius: var(--rad-chip);
+  padding: 1px 5px;
+}
+
+.admin-users__cell--all {
+  color: var(--mut);
+}
+
+.admin-users__cell {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--mut);
+  cursor: pointer;
+}
+
+.admin-users__cell--read {
+  font-size: 10px;
+  color: var(--mut);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-chip);
+  padding: 2px 7px;
+  align-self: flex-start;
+}
+
+.admin-users__cell--write {
+  font-size: 10px;
+  color: var(--eng-kv-chip-tx);
+  background: var(--eng-kv-chip-bg);
+  border-radius: var(--rad-chip);
+  padding: 2px 7px;
+  align-self: flex-start;
+}
+
+.admin-users__cell:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.admin-users__cell-error {
+  color: var(--err);
+  font-size: 10px;
+}
+
+.admin-users__action {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--acc);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.admin-users__action-trash {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--mut);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.admin-users__action-trash:hover {
+  color: var(--tx);
+}
+
+.admin-users__confirm {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--tx);
+}
+
+.admin-users__confirm-action {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--err);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-users__confirm-cancel {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--mut);
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-users__error {
+  margin-top: 4px;
+  color: var(--err);
+  font-size: 11px;
+}
+
+.admin-users__reveal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--bord);
+  background: var(--edbg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.admin-users__reveal-key {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--acc);
+}
+
+.admin-users__reveal-copy {
+  background: var(--panel2);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.admin-users__reveal-note {
+  color: var(--warn);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* --- Create-User-Zeile (Prototyp Z. 223, spec admin/002 §4) -------------- */
+
+.admin-users__create {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+}
+
+.admin-users__create-input {
+  flex: 1;
+  min-width: 160px;
+  box-sizing: border-box;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.admin-users__create-submit {
+  background: var(--acc);
+  color: var(--accT);
+  border: none;
+  border-radius: var(--rad-input);
+  padding: 6px 12px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.admin-users__create-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

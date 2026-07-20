@@ -1,0 +1,132 @@
+/* --- About-Dialog (spec shell/005) --- */
+
+/* Author-display würde sonst das UA-`display:none` geschlossener Dialoge überstimmen. */
+.about:not([open]) {
+  display: none;
+}
+
+.about {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 92vw);
+  max-height: min(560px, 88vh);
+  padding: 0;
+  background: var(--panel);
+  color: var(--tx);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-card);
+  font-family: var(--font-sans);
+}
+
+.about::backdrop {
+  background: color-mix(in oklch, var(--bg) 65%, transparent);
+}
+
+.about__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  border-bottom: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.about__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.about__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tx);
+}
+
+.about__version {
+  color: var(--mut);
+}
+
+.about__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.about__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.about__label {
+  color: var(--mut);
+}
+
+.about__text {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--tx);
+}
+
+.about__text--mut {
+  color: var(--mut);
+}
+
+/* Der SPDX-Code bricht sonst mitten im Identifier um. */
+.about__nowrap {
+  white-space: nowrap;
+}
+
+.about__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.about__group-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--mut);
+}
+
+.about__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--tx);
+}
+
+/* Trailing space in `content` kollabiert am Flex-Item-Ende — Abstand kommt aus column-gap. */
+.about__list li:not(:last-child)::after {
+  content: ',';
+  color: var(--mut);
+}
+
+.about__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 18px;
+  border-top: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.about__close {
+  background: transparent;
+  border: 1px solid var(--bord);
+  color: var(--tx);
+  border-radius: var(--rad-input);
+  padding: 7px 14px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}

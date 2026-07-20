@@ -1,0 +1,270 @@
+.rest {
+  height: 100%;
+  min-width: 840px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+/* --- Builder (linke Spalte) ------------------------------------------- */
+
+.rest__builder {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--bord);
+}
+
+.rest__builder-header {
+  display: flex;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--bord);
+}
+
+.rest__method {
+  padding: 6px 10px;
+  background: var(--panel2);
+  border-radius: var(--rad-input);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+  align-self: center;
+}
+
+.rest__method--acc {
+  color: var(--acc);
+}
+
+.rest__method--json {
+  color: var(--eng-json-label);
+}
+
+.rest__method--err {
+  color: var(--err);
+}
+
+.rest__url {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel2);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.rest__send {
+  background: var(--acc);
+  color: var(--accT);
+  border: none;
+  border-radius: var(--rad-input);
+  padding: 6px 14px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rest__send--armed {
+  background: var(--err);
+}
+
+.rest__send:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.rest__params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--bord);
+}
+
+.rest__param {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rest__param-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+}
+
+.rest__param-input {
+  width: 150px;
+  background: var(--panel2);
+  border: 1px solid var(--bord);
+  border-radius: 6px;
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 4px 8px;
+  outline: none;
+}
+
+.rest__body {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--bord);
+}
+
+.rest__section-label {
+  color: var(--mut);
+}
+
+.rest__body .rest__section-label {
+  margin-bottom: 8px;
+}
+
+.rest__endpoints-header {
+  padding: 10px 16px 6px;
+}
+
+.rest__endpoints {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 8px;
+}
+
+.rest__group-label {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mut);
+  padding: 10px 10px 4px;
+}
+
+.rest__endpoint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.rest__endpoint:hover {
+  background: var(--panel2);
+}
+
+.rest__endpoint--active {
+  background: var(--panel2);
+}
+
+.rest__endpoint-method {
+  width: 44px;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.rest__endpoint-path {
+  white-space: nowrap;
+}
+
+.rest__swagger {
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--acc);
+  text-decoration: none;
+}
+
+.rest__swagger:hover {
+  text-decoration: underline;
+}
+
+/* --- Response (rechte Spalte) ----------------------------------------- */
+
+.rest__response {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--edbg);
+}
+
+.rest__status-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 20px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.rest__reason--ok {
+  color: var(--ok);
+}
+
+.rest__reason--err {
+  color: var(--err);
+}
+
+.rest__reason--neutral {
+  color: var(--mut);
+}
+
+.rest__meta {
+  color: var(--mut);
+}
+
+.rest__pending {
+  color: var(--mut);
+}
+
+.rest__copy-curl {
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.rest__copy-curl:hover {
+  color: var(--tx);
+}
+
+.rest__response-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--tx);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rest__response-empty {
+  flex: 1;
+  padding: 16px;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}

@@ -1,0 +1,482 @@
+.sql {
+  height: 100%;
+  display: flex;
+  min-height: 0;
+}
+
+.sql__editor-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 420px;
+  min-height: 0;
+}
+
+/* --- Tab strip (Prototyp Z. 63–66) ----------------------------------- */
+
+.sql-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 6px 8px 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.sql-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--rad) var(--rad) 0 0;
+}
+
+.sql-tab--active {
+  background: var(--edbg);
+  border-color: var(--bord);
+  color: var(--tx);
+}
+
+.sql-tab__label {
+  white-space: nowrap;
+}
+
+.sql-tab__close {
+  color: var(--mut);
+  cursor: pointer;
+}
+
+.sql-tab__close:hover {
+  color: var(--tx);
+}
+
+.sql-tab__rename {
+  width: 150px;
+  background: var(--panel2);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-chip);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 1px 5px;
+  outline: none;
+}
+
+.sql-tab__add {
+  padding: 7px 12px;
+  background: none;
+  border: none;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sql-tab__add:hover {
+  color: var(--tx);
+}
+
+/* --- Toolbar (Prototyp Z. 68–74) ------------------------------------- */
+
+.sql-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--bord);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sql-toolbar__run {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--acc);
+  color: var(--accT);
+  border: none;
+  border-radius: var(--rad);
+  padding: 6px 16px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sql-toolbar__run:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.sql-toolbar__expand-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+}
+
+.sql-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: var(--rad-pill);
+  border: 1px solid transparent;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.sql-chip--active {
+  background: var(--eng-json-chip-bg);
+  color: var(--eng-json-chip-tx);
+}
+
+.sql-chip--ghost {
+  background: none;
+  border: 1px dashed var(--bord);
+  color: var(--mut);
+}
+
+.sql-chip--input {
+  width: 70px;
+  background: var(--panel2);
+  border: 1px solid var(--bord);
+  color: var(--tx);
+  outline: none;
+}
+
+.sql-chip__x {
+  opacity: 0.8;
+}
+
+.sql-toolbar__hint {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.sql-toolbar__docs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: none;
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sql-toolbar__docs--active {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--accT);
+}
+
+/* --- Save as view bar (spec §6) -------------------------------------- */
+
+.sql-saveview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--panel2);
+  border-bottom: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.sql-saveview__label {
+  color: var(--mut);
+}
+
+.sql-saveview__input {
+  flex: 1;
+  max-width: 280px;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.sql-saveview__save {
+  background: var(--acc);
+  color: var(--accT);
+  border: none;
+  border-radius: var(--rad-input);
+  padding: 6px 14px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sql-saveview__cancel {
+  background: none;
+  border: none;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* --- Editor surface (Prototyp Z. 76) --------------------------------- */
+
+.sql__editor {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--edbg);
+}
+
+/* Der geteilte CodeEditor deckelt sonst auf 220px (rest/001) — hier soll er die Fläche füllen. */
+.sql__editor .code-editor,
+.sql__editor .code-editor .cm-editor {
+  height: 100%;
+  max-height: none;
+}
+
+/* --- Results panel (Prototyp Z. 80–88) ------------------------------- */
+
+.sql-results {
+  height: 34%;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--bord);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+
+.sql-results__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--bord);
+  color: var(--mut);
+  font-family: var(--font-mono);
+}
+
+.sql-results__meta {
+  min-width: 0;
+  font-size: 11px;
+  color: var(--mut);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sql-results__export {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sql-results__export:hover {
+  color: var(--tx);
+}
+
+.sql-results__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.sql-results__hint {
+  padding: 10px 14px;
+  color: var(--mut);
+}
+
+.sql-results__confirm {
+  padding: 10px 14px;
+  color: var(--tx);
+}
+
+.sql-results__error {
+  padding: 10px 14px;
+  color: var(--err);
+}
+
+/* --- Result grid ----------------------------------------------------- */
+
+.sql-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.sql-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+  text-align: left;
+  font-weight: 400;
+  color: var(--mut);
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--bord);
+  white-space: nowrap;
+}
+
+.sql-grid__expanded-head {
+  color: var(--eng-json-label);
+}
+
+.sql-grid tbody td {
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--bord);
+  color: var(--tx);
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.sql-grid tbody tr:hover {
+  background: var(--panel2);
+}
+
+.sql-grid__row--selected td {
+  box-shadow: inset 2px 0 0 var(--acc);
+}
+
+.sql-grid__cell--muted {
+  color: var(--mut);
+}
+
+.sql-grid__expanded-cell {
+  max-width: 420px;
+}
+
+.sql-grid__expanded-value {
+  display: block;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--eng-json-label);
+}
+
+.sql-grid__dangling {
+  color: var(--mut);
+}
+
+.sql-grid__empty {
+  padding: 10px 14px;
+  color: var(--mut);
+}
+
+.sql-link {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--acc);
+  font-family: var(--font-mono);
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.sql-link:hover {
+  text-decoration: underline;
+}
+
+/* --- Docs split (Prototyp Z. 91–109) --------------------------------- */
+
+.sql-docs {
+  width: clamp(280px, 28vw, 360px);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--bord);
+  background: var(--panel);
+}
+
+.sql-docs__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.sql-docs__close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sql-docs__search {
+  padding: 10px 14px 0;
+}
+
+.sql-docs__search input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--panel2);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 7px 10px;
+  outline: none;
+}
+
+.sql-docs__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sql-docs__full {
+  align-self: flex-start;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--acc);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}

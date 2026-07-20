@@ -1,0 +1,11 @@
+.screen-placeholder {
+  padding: 20px;
+}
+
+.screen-placeholder__title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--tx);
+}

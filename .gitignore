@@ -1,0 +1,23 @@
+# Abhängigkeiten & Build
+node_modules/
+dist/
+coverage/
+
+# Lokale Umgebung & Secrets (Admin-Key liegt in .env.local)
+.env.local
+.env.*.local
+
+# KI-/Agent-Dateien bleiben lokal, nie ins Public-Repo
+.claude/
+
+# Nur lokal gepflegte Arbeitsstände (Autoren-Entscheidung 2026-07-16):
+# Konzepte/Specs, Design-Handoff und API-Contract-Kopie bleiben unversioniert.
+concept/
+design-concept/
+/api/
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

@@ -1,0 +1,277 @@
+.engines {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* --- SYSTEM-Durchsatzleiste (spec §2, Abweichung vom Fixture: system-weit statt je Engine) ------ */
+
+.engines__throughput {
+  background: var(--panel);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad);
+  padding: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 32px;
+}
+
+.engines__throughput-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.engines__throughput-value {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 26px;
+}
+
+.engines__throughput-unit {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--mut);
+}
+
+.engines__throughput-label {
+  margin-left: auto;
+  align-self: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+}
+
+.engines__spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 36px;
+}
+
+.engines__spark-bar {
+  width: 7px;
+  background: var(--acc);
+  opacity: 0.75;
+  border-radius: 2px;
+}
+
+/* --- Engine-Karten (spec §3) -------------------------------------------- */
+
+.engines__cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+}
+
+.engines__card {
+  background: var(--panel);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad);
+}
+
+.engines__cards .engines__card {
+  padding: 16px;
+}
+
+.engines__card--kv {
+  border-top: 3px solid var(--eng-kv-border);
+}
+
+.engines__card--json {
+  border-top: 3px solid var(--eng-json-border);
+}
+
+.engines__card--rel {
+  border-top: 3px solid var(--eng-rel-border);
+}
+
+.engines__card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.engines__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mut);
+  flex-shrink: 0;
+}
+
+.engines__dot--ok {
+  background: var(--ok);
+}
+
+.engines__dot--warn {
+  background: var(--warn);
+}
+
+.engines__dot--err {
+  background: var(--err);
+}
+
+.engines__card-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.engines__card-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.engines__card-row-label {
+  color: var(--mut);
+}
+
+.engines__card-row-value {
+  color: var(--tx);
+}
+
+.engines__card-footer {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+}
+
+.engines__domain-link {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--acc);
+  font-family: var(--font-mono);
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.engines__domain-link:hover {
+  text-decoration: underline;
+}
+
+/* --- Tasks/Requests-Zeile (spec §4/§5) ----------------------------------- */
+
+.engines__bottom {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.engines__card-title {
+  padding: 12px 16px;
+  color: var(--mut);
+}
+
+.engines__tasks > *:not(:last-child),
+.engines__requests > *:not(:last-child) {
+  border-bottom: 1px solid var(--bord);
+}
+
+.engines__empty {
+  padding: 10px 16px;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.engines__task-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.engines__task-label {
+  white-space: nowrap;
+}
+
+.engines__task-meta {
+  flex: 1;
+  min-width: 0;
+  color: var(--mut);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.engines__task-bar {
+  width: 110px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bord);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.engines__task-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--acc);
+}
+
+.engines__request-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.engines__request-status {
+  flex-shrink: 0;
+}
+
+.engines__stream-tag {
+  color: var(--acc);
+}
+
+.engines__request-method {
+  color: var(--mut);
+  flex-shrink: 0;
+}
+
+.engines__request-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.engines__why-link {
+  margin-left: auto;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--acc);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.engines__why-link:hover {
+  text-decoration: underline;
+}

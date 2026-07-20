@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 54" width="222" height="40" role="img" aria-label="LuraDB Web Client">
+  <g transform="translate(2,2) scale(0.5)">
+    <g transform="skewX(-14)">
+      <rect x="32" y="22" width="52" height="13" rx="6.5" fill="#008cba"/>
+      <rect x="32" y="42" width="52" height="13" rx="6.5" fill="#bd821a"/>
+      <rect x="32" y="62" width="52" height="13" rx="6.5" fill="#439458"/>
+    </g>
+  </g>
+  <text x="58" y="36" font-family="'IBM Plex Sans','Segoe UI',-apple-system,Roboto,Helvetica,Arial,sans-serif" font-size="34" font-weight="600" letter-spacing="-0.3">
+    <tspan fill="#e4e8ee">Lura</tspan><tspan fill="#7aa7e0">DB</tspan>
+  </text>
+  <rect x="188" y="15" width="104" height="23" rx="5" fill="none" stroke="#262b34"/>
+  <text x="199" y="31" font-family="'IBM Plex Mono',ui-monospace,'Cascadia Code',Consolas,monospace" font-size="11" letter-spacing="2.2" fill="#8b93a1">WEB CLIENT</text>
+</svg>

@@ -1,0 +1,29 @@
+.app-shell {
+  display: flex;
+  height: 100vh;
+}
+
+.app-shell__explorer {
+  width: 242px;
+  flex-shrink: 0;
+  background: var(--panel2);
+  border-right: 1px solid var(--bord);
+  padding: 14px 10px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.app-shell__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell__content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
