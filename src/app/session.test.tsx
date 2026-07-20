@@ -58,23 +58,22 @@ describe('connect', () => {
     expect(screen.getByTestId('session')).toHaveTextContent(`server unreachable at ${ORIGIN}`)
   })
 
-  it('rejects a foreign major version', async () => {
-    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '1.0.0', server_version: '1.0.0' })))
+  it('rejects a server below the minimum supported version', async () => {
+    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.0.9' })))
     render(<SessionProbe />)
 
     await act(() => connect(makeConnection()))
 
-    expect(screen.getByTestId('session')).toHaveTextContent(/major/)
+    expect(screen.getByTestId('session')).toHaveTextContent(/minimum supported/)
   })
 
-  it('connects with a one-time warning when the server has a newer minor version', async () => {
+  it('connects to any server at or above the minimum', async () => {
     server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
     render(<SessionProbe />)
 
     await act(() => connect(makeConnection()))
 
     expect(screen.getByTestId('session')).toHaveTextContent(/connected 0\.2\.0/)
-    expect(screen.getByTestId('session')).toHaveTextContent(/newer/)
   })
 
   it('connects cleanly on a matching version', async () => {

@@ -56,18 +56,20 @@ builds from source on all three — see [Build from source](#build-from-source).
 
 ## Server compatibility
 
-The client is built against a pinned version of the LuraDB OpenAPI contract and
-only ever targets the **latest** API. On connect it calls `GET /version` and
-treats the server as compatible when the server API shares the client's contract
-major **and** is greater than or equal to the compiled contract version (SemVer);
-`401` means the key is invalid.
+This client supports LuraDB from an explicitly declared **minimum server
+version** upward. That minimum is a maintained decision (`MIN_SERVER_VERSION` in
+[src/api/contract.ts](src/api/contract.ts)), **not** derived from a version
+formula — it is raised only when the client starts using something older servers
+cannot provide. On connect the client calls `GET /version` and refuses to operate
+against a server below that minimum (`401` means the key is invalid).
 
-| Client | API contract | Compatible servers |
-| :--- | :--- | :--- |
-| 0.1.x | 0.1.0 | ≥ 0.1.0 |
+| Client | Minimum LuraDB server |
+| :--- | :--- |
+| 0.1.x | 0.1.0 |
 
-A breaking API change forces a new client major; older client releases stay
-downloadable but unmaintained.
+The client is built against the latest LuraDB API contract (`CONTRACT_VERSION`,
+informational only). When a LuraDB change requires it, a new client release
+raises the minimum; older releases stay downloadable but unmaintained.
 
 ## Build from source
 

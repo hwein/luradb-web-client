@@ -21,7 +21,17 @@ function compareSemVer(a: SemVer, b: SemVer): number {
   return a.patch - b.patch
 }
 
+/** API-Contract, gegen den dieser Client gebaut wurde — rein informativ (About/Statusbar). */
 export const CONTRACT_VERSION: SemVer = parseSemVer(openapiDocument.info.version)
+
+/**
+ * Niedrigste unterstützte LuraDB-Server-Version. Bewusst gepflegte Tatsache,
+ * NICHT aus dem Contract abgeleitet: nur anheben, wenn der Client anfängt, etwas
+ * zu nutzen, das ältere Server nicht können — im selben Commit, mit Begründung.
+ * Ausschließlich manuelle Maintainer-Entscheidung.
+ */
+export const MIN_SERVER_VERSION = '0.1.0'
+const minServer = parseSemVer(MIN_SERVER_VERSION)
 
 export interface CompatibilityResult {
   compatible: boolean
@@ -30,28 +40,13 @@ export interface CompatibilityResult {
 
 type VersionResponse = components['schemas']['VersionResponse']
 
-/** Kompatibilitätsregel siehe api/COMPATIBILITY.md: gleiche Major, Server >= Contract-Version. */
+/** Verlässliches Verfahren: Server wird unterstützt gdw. seine Version >= MIN_SERVER_VERSION. */
 export function checkCompatibility(versionResponse: VersionResponse): CompatibilityResult {
-  const apiVersion = parseSemVer(versionResponse.api_version)
-
-  if (apiVersion.major !== CONTRACT_VERSION.major) {
+  const serverVersion = parseSemVer(versionResponse.server_version)
+  if (compareSemVer(serverVersion, minServer) < 0) {
     return {
       compatible: false,
-      reason: `server API major ${apiVersion.major} does not match client contract major ${CONTRACT_VERSION.major}`,
-    }
-  }
-
-  const cmp = compareSemVer(apiVersion, CONTRACT_VERSION)
-  if (cmp < 0) {
-    return {
-      compatible: false,
-      reason: `server API ${versionResponse.api_version} is older than client contract ${openapiDocument.info.version}`,
-    }
-  }
-  if (cmp > 0) {
-    return {
-      compatible: true,
-      reason: `server API ${versionResponse.api_version} is newer than client contract ${openapiDocument.info.version}`,
+      reason: `LuraDB ${versionResponse.server_version} is older than the minimum supported ${MIN_SERVER_VERSION}`,
     }
   }
   return { compatible: true }
