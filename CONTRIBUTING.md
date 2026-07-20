@@ -48,7 +48,8 @@ written case carries that risk alone.
 Merge prerequisites, beyond review and a green CI:
 
 - The **CLA is agreed** — once. On your first PR, read [CLA.md](CLA.md) and post a
-  comment with the exact line "I have read and agree to the LuraDB CLA" on that PR
+  comment with the exact line "I have read and agree to the LuraDB Web Client CLA"
+  on that PR
   to sign it. That covers all your later contributions from the same account.
 
 The CLA preserves the maintainer's ability to dual-license the codebase — the

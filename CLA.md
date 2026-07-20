@@ -7,7 +7,8 @@ intellectual property is contributed to the Project, so that contributors and
 users can rely on it.
 
 You indicate agreement to this Agreement by posting a comment containing the
-exact line "I have read and agree to the LuraDB CLA" on your first pull request.
+exact line "I have read and agree to the LuraDB Web Client CLA" on your first
+pull request.
 This only needs to happen once; later contributions from the same GitHub account
 are covered automatically.
 
