@@ -11,6 +11,8 @@ import { readChangelog, extractSection, latestVersion } from './changelog-extrac
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const CHANGELOG = path.join(rootDir, 'CHANGELOG.md')
 const PKG = path.join(rootDir, 'package.json')
+const CONTRACT = path.join(rootDir, 'src', 'api', 'openapi.json')
+const CONTRACT_TS = path.join(rootDir, 'src', 'api', 'contract.ts')
 
 const dryRun = process.argv.includes('--dry-run')
 const versionArg = process.argv.slice(2).find((a) => /^\d+\.\d+\.\d+$/.test(a))
@@ -33,6 +35,33 @@ function versionGt(a, b) {
 function bumpPatch(base) {
   const [maj, min, pat] = base.split('.').map(Number)
   return `${maj}.${min}.${pat + 1}`
+}
+
+function bumpMinor(base) {
+  const [maj, min] = base.split('.').map(Number)
+  return `${maj}.${min + 1}.0`
+}
+
+// Datei-Inhalt zum gegebenen Tag; null, wenn Tag/Datei fehlt.
+function fileAtTag(tag, relpath) {
+  try {
+    return execFileSync('git', ['show', `${tag}:${relpath}`], { cwd: rootDir, encoding: 'utf-8' })
+  } catch {
+    return null
+  }
+}
+
+function contractVersion(text) {
+  try {
+    return JSON.parse(text).info.version
+  } catch {
+    return null
+  }
+}
+
+function minServerVersion(text) {
+  const m = text && /MIN_SERVER_VERSION\s*=\s*'([^']+)'/.exec(text)
+  return m ? m[1] : null
 }
 
 function resolveRepoUrl() {
@@ -135,13 +164,22 @@ const changelog = readChangelog()
 const unreleased = extractSection(changelog, 'Unreleased')
 if (!unreleased) die('[Unreleased] is missing or empty — nothing to release')
 
-// --- Version proposal: always a patch bump. The client produces no breaking
-// changes (it consumes the LuraDB API); minor/major are the author's manual
-// call at the confirm prompt below. ---
+// --- Version proposal (a mechanism, not a choice). The client produces no
+// breaking changes; it consumes the LuraDB API. minor = a compatibility jump:
+// the committed API contract (openapi.json info.version) or MIN_SERVER_VERSION
+// changed since the last release. Otherwise patch. major is the author's only
+// manual override, typed at the confirm prompt. ---
 const last = latestVersion(changelog)
 let proposed
 if (last) {
-  proposed = bumpPatch(last)
+  const tag = `v${last}`
+  const prevContract = contractVersion(fileAtTag(tag, 'src/api/openapi.json'))
+  const prevMin = minServerVersion(fileAtTag(tag, 'src/api/contract.ts'))
+  const contractChanged = prevContract !== null && prevContract !== contractVersion(readFileSync(CONTRACT, 'utf-8'))
+  const minChanged = prevMin !== null && prevMin !== minServerVersion(readFileSync(CONTRACT_TS, 'utf-8'))
+  const compatJump = contractChanged || minChanged
+  step(`bump: ${compatJump ? 'minor (compatibility jump)' : 'patch'} — contract ${contractChanged ? 'changed' : 'same'}, MIN_SERVER_VERSION ${minChanged ? 'changed' : 'same'} since ${tag}`)
+  proposed = compatJump ? bumpMinor(last) : bumpPatch(last)
 } else {
   proposed = JSON.parse(readFileSync(PKG, 'utf-8')).version.replace(/-.*$/, '')
 }
