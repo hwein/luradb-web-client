@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "check": "tsc --noEmit && eslint .",
     "test": "vitest run",
+    "version": "node scripts/sync-version.mjs && git add src-tauri/Cargo.toml",
     "api:types": "node scripts/api-types.mjs",
     "tauri": "tauri",
     "app:dev": "tauri dev",
