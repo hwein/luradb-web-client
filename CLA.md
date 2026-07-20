@@ -6,10 +6,10 @@ Contributor License Agreement ("Agreement") clarifies the terms under which
 intellectual property is contributed to the Project, so that contributors and
 users can rely on it.
 
-You indicate agreement to this Agreement by adding a comment on your first pull
-request stating that you have read this Agreement and agree to it. This only
-needs to happen once; later contributions from the same GitHub account are
-covered automatically.
+You indicate agreement to this Agreement by posting a comment containing the
+exact line "I have read and agree to the LuraDB CLA" on your first pull request.
+This only needs to happen once; later contributions from the same GitHub account
+are covered automatically.
 
 ## 1. Definitions
 
