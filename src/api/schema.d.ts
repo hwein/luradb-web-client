@@ -33,13 +33,13 @@ export interface paths {
         };
         /**
          * Gibt alle angelegten User zurück (Admins und reguläre User).
-         * @description API Keys werden nicht ausgegeben — nur Name, Rolle und Erstellungszeitpunkt.
+         *     API Keys werden nicht ausgegeben — nur Name, Rolle und Erstellungszeitpunkt.
          */
         get: operations["list_users"];
         put?: never;
         /**
          * Legt einen neuen User mit der Rolle `User` an.
-         * @description Der API Key wird **ausschließlich in dieser Response** zurückgegeben und danach nicht mehr gespeichert.
+         *     Der API Key wird **ausschließlich in dieser Response** zurückgegeben und danach nicht mehr gespeichert.
          *     Nur Admins dürfen diesen Endpunkt aufrufen.
          */
         post: operations["create_user"];
@@ -61,7 +61,7 @@ export interface paths {
         post?: never;
         /**
          * Löscht einen User und alle seine Domain-Permissions.
-         * @description Der API Key des Users wird sofort ungültig — laufende Requests mit dem alten Key erhalten danach `401`.
+         *     Der API Key des Users wird sofort ungültig — laufende Requests mit dem alten Key erhalten danach `401`.
          */
         delete: operations["delete_user"];
         options?: never;
@@ -80,7 +80,7 @@ export interface paths {
         put?: never;
         /**
          * Setzt oder überschreibt die Zugriffsberechtigung eines Users auf eine Domain.
-         * @description `access` muss `"read"`, `"write"` oder `"ddl"` sein — jede Stufe schließt die
+         *     `access` muss `"read"`, `"write"` oder `"ddl"` sein — jede Stufe schließt die
          *     niedrigeren ein. Für `kv` muss die Domain existieren; `json`/`rel` prüfen nur den Namen.
          */
         post: operations["set_permission"];
@@ -102,7 +102,7 @@ export interface paths {
         post?: never;
         /**
          * Entzieht einem User die Zugriffsberechtigung auf eine bestimmte Domain.
-         * @description `?store_type=json`/`rel` entzieht eine JSON-/rel-Domain-Permission (Default: kv).
+         *     `?store_type=json`/`rel` entzieht eine JSON-/rel-Domain-Permission (Default: kv).
          *     Nach diesem Aufruf erhalten Requests des Users auf diese Domain `403 Forbidden`.
          */
         delete: operations["remove_permission"];
@@ -122,7 +122,7 @@ export interface paths {
         put?: never;
         /**
          * Generiert einen neuen API Key für den User und invalidiert den alten sofort.
-         * @description Der neue Key wird **ausschließlich in dieser Response** zurückgegeben.
+         *     Der neue Key wird **ausschließlich in dieser Response** zurückgegeben.
          *     Verwende dies bei Key-Leaks oder regelmäßiger Key-Rotation.
          */
         post: operations["rotate_key"];
@@ -144,7 +144,7 @@ export interface paths {
         put?: never;
         /**
          * Creates a new logical domain (isolated KV namespace).
-         * @description Domain names must be unique, max 50 chars, and match `[a-zA-Z0-9_-]`.
+         *     Domain names must be unique, max 50 chars, and match `[a-zA-Z0-9_-]`.
          */
         post: operations["create_domain"];
         delete?: never;
@@ -166,7 +166,7 @@ export interface paths {
         post?: never;
         /**
          * Schedules a domain and all its data for deletion.
-         * @description The domain becomes immediately inaccessible; the actual purge runs in the background.
+         *     The domain becomes immediately inaccessible; the actual purge runs in the background.
          */
         delete: operations["delete_domain"];
         options?: never;
@@ -201,7 +201,7 @@ export interface paths {
         };
         /**
          * Returns metadata for a single JSON domain, including its document count.
-         * @description Domains in `deleting` state answer with 410 Gone.
+         *     Domains in `deleting` state answer with 410 Gone.
          */
         get: operations["json_get_domain_1"];
         put?: never;
@@ -274,18 +274,18 @@ export interface paths {
         };
         /**
          * Reads a document; `_key`/`_version` are top-level fields and an opaque
-         * @description `ETag` is exposed for use with `If-Match` (json/011).
+         *     `ETag` is exposed for use with `If-Match` (json/011).
          */
         get: operations["get_document"];
         /**
          * Upserts a document. With an `If-Match: "<etag>"` header the write is a
-         * @description conditional update that fails with 409 on a version mismatch.
+         *     conditional update that fails with 409 on a version mismatch.
          */
         put: operations["put_document"];
         post?: never;
         /**
          * Deletes a document and its index entries. Supports conditional delete via
-         * @description `If-Match: "<etag>"`.
+         *     `If-Match: "<etag>"`.
          */
         delete: operations["delete_document"];
         options?: never;
@@ -322,7 +322,7 @@ export interface paths {
         put?: never;
         /**
          * Creates an index definition. Existing documents are NOT back-indexed —
-         * @description trigger a re-index for that.
+         *     trigger a re-index for that.
          */
         post: operations["create_index"];
         delete?: never;
@@ -374,7 +374,7 @@ export interface paths {
         };
         /**
          * Returns the status of a re-index task. Tasks are domain-scoped: a task id
-         * @description of another domain answers 404 (tenant isolation).
+         *     of another domain answers 404 (tenant isolation).
          */
         get: operations["reindex_status"];
         put?: never;
@@ -396,7 +396,7 @@ export interface paths {
         put?: never;
         /**
          * Searches documents via indexed fields. Filters: `"field": value` for
-         * @description equality or `"field": {"$gt": …}` for ranges; multiple fields are ANDed.
+         *     equality or `"field": {"$gt": …}` for ranges; multiple fields are ANDed.
          */
         post: operations["search_documents"];
         delete?: never;
@@ -433,7 +433,7 @@ export interface paths {
         get: operations["get_key"];
         /**
          * Inserts or updates a value for the given key (upsert semantics).
-         * @description The optional `ttl` query parameter sets an expiry in seconds; omitting it stores the key indefinitely.
+         *     The optional `ttl` query parameter sets an expiry in seconds; omitting it stores the key indefinitely.
          */
         put: operations["put_key"];
         post?: never;
@@ -459,7 +459,7 @@ export interface paths {
         head?: never;
         /**
          * Writes an explicit null/tombstone marker for a key without removing it from the keyspace.
-         * @description Useful for signalling soft-deletes in distributed or CDC scenarios.
+         *     Useful for signalling soft-deletes in distributed or CDC scenarios.
          */
         patch: operations["set_null"];
         trace?: never;
@@ -473,7 +473,7 @@ export interface paths {
         };
         /**
          * Opens a Server-Sent Events stream that delivers real-time change events (`set` / `delete`) for keys matching the optional prefix.
-         * @description The connection stays open until the client disconnects; a keep-alive ping is sent automatically.
+         *     The connection stays open until the client disconnects; a keep-alive ping is sent automatically.
          */
         get: operations["watch"];
         put?: never;
@@ -530,7 +530,7 @@ export interface paths {
         put?: never;
         /**
          * Creates a new relational domain (isolated table/view namespace, separate
-         * @description from KV and JSON domains).
+         *     from KV and JSON domains).
          */
         post: operations["rel_create_domain_2"];
         delete?: never;
@@ -548,14 +548,14 @@ export interface paths {
         };
         /**
          * Returns metadata for a single relational domain. A domain in `deleting`
-         * @description state answers 410 Gone (rel/013 finishes the physical purge).
+         *     state answers 410 Gone (rel/013 finishes the physical purge).
          */
         get: operations["rel_get_domain_2"];
         put?: never;
         post?: never;
         /**
          * Marks a relational domain as deleting. Its tables/views become
-         * @description inaccessible immediately; physical cleanup follows in rel/013.
+         *     inaccessible immediately; physical cleanup follows in rel/013.
          */
         delete: operations["rel_delete_domain_2"];
         options?: never;
@@ -574,7 +574,7 @@ export interface paths {
         put?: never;
         /**
          * Executes exactly one LuraSQL statement against `domain` and returns its
-         * @description typed result. `expand` resolves REFERENCES columns of a SELECT into
+         *     typed result. `expand` resolves REFERENCES columns of a SELECT into
          *     embedded objects (or `"*"` for every REFERENCES column).
          */
         post: operations["execute_sql"];
@@ -610,7 +610,7 @@ export interface paths {
         };
         /**
          * Returns a table's schema (columns, indexes) plus HATEOAS links. A view
-         * @description name answers 404 here — use `GET …/views` for views.
+         *     name answers 404 here — use `GET …/views` for views.
          */
         get: operations["get_table"];
         put?: never;
@@ -630,7 +630,7 @@ export interface paths {
         };
         /**
          * Lists rows of `table`. Every query parameter other than `expand`/`limit`/
-         * @description `offset` is an equality filter on the like-named column (`?col=value`,
+         *     `offset` is an equality filter on the like-named column (`?col=value`,
          *     AND-combined); parse errors and unknown filter columns answer 400. This
          *     compiles onto the same bound `*`-SELECT plan `/sql` would use.
          */
@@ -638,7 +638,7 @@ export interface paths {
         put?: never;
         /**
          * Inserts one row from a JSON object body (`{column: value, …}`). An omitted
-         * @description AUTOINCREMENT primary key is assigned the next sequence value (rel/005
+         *     AUTOINCREMENT primary key is assigned the next sequence value (rel/005
          *     §9); this compiles onto the exact same bound INSERT plan `/sql` would use.
          */
         post: operations["insert_row"];
@@ -657,19 +657,19 @@ export interface paths {
         };
         /**
          * Fetches a single row by primary key — the same PK-point SELECT plan
-         * @description `/sql`'s `WHERE pk = ?` would use.
+         *     `/sql`'s `WHERE pk = ?` would use.
          */
         get: operations["get_row"];
         /**
          * Partially updates a row by primary key: only the columns named in the
-         * @description body are set, everything else stays unchanged (spec §5). Not an upsert —
+         *     body are set, everything else stays unchanged (spec §5). Not an upsert —
          *     a PK the table doesn't have answers 404, never a create.
          */
         put: operations["update_row"];
         post?: never;
         /**
          * Deletes a row by primary key. Hanging REFERENCES from other tables are
-         * @description not blocked by this (rel/005 §11) — they resolve to `null` afterwards.
+         *     not blocked by this (rel/005 §11) — they resolve to `null` afterwards.
          */
         delete: operations["delete_row"];
         options?: never;
@@ -1093,7 +1093,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description 'kv' (Default), 'json' oder 'rel' */
-                store_type?: string | null;
+                store_type?: string;
             };
             header?: never;
             path: {
@@ -1465,11 +1465,11 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Page size (default 50, max 1000) */
-                limit?: number | null;
+                limit?: number;
                 /** @description Documents to skip */
-                offset?: number | null;
+                offset?: number;
                 /** @description Return only keys, no content */
-                keys_only?: boolean | null;
+                keys_only?: boolean;
             };
             header?: never;
             path: {
@@ -1748,7 +1748,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/x-ndjson": unknown;
+                };
             };
             /** @description Domain not found */
             404: {
@@ -2033,7 +2035,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Key prefix filter */
-                prefix?: string | null;
+                prefix?: string;
             };
             header?: never;
             path: {
@@ -2089,7 +2091,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/octet-stream": unknown;
+                };
             };
             /** @description Invalid key */
             400: {
@@ -2126,7 +2130,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description TTL in seconds (optional) */
-                ttl?: number | null;
+                ttl?: number;
             };
             header?: never;
             path: {
@@ -2275,7 +2279,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Key prefix filter */
-                prefix?: string | null;
+                prefix?: string;
             };
             header?: never;
             path: {
@@ -2291,7 +2295,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/event-stream": unknown;
+                };
             };
             /** @description Domain is being deleted */
             410: {
@@ -2725,11 +2731,11 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Comma-separated REFERENCES columns to resolve, or "*" for all */
-                expand?: string | null;
+                expand?: string;
                 /** @description Max rows to return (falls back to the configured default, capped at the configured max) */
-                limit?: number | null;
+                limit?: number;
                 /** @description Rows to skip */
-                offset?: number | null;
+                offset?: number;
             };
             header?: never;
             path: {
@@ -2870,7 +2876,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Comma-separated REFERENCES columns to resolve, or "*" */
-                expand?: string | null;
+                expand?: string;
             };
             header?: never;
             path: {

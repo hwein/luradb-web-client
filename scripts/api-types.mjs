@@ -1,21 +1,25 @@
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import openapiTS, { astToString, COMMENT_HEADER } from 'openapi-typescript'
 
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-const sourcePath = path.join(rootDir, 'api', 'openapi.json')
 const targetJsonPath = path.join(rootDir, 'src', 'api', 'openapi.json')
 const targetSchemaPath = path.join(rootDir, 'src', 'api', 'schema.d.ts')
 
-if (!existsSync(sourcePath)) {
-  console.error(
-    `api:types: ${sourcePath} fehlt. Contract-Kopie aus dem LuraDB-Repo beziehen (siehe api/COMPATIBILITY.md).`,
-  )
+// Contract-Quelle ist das LuraDB-Repo: Client-`main` bindet an LuraDB-`main`
+// (released), Client-`next` an `next` (in Arbeit). Ref via Arg oder Env
+// uebersteuerbar (auch Tag/Commit zum Pinnen): npm run api:types -- next
+const ref = process.argv[2] ?? process.env.LURADB_API_REF ?? 'main'
+const url = `https://raw.githubusercontent.com/hwein/luradb/${ref}/api/openapi.json`
+
+const response = await fetch(url)
+if (!response.ok) {
+  console.error(`api:types: fetch ${url} → HTTP ${response.status}. Ref '${ref}' korrekt (main/next/tag)?`)
   process.exit(1)
 }
-
-copyFileSync(sourcePath, targetJsonPath)
+const source = await response.text()
+writeFileSync(targetJsonPath, source)
 
 // api/openapi.json wiederholt list/create/get/delete_domain-operationIds je Engine
 // (generisch + json + rel) – nur fuers Codegen in-memory eindeutig machen, damit
@@ -39,9 +43,9 @@ function dedupeOperationIds(schema) {
   }
 }
 
-const schema = JSON.parse(readFileSync(sourcePath, 'utf-8'))
+const schema = JSON.parse(source)
 dedupeOperationIds(schema)
 const ast = await openapiTS(schema)
 writeFileSync(targetSchemaPath, `${COMMENT_HEADER}${astToString(ast)}`)
 
-console.log(`api:types: Contract ${schema.info.version} → src/api/openapi.json + src/api/schema.d.ts`)
+console.log(`api:types: Contract ${schema.info.version} @ luradb/${ref} → src/api/openapi.json + src/api/schema.d.ts`)
