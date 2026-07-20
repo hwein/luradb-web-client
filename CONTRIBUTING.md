@@ -47,10 +47,9 @@ written case carries that risk alone.
 
 Merge prerequisites, beyond review and a green CI:
 
-- The **CLA is signed** — once, on your first PR, through a fully automatic
-  comment/click flow with zero maintainer involvement. See [CLA.md](CLA.md) for
-  the agreement; the CLA-assistant bot comments on your first PR with the exact
-  steps.
+- The **CLA is agreed** — once. On your first PR, read [CLA.md](CLA.md) and add a
+  comment stating: *"I have read the CLA and I agree to it."* That covers all your
+  later contributions from the same account.
 
 The CLA preserves the maintainer's ability to dual-license the codebase — the
 public Fair Source license plus separate commercial terms — as a whole. Without
