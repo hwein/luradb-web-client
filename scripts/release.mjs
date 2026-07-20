@@ -30,9 +30,9 @@ function versionGt(a, b) {
   return false
 }
 
-function bump(base, kind) {
+function bumpPatch(base) {
   const [maj, min, pat] = base.split('.').map(Number)
-  return kind === 'minor' ? `${maj}.${min + 1}.0` : `${maj}.${min}.${pat + 1}`
+  return `${maj}.${min}.${pat + 1}`
 }
 
 function resolveRepoUrl() {
@@ -135,12 +135,13 @@ const changelog = readChangelog()
 const unreleased = extractSection(changelog, 'Unreleased')
 if (!unreleased) die('[Unreleased] is missing or empty — nothing to release')
 
-// --- Version proposal (client scheme: BREAKING → minor, else patch; major manual only) ---
+// --- Version proposal: always a patch bump. The client produces no breaking
+// changes (it consumes the LuraDB API); minor/major are the author's manual
+// call at the confirm prompt below. ---
 const last = latestVersion(changelog)
 let proposed
 if (last) {
-  const kind = /^-\s*\*\*BREAKING\*\*/m.test(unreleased) ? 'minor' : 'patch'
-  proposed = bump(last, kind)
+  proposed = bumpPatch(last)
 } else {
   proposed = JSON.parse(readFileSync(PKG, 'utf-8')).version.replace(/-.*$/, '')
 }
@@ -151,7 +152,7 @@ if (git('tag', '-l', tag)) die(`tag ${tag} already exists`)
 
 if (dryRun) {
   console.log(`[dry-run] would finalize CHANGELOG → [${version}], bump to ${version}, merge next → main,`)
-  console.log(`[dry-run] tag ${tag}, set next to ${bump(version, 'patch')}-dev, push --atomic origin main next ${tag}`)
+  console.log(`[dry-run] tag ${tag}, set next to ${bumpPatch(version)}-dev, push --atomic origin main next ${tag}`)
   process.exit(0)
 }
 
@@ -175,7 +176,7 @@ git('checkout', 'next')
 git('merge', '--ff-only', 'main')
 
 // Dev-Zyklus: next auf X.Y.(Z+1)-dev, damit Dev-Builds nie eine Release-Nummer melden.
-const nextDev = `${bump(version, 'patch')}-dev`
+const nextDev = `${bumpPatch(version)}-dev`
 step(`next: begin v${nextDev} cycle`)
 setVersion(nextDev)
 git('add', 'package.json', 'src-tauri/Cargo.toml')
