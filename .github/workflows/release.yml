@@ -1,8 +1,10 @@
 name: release
 
-# Cut a release by pushing a version tag, e.g. `git tag v0.1.0 && git push --tags`.
-# Builds the Windows desktop app (unsigned) and attaches the installers to a
-# draft GitHub release for the maintainer to review and publish.
+# Releases are cut with `npm run release` on the `next` branch (see
+# scripts/release.mjs): it finalizes the changelog, bumps the version, merges
+# next → main, tags vX.Y.Z and pushes. The tag triggers this workflow, which
+# builds the Windows app (unsigned) and drafts a GitHub release with the
+# matching changelog section as its notes.
 on:
   push:
     tags: ['v*']
@@ -23,11 +25,21 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
+      - name: Release notes from changelog
+        id: notes
+        shell: bash
+        run: |
+          {
+            echo 'body<<CHANGELOG_EOF'
+            node scripts/changelog-extract.mjs "${GITHUB_REF_NAME#v}"
+            echo 'CHANGELOG_EOF'
+          } >> "$GITHUB_OUTPUT"
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: ${{ github.ref_name }}
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: true
           prerelease: false

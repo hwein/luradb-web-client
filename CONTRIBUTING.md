@@ -82,6 +82,10 @@ it, externally contributed lines would have to be excluded from that.
 - `npm run check` (runs before `npm test`) and `npm test` must both be green.
   New behavior comes with tests (Vitest + Testing Library; mock the API through
   MSW handlers, not ad-hoc fetch stubs).
+- A user-visible change adds a `CHANGELOG.md` entry under `[Unreleased]` in the
+  same PR ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format:
+  `### Added/Changed/Fixed/…`). Mark a breaking change with a leading
+  `**BREAKING**` — that drives the next release to a new minor.
 - The public repo's language is English — code, comments, docs and commit
   messages.
 
