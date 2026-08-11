@@ -5,6 +5,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-08-11
+
 ### Added
 
 - Command palette (Ctrl+K / Cmd+K): jump straight to any screen, domain, or
@@ -56,5 +58,6 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   permissions, key rotation); configuration; and built-in docs. Packaged as a
   Tauri 2 desktop app.
 
-[unreleased]: https://github.com/hwein/luradb-web-client/compare/v0.0.1...HEAD
+[unreleased]: https://github.com/hwein/luradb-web-client/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/hwein/luradb-web-client/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/hwein/luradb-web-client/releases/tag/v0.0.1
