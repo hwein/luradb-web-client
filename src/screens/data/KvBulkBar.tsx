@@ -17,6 +17,9 @@ import { invalidateKvKeys } from './kvEntries'
 
 const ACTIONS: KvBulkAction[] = ['delete', 'clear', 'set-null']
 
+/** Nur die Vorschau ist gekappt (Tipp-Lag bei 10k+-Scans) — Selektion und Lauf nutzen die volle Liste; ungekappt bleibt laut Spec §5 allein die Fehlerliste. */
+const PREVIEW_LIMIT = 200
+
 const ACTION_LABEL: Record<KvBulkAction, string> = {
   delete: 'delete',
   clear: 'set value to ""',
@@ -113,11 +116,16 @@ export function KvBulkBar({ domain, apiClient, keys, prefix }: KvBulkBarProps) {
         {selectedKeys.length === 0 ? (
           <div className="kv-bulk__hint">no keys selected</div>
         ) : (
-          selectedKeys.map((key) => (
-            <div key={key} className="kv-bulk__preview-row">
-              {key}
-            </div>
-          ))
+          <>
+            {selectedKeys.slice(0, PREVIEW_LIMIT).map((key) => (
+              <div key={key} className="kv-bulk__preview-row">
+                {key}
+              </div>
+            ))}
+            {selectedKeys.length > PREVIEW_LIMIT && (
+              <div className="kv-bulk__hint">… and {selectedKeys.length - PREVIEW_LIMIT} more keys</div>
+            )}
+          </>
         )}
       </div>
 

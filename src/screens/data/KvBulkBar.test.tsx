@@ -80,6 +80,15 @@ describe('KvBulkBar', () => {
     expect(screen.queryByText('session:2')).not.toBeInTheDocument()
   })
 
+  it('caps the preview at 200 rows while the selection itself stays complete', async () => {
+    const keys = Array.from({ length: 250 }, (_, i) => `session:${String(i).padStart(3, '0')}`)
+    await renderBar(keys)
+
+    expect(screen.getByText('250 keys selected')).toBeInTheDocument()
+    expect(document.querySelectorAll('.kv-bulk__preview-row')).toHaveLength(200)
+    expect(screen.getByText('… and 50 more keys')).toBeInTheDocument()
+  })
+
   it('disables run with an empty selection and describes the pending call pattern as "not recorded"', async () => {
     await renderBar([])
     fireEvent.click(screen.getByLabelText('delete'))
