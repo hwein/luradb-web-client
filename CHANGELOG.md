@@ -32,6 +32,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   is a single label row (color dot, "+" action) without empty-state placeholders.
 - Domain lists and the expanded explorer domain now refresh automatically
   (every 30–60s), so changes made by other clients appear without a reload.
+- Docs: the LuraSQL article now also covers column types, constraints,
+  `ALTER TABLE` restrictions, and identifier/limit rules.
 
 ## [0.0.1] - 2026-08-11
 
