@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router'
+import { useNavigate, type NavigateFunction } from 'react-router'
 import { useSession } from '../../app/session'
 import { useSelectedDomain } from '../../shell'
 import { jsonDomainsQueryOptions, kvDomainsQueryOptions, relDomainsQueryOptions } from '../../shell/domains'
@@ -17,6 +17,12 @@ const NUMBER_PLACEHOLDER = '…'
 
 function numberOrPlaceholder(loaded: boolean, value: number): string {
   return loaded ? formatNumber(value) : NUMBER_PLACEHOLDER
+}
+
+/** Domänen-Ziellogik der "open in:"-Links — auch von der Command-Palette genutzt (spec shell/008 §4). */
+export function openDomainIn(navigate: NavigateFunction, select: (name: string) => void, domain: string, engine: EngineTone): void {
+  select(domain)
+  void navigate(`/data?engine=${engine}`)
 }
 
 /** Übersichts-Screen (spec engines/001): SYSTEM-Durchsatz, drei Engine-Karten, Tasks & Jobs, Recent Requests. */
@@ -47,11 +53,6 @@ export function EnginesScreen() {
     relDomains.map((domain) => domain.name),
   )
 
-  function openDomainIn(domain: string, engine: EngineTone): void {
-    select(domain)
-    void navigate(`/data?engine=${engine}`)
-  }
-
   const kvRows: EngineCardRow[] = [
     { label: 'domains', value: health ? formatNumber(health.domainCount) : NUMBER_PLACEHOLDER },
     { label: 'memtable keys (est.)', value: health ? formatNumber(health.estimatedMemtableKeys) : NUMBER_PLACEHOLDER },
@@ -81,7 +82,7 @@ export function EnginesScreen() {
           online={kvDomainsQuery.isSuccess}
           rows={kvRows}
           domains={kvDomains.map((domain) => domain.name)}
-          onOpenDomain={(domain) => openDomainIn(domain, 'kv')}
+          onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'kv')}
         />
         <EngineCard
           tone="json"
@@ -89,7 +90,7 @@ export function EnginesScreen() {
           online={jsonDomainsQuery.isSuccess}
           rows={jsonRows}
           domains={jsonDomains.map((domain) => domain.name)}
-          onOpenDomain={(domain) => openDomainIn(domain, 'json')}
+          onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'json')}
         />
         <EngineCard
           tone="rel"
@@ -97,7 +98,7 @@ export function EnginesScreen() {
           online={relDomainsQuery.isSuccess}
           rows={relRows}
           domains={relDomains.map((domain) => domain.name)}
-          onOpenDomain={(domain) => openDomainIn(domain, 'rel')}
+          onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'rel')}
         />
       </div>
       <div className="engines__bottom">

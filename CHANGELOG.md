@@ -5,6 +5,11 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Command palette (Ctrl+K / Cmd+K): jump straight to any screen, domain, or
+  docs article by typing a few letters.
+
 ### Changed
 
 - Explorer: the expanded domain renders as a bordered card; each engine section

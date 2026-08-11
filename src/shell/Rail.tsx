@@ -12,7 +12,7 @@ interface RailRoute {
   icon: ReactNode
 }
 
-const ROUTES: RailRoute[] = [
+export const ROUTES: RailRoute[] = [
   {
     path: '/sql',
     title: 'LuraSQL console',

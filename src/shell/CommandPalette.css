@@ -1,0 +1,133 @@
+/* --- Command-Palette (spec shell/008) --- */
+
+/* Author-display würde sonst das UA-`display:none` geschlossener Dialoge überstimmen. */
+.cmdk:not([open]) {
+  display: none;
+}
+
+.cmdk {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 92vw);
+  max-height: min(420px, 70vh);
+  /* Zentriert per UA-`margin:auto`, aber oberes Drittel statt Bildschirmmitte (spec §2). */
+  margin: 12vh auto auto;
+  padding: 0;
+  background: var(--panel);
+  color: var(--tx);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-card);
+  font-family: var(--font-sans);
+}
+
+.cmdk::backdrop {
+  background: color-mix(in oklch, var(--bg) 65%, transparent);
+}
+
+.cmdk__input {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--bord);
+  color: var(--tx);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  padding: 14px 18px;
+  outline: none;
+}
+
+.cmdk__results {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cmdk__group {
+  display: flex;
+  flex-direction: column;
+}
+
+.cmdk__group-label {
+  color: var(--mut);
+  padding: 8px 10px 4px;
+}
+
+.cmdk__empty-row {
+  padding: 7px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--mut);
+}
+
+.cmdk__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--rad);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cmdk__row--active {
+  background: var(--panel2);
+}
+
+.cmdk__row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmdk__row-meta {
+  flex-shrink: 0;
+  color: var(--mut);
+  font-size: 11px;
+}
+
+.cmdk__chips {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.cmdk__chip {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--rad-chip);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 9px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.cmdk__chip--rel {
+  background: var(--eng-rel-chip-bg);
+  color: var(--eng-rel-chip-tx);
+}
+
+.cmdk__chip--json {
+  background: var(--eng-json-chip-bg);
+  color: var(--eng-json-chip-tx);
+}
+
+.cmdk__chip--kv {
+  background: var(--eng-kv-chip-bg);
+  color: var(--eng-kv-chip-tx);
+}
