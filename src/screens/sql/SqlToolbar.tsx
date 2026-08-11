@@ -11,6 +11,9 @@ interface SqlToolbarProps {
   runDisabled: boolean
   expand: string[]
   onExpandChange: (expand: string[]) => void
+  params: string
+  onParamsChange: (params: string) => void
+  paramsError: string | undefined
   onRun: () => void
   running: boolean
   docsOpen: boolean
@@ -46,6 +49,9 @@ export function SqlToolbar({
   runDisabled,
   expand,
   onExpandChange,
+  params,
+  onParamsChange,
+  paramsError,
   onRun,
   running,
   docsOpen,
@@ -125,6 +131,16 @@ export function SqlToolbar({
           <ExpandFreetext onAdd={addColumn} />
         </>
       )}
+
+      <input
+        className={`sql-chip sql-chip--input sql-toolbar__params${paramsError ? ' sql-toolbar__params--error' : ''}`}
+        aria-label="params"
+        aria-invalid={paramsError !== undefined}
+        placeholder='params: ["paid", 42]'
+        value={params}
+        onChange={(event) => onParamsChange(event.target.value)}
+      />
+      {paramsError && <span className="sql-toolbar__params-error">{paramsError}</span>}
 
       <span className="sql-toolbar__hint">⌘⏎ run · ⌘S save as view</span>
 

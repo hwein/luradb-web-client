@@ -9,6 +9,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Command palette (Ctrl+K / Cmd+K): jump straight to any screen, domain, or
   docs article by typing a few letters.
+- SQL console: a `params` field in the toolbar sends a JSON array bound to
+  `?` placeholders, for any statement class.
 
 ### Changed
 
