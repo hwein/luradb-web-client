@@ -35,7 +35,8 @@ function useCommandPalette(): { open: boolean; close: () => void } {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
-      if (event.key.toLowerCase() !== 'k' || (!event.ctrlKey && !event.metaKey)) return
+      // altKey ausgeschlossen: AltGr sendet unter Windows ctrl+alt — sonst fräße die Palette AltGr+K-Zeichen mancher Layouts.
+      if (event.altKey || event.key.toLowerCase() !== 'k' || (!event.ctrlKey && !event.metaKey)) return
       event.preventDefault()
       setOpen((was) => !was)
     }

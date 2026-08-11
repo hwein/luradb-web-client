@@ -113,6 +113,16 @@ describe('AppShell', () => {
     expect(await screen.findByLabelText('command palette search')).toBeInTheDocument()
   })
 
+  it('AltGr+K (ctrl+alt on Windows) does not open the palette', async () => {
+    stubShowModal()
+    await renderConnectedShell('/sql')
+    await screen.findByText('run a query to see results')
+
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true, altKey: true })
+
+    expect(screen.queryByLabelText('command palette search')).not.toBeInTheDocument()
+  })
+
   it('Meta+K opens the command palette too', async () => {
     stubShowModal()
     await renderConnectedShell('/sql')
