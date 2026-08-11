@@ -5,6 +5,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.1] - 2026-08-11
+
 ### Added
 
 - Initial release: an IDE for LuraDB over its REST API — LuraSQL console; data
@@ -12,3 +14,6 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   explorer over the OpenAPI contract; engines & jobs; admin (domains, users,
   permissions, key rotation); configuration; and built-in docs. Packaged as a
   Tauri 2 desktop app.
+
+[unreleased]: https://github.com/hwein/luradb-web-client/compare/v0.0.1...HEAD
+[0.0.1]: https://github.com/hwein/luradb-web-client/releases/tag/v0.0.1
