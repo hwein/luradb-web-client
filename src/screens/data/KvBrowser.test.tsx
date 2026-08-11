@@ -54,13 +54,13 @@ function watchStream(frames: string[]) {
   })
 }
 
-async function connectAndRender() {
+async function connectAndRender(initialPath = '/data?engine=kv') {
   server.use(...baseHandlers())
   await act(() => connect(makeConnection()))
   const queryClient = createAppQueryClient()
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/data?engine=kv']}>
+      <MemoryRouter initialEntries={[initialPath]}>
         <SelectedDomainProvider>
           <Routes>
             <Route path="/data" element={<DataScreen />} />
@@ -81,6 +81,18 @@ afterEach(() => {
 })
 
 describe('KvBrowser', () => {
+  it('arrives with ?key= (cross-engine jump from the rel row detail): selects that key initially, even though it is not first in the list (spec data/009 §5)', async () => {
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(['alpha', 'cart_1'])),
+      http.get(keyUrl('alpha'), () => rawValue('a')),
+      http.get(keyUrl('cart_1'), () => rawValue('cart-contents')),
+    )
+    await connectAndRender('/data?engine=kv&key=cart_1')
+
+    expect(await screen.findByText('KEY cart_1')).toBeInTheDocument()
+    expect(screen.getByText('cart-contents')).toBeInTheDocument()
+  })
+
   it('scans keys via GET and shows the call in the footer; Scan commits a new prefix', async () => {
     let lastPrefix: string | null = null
     server.use(

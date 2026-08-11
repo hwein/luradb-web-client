@@ -82,6 +82,11 @@ export function RelBrowser({ domain, apiClient, table, filterCol, filterVal }: R
     void navigate('/docs')
   }
 
+  // Absprung zum Ziel-Objekt (spec 009 §5): Ankunftsparam analog zur Filter-Ankunft, den KvBrowser/JsonBrowser als initiale Detail-Selektion übernehmen.
+  function openLinkedKey(engine: 'json' | 'kv', key: string): void {
+    void navigate(`/data?${new URLSearchParams({ engine, key }).toString()}`)
+  }
+
   if (schemaQuery.isLoading) {
     return (
       <div className="data">
@@ -179,6 +184,7 @@ export function RelBrowser({ domain, apiClient, table, filterCol, filterVal }: R
           onDeleted={() => setMode({ kind: 'empty' })}
           onClear={() => setMode({ kind: 'empty' })}
           onConflictDocs={goToLinkDocs}
+          onOpenLink={openLinkedKey}
         />
       </div>
       <div className="data__footer mono-path">

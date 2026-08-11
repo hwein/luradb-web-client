@@ -1627,6 +1627,73 @@
   cursor: pointer;
 }
 
+/* --- REL row detail: expandierte Link-Werte (spec data/009) ------------- */
+
+.rel-detail__expanded-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rel-detail__expanded-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.rel-detail__expanded-label {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.rel-detail__expanded-label--json {
+  color: var(--eng-json-label);
+}
+
+.rel-detail__expanded-label--kv {
+  color: var(--eng-kv-label);
+}
+
+.rel-detail__expanded-open {
+  margin-left: auto;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--acc);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rel-detail__expanded-open:hover {
+  text-decoration: underline;
+}
+
+.rel-detail__expanded-value {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad);
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--tx);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rel-detail__expanded-dangling {
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
 /* --- Dangling-Report-Dialog (spec data/004 §4) -------------------------- */
 
 .dlr:not([open]) {

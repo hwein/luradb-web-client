@@ -14,6 +14,7 @@ import { isJsonObject, jsonDocumentsQueryOptions, safeJsonParse, type ParsedFilt
 interface JsonBrowserProps {
   domain: string
   apiClient: ApiClient | undefined
+  initialKey: string | undefined
 }
 
 function formatNumber(value: number): string {
@@ -38,7 +39,7 @@ function downloadNdjson(domain: string, text: string): void {
 }
 
 /** JSON-Modus des Data Browsers (spec data/001): Kopf mit Idx/Filter/Search, Master-Detail, Footer-CallLine. */
-export function JsonBrowser({ domain, apiClient }: JsonBrowserProps) {
+export function JsonBrowser({ domain, apiClient, initialKey }: JsonBrowserProps) {
   const navigate = useNavigate()
 
   const [filterText, setFilterText] = useState('')
@@ -66,6 +67,11 @@ export function JsonBrowser({ domain, apiClient }: JsonBrowserProps) {
   useEffect(() => {
     setMode({ kind: 'empty' })
   }, [domain, committedFilter])
+
+  // Ankunft mit ?key= (spec data/009 §5, analog zur rel-Filter-Ankunft): einmalig initiale Selektion, danach normale Bedienung.
+  useEffect(() => {
+    if (initialKey !== undefined) setMode({ kind: 'view', key: initialKey })
+  }, [domain, initialKey])
 
   useEffect(() => {
     const first = documents[0]

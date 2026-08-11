@@ -12,6 +12,7 @@ import { invalidateKvKeys, KV_KEYS_PAGE_SIZE, kvKeysQueryOptions } from './kvEnt
 interface KvBrowserProps {
   domain: string
   apiClient: ApiClient | undefined
+  initialKey: string | undefined
 }
 
 function formatNumber(value: number): string {
@@ -19,7 +20,7 @@ function formatNumber(value: number): string {
 }
 
 /** KV-Modus des Data Browsers (spec data/002): Kopf mit Prefix-Scan/Watch-Toggle, Master-Detail, optionales Feed-Panel, Footer-CallLine. */
-export function KvBrowser({ domain, apiClient }: KvBrowserProps) {
+export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
   const queryClient = useQueryClient()
   const [prefixText, setPrefixText] = useState('')
   const [committedPrefix, setCommittedPrefix] = useState('')
@@ -37,6 +38,11 @@ export function KvBrowser({ domain, apiClient }: KvBrowserProps) {
     setMode({ kind: 'empty' })
     setVisibleCount(KV_KEYS_PAGE_SIZE)
   }, [domain, committedPrefix])
+
+  // Ankunft mit ?key= (spec data/009 §5, analog zur rel-Filter-Ankunft): einmalig initiale Selektion, danach normale Bedienung.
+  useEffect(() => {
+    if (initialKey !== undefined) setMode({ kind: 'view', key: initialKey })
+  }, [domain, initialKey])
 
   useEffect(() => {
     const first = visibleKeys[0]

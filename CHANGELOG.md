@@ -25,6 +25,9 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Data browser (KV mode): a "bulk…" panel selects scanned keys with a
   `contains` filter and runs delete / clear / set-null across the selection,
   with confirmation and a per-key failure report.
+- Data browser (REL mode): with expand active, the row detail shows the
+  linked KV value / JSON document below the field list, with a jump to the
+  target key in its own browser (dangling links stay a muted docs pointer).
 
 ### Changed
 

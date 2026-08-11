@@ -11,7 +11,7 @@ const ROWS_PAGE_SIZE = 50
 
 export type RelRow = Record<string, unknown>
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 

@@ -52,13 +52,13 @@ function DocsRouteProbe() {
 
 // `extraHandlers` kommen vor den Basis-Handlern in denselben `server.use()`-Aufruf (MSW: pro Aufruf gewinnt die
 // zuerst gelistete Route) — sonst würde `baseHandlers`' fixe `GET …/indexes → []` jeden Test-Override verdecken.
-async function connectAndRender(relDomain = false, extraHandlers: Parameters<typeof server.use> = []) {
+async function connectAndRender(relDomain = false, extraHandlers: Parameters<typeof server.use> = [], initialPath = '/data') {
   server.use(...extraHandlers, ...baseHandlers(relDomain))
   await act(() => connect(makeConnection()))
   const queryClient = createAppQueryClient()
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/data']}>
+      <MemoryRouter initialEntries={[initialPath]}>
         <SelectedDomainProvider>
           <Routes>
             <Route path="/data" element={<DataScreen />} />
@@ -87,6 +87,28 @@ async function openIndexPanel(): Promise<void> {
 }
 
 describe('JsonBrowser', () => {
+  it('arrives with ?key= (cross-engine jump from the rel row detail): selects that document initially, loaded independently of the listed page (spec data/009 §5)', async () => {
+    await connectAndRender(
+      false,
+      [
+        http.get(DOCS_URL, () =>
+          HttpResponse.json({
+            documents: [{ _key: 'cus_1', _version: 1, name: 'first' }],
+            keys: ['cus_1'],
+            total: 1,
+            offset: 0,
+            limit: 50,
+          }),
+        ),
+        documentHandler('cus_8102', 7, { name: 'M. Keller' }, '"etag-1"'),
+      ],
+      '/data?engine=json&key=cus_8102',
+    )
+
+    expect(await screen.findByText('DOCUMENT cus_8102')).toBeInTheDocument()
+    expect(screen.getByText(/"name": "M. Keller"/)).toBeInTheDocument()
+  })
+
   it('lists documents via GET when the filter is empty, and shows the raw call in the footer', async () => {
     server.use(
       http.get(DOCS_URL, ({ request }) => {
