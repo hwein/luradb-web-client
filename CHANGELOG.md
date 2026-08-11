@@ -16,6 +16,9 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   statements into the SQL editor, guided by the server's v1 restrictions.
 - Engines & jobs: a "▶ reindex…" trigger in the tasks card starts a JSON
   domain reindex (all indexes or one field) without the REST explorer.
+- Data browser (JSON mode): the idx pill opens an index management panel —
+  create or delete field indexes, with a one-click reindex prompt right after
+  creating one.
 
 ### Changed
 
