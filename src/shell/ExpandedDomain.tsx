@@ -27,13 +27,22 @@ function sectionLabelText(base: string, state: string | undefined): string {
   return state === 'deleting' ? `${base} (deleting)` : base
 }
 
-function sectionLabelClass(engine: 'rel' | 'json', state: string | undefined): string {
-  return state === 'deleting' ? 'explorer__section-label' : `explorer__section-label explorer__section-label--${engine}`
-}
-
 function jsonSummaryText(count: number | null | undefined, indexCount: number | undefined): string | undefined {
   if (typeof count !== 'number' || typeof indexCount !== 'number') return undefined
   return `${formatCount(count)} · idx ${indexCount}`
+}
+
+/** Eine Zeile je Engine: Farb-Punkt + muted Label + rechtsbündiger `+`, in jeder Aktivitätsstufe sichtbar (spec shell/006 §2/§3). */
+function SectionLabel({ tone, text, addLabel, onAdd }: { tone: 'rel' | 'json' | 'kv'; text: string; addLabel: string; onAdd: () => void }) {
+  return (
+    <div className="explorer__section-label-row">
+      <span className={`explorer__section-dot explorer__section-dot--${tone}`} />
+      <span className="explorer__section-label">{text}</span>
+      <button type="button" className="explorer__section-add" title={addLabel} aria-label={addLabel} onClick={onAdd}>
+        +
+      </button>
+    </div>
+  )
 }
 
 /** RELATIONAL/JSON/KEY-VALUE-Abschnitte der genau einen expandierten Domäne (spec shell/002 §3) — Daten nur hier geladen. */
@@ -63,74 +72,67 @@ export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
   }
 
   const jsonSummary = jsonSummaryText(jsonDetailQuery.data?.document_count, indexesQuery.data?.length)
-  const relEmpty = tablesQuery.isSuccess && viewsQuery.isSuccess && (tablesQuery.data?.length ?? 0) === 0 && (viewsQuery.data?.length ?? 0) === 0
 
   return (
     <>
-      <div className="explorer__domain-header">▾ {domain.name}</div>
-      <div className="explorer__sections">
-        {hasRel && (
-          <>
-            <div className={sectionLabelClass('rel', domain.engines.rel?.state)}>{sectionLabelText('RELATIONAL', domain.engines.rel?.state)}</div>
-            {(tablesQuery.data ?? []).map((table) => (
-              <button key={table.name} type="button" className="explorer__object-row" onClick={() => openInData('rel', table.name)}>
-                <EngineChip letter="T" tone="rel" /> {table.name}
-              </button>
-            ))}
-            {(viewsQuery.data ?? []).map((view) => (
-              <button
-                key={view.name}
-                type="button"
-                className="explorer__object-row explorer__object-row--muted"
-                onClick={() => openViewInSql(view.name)}
-              >
-                <EngineChip letter="V" tone="dashed" /> {view.name}
-              </button>
-            ))}
-            {relEmpty && <div className="explorer__section-placeholder mono-path">no tables yet</div>}
-            <button type="button" className="explorer__create-link" onClick={() => setTableModalOpen(true)}>
-              + new table
-            </button>
-          </>
-        )}
-        {hasJson && (
-          <>
-            <div className={sectionLabelClass('json', domain.engines.json?.state)}>{sectionLabelText('JSON', domain.engines.json?.state)}</div>
-            {activity.json === 'active' && (
-              <button type="button" className="explorer__object-row" onClick={() => openInData('json')}>
-                <EngineChip letter="J" tone="json" /> documents
-                {jsonSummary && <span className="explorer__object-count">{jsonSummary}</span>}
-              </button>
-            )}
-            {activity.json === 'empty' && (
-              <>
-                <div className="explorer__section-placeholder mono-path">no documents yet</div>
-                <button type="button" className="explorer__create-link" onClick={() => openInData('json')}>
-                  + new document
+      <div className="explorer__domain-card">
+        <div className="explorer__domain-header">
+          <span className="explorer__domain-chevron">▾</span> {domain.name}
+        </div>
+        <div className="explorer__sections">
+          {hasRel && (
+            <>
+              <SectionLabel
+                tone="rel"
+                text={sectionLabelText('RELATIONAL', domain.engines.rel?.state)}
+                addLabel="new table"
+                onAdd={() => setTableModalOpen(true)}
+              />
+              {(tablesQuery.data ?? []).map((table) => (
+                <button key={table.name} type="button" className="explorer__object-row" onClick={() => openInData('rel', table.name)}>
+                  <EngineChip letter="T" tone="rel" /> {table.name}
                 </button>
-              </>
-            )}
-          </>
-        )}
-        {hasKv && (
-          <>
-            <div className="explorer__section-label explorer__section-label--kv">KEY-VALUE</div>
-            {activity.kv === 'active' && (
-              <button type="button" className="explorer__object-row" onClick={() => openInData('kv')}>
-                <EngineChip letter="K" tone="kv" /> keys
-                {typeof activity.kvKeyCount === 'number' && <span className="explorer__object-count">{formatCount(activity.kvKeyCount)}</span>}
-              </button>
-            )}
-            {activity.kv === 'empty' && (
-              <>
-                <div className="explorer__section-placeholder mono-path">no keys yet</div>
-                <button type="button" className="explorer__create-link" onClick={() => openInData('kv')}>
-                  + new key
+              ))}
+              {(viewsQuery.data ?? []).map((view) => (
+                <button
+                  key={view.name}
+                  type="button"
+                  className="explorer__object-row explorer__object-row--muted"
+                  onClick={() => openViewInSql(view.name)}
+                >
+                  <EngineChip letter="V" tone="dashed" /> {view.name}
                 </button>
-              </>
-            )}
-          </>
-        )}
+              ))}
+            </>
+          )}
+          {hasJson && (
+            <>
+              <SectionLabel
+                tone="json"
+                text={sectionLabelText('JSON', domain.engines.json?.state)}
+                addLabel="new document"
+                onAdd={() => openInData('json')}
+              />
+              {activity.json === 'active' && (
+                <button type="button" className="explorer__object-row" onClick={() => openInData('json')}>
+                  <EngineChip letter="J" tone="json" /> documents
+                  {jsonSummary && <span className="explorer__object-count">{jsonSummary}</span>}
+                </button>
+              )}
+            </>
+          )}
+          {hasKv && (
+            <>
+              <SectionLabel tone="kv" text="KEY-VALUE" addLabel="new key" onAdd={() => openInData('kv')} />
+              {activity.kv === 'active' && (
+                <button type="button" className="explorer__object-row" onClick={() => openInData('kv')}>
+                  <EngineChip letter="K" tone="kv" /> keys
+                  {typeof activity.kvKeyCount === 'number' && <span className="explorer__object-count">{formatCount(activity.kvKeyCount)}</span>}
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
       {tableModalOpen && <CreateTableModal domain={domain} apiClient={apiClient} onClose={() => setTableModalOpen(false)} />}
     </>

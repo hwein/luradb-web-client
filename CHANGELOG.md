@@ -5,6 +5,11 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Explorer: the expanded domain renders as a bordered card; each engine section
+  is a single label row (color dot, "+" action) without empty-state placeholders.
+
 ## [0.0.1] - 2026-08-11
 
 ### Added

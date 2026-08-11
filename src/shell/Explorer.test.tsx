@@ -73,6 +73,19 @@ function kvKeysHandler(domain: string, keys: string[]) {
   return http.get(`${ORIGIN}/store-api/kv/${domain}/keys`, () => HttpResponse.json(keys))
 }
 
+/**
+ * '▾ name' liegt seit spec shell/006 §1 auf einem Chevron-Span + einem Text-Node — RTL's Default-Textmatcher
+ * sieht pro Element nur dessen direkte Text-Kinder, keine verschachtelten. Matcht daher gegen das volle
+ * textContent, mit Kind-Ausschluss, damit nicht zusätzlich ein Vorfahre trifft (RTL-FAQ-Pattern).
+ */
+function expandedHeader(name: string): (content: string, element: Element | null) => boolean {
+  const text = `▾ ${name}`
+  return (_content, element) => {
+    if (element === null || element.textContent !== text) return false
+    return Array.from(element.children).every((child) => child.textContent !== text)
+  }
+}
+
 function DataRouteProbe() {
   const location = useLocation()
   return (
@@ -119,6 +132,7 @@ async function connectAndRender() {
 afterEach(() => {
   act(() => disconnect())
   resetSqlState()
+  Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal')
 })
 
 describe('Explorer', () => {
@@ -150,7 +164,7 @@ describe('Explorer', () => {
 
     await connectAndRender()
 
-    expect(await screen.findByText('▾ alpha')).toBeInTheDocument()
+    expect(await screen.findByText(expandedHeader('alpha'))).toBeInTheDocument()
     expect(screen.getByText('RELATIONAL')).toBeInTheDocument()
     expect(screen.getByText('JSON')).toBeInTheDocument()
     expect(screen.getByText('KEY-VALUE')).toBeInTheDocument()
@@ -185,12 +199,13 @@ describe('Explorer', () => {
     expect(await screen.findByRole('button', { name: /T orders/ })).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: /V v_paid/ })).toBeInTheDocument()
     expect(await screen.findByText('3 · idx 1')).toBeInTheDocument()
-    // kv keys scan resolves empty -> "no keys yet" placeholder, not an active row (spec shell/004 §4).
-    expect(await screen.findByText('no keys yet')).toBeInTheDocument()
+    // kv keys scan resolves empty -> only the label row's "+" action, no active row (spec shell/004 §4).
+    expect(await screen.findByRole('button', { name: 'new key' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^K keys/ })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /▸ beta/ }))
 
-    expect(await screen.findByText('▾ beta')).toBeInTheDocument()
+    expect(await screen.findByText(expandedHeader('beta'))).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /▸ alpha/ })).toBeInTheDocument()
     expect(screen.queryByText('RELATIONAL')).not.toBeInTheDocument()
   })
@@ -273,7 +288,7 @@ describe('Explorer', () => {
 
     await connectAndRender()
 
-    await screen.findByText('▾ alpha')
+    await screen.findByText(expandedHeader('alpha'))
     expect(screen.queryByText(/LINKS IN/)).not.toBeInTheDocument()
   })
 
@@ -299,7 +314,7 @@ describe('Explorer', () => {
     )
 
     await connectAndRender()
-    await screen.findByText('▾ alpha')
+    await screen.findByText(expandedHeader('alpha'))
 
     fireEvent.click(screen.getByRole('button', { name: '+ create domain' }))
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
@@ -324,7 +339,7 @@ describe('Explorer', () => {
     )
 
     await connectAndRender()
-    await screen.findByText('▾ alpha')
+    await screen.findByText(expandedHeader('alpha'))
 
     fireEvent.click(screen.getByRole('button', { name: '+ create domain' }))
     fireEvent.change(screen.getByLabelText('domain name'), { target: { value: 'shop2' } })
@@ -358,11 +373,14 @@ describe('Explorer', () => {
     expect(screen.getByText('create one to get started')).toBeInTheDocument()
   })
 
-  // "+ new table" öffnet seit spec sql/002 den Create-Table-Assistenten (natives <dialog> + showModal()) statt
-  // direkt einen SQL-Tab zu befüllen. showModal() ist in diesem jsdom (25.0.1) nicht implementiert (nur die
-  // `open`-IDL-Property wird reflektiert) — ein Klick hier würde crashen. Der Modal-Formular-Flow selbst ist in
-  // CreateTableModal.test.tsx gegen die <dialog>-freie CreateTableForm getestet; hier nur der Einstiegspunkt.
-  it('shows a "no tables yet" placeholder for an empty rel domain, with "+ new table" available', async () => {
+  it('renders only the label row for an empty rel section; its "+" opens the create-table modal', async () => {
+    // Der "+" im Label öffnet seit spec sql/002 den Create-Table-Assistenten (natives <dialog> + showModal()).
+    // showModal() ist in diesem jsdom (25.0.1) nicht implementiert (nur die `open`-IDL-Property wird reflektiert)
+    // — hier gestubbt, weil dieser Test den öffnenden Klick tatsächlich auslöst. Der Formular-Flow selbst ist in
+    // CreateTableModal.test.tsx gegen die <dialog>-freie CreateTableForm getestet; hier nur der Einstiegspunkt.
+    HTMLDialogElement.prototype.showModal = function showModalStub(this: HTMLDialogElement) {
+      this.setAttribute('open', '')
+    }
     server.use(
       ...domainListHandlers([], [], [{ name: 'alpha', created_at: 1, state: 'active' }]),
       relTablesHandler('alpha', []),
@@ -371,11 +389,16 @@ describe('Explorer', () => {
 
     await connectAndRender()
 
-    expect(await screen.findByText('no tables yet')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '+ new table' })).toBeInTheDocument()
+    expect(await screen.findByText('RELATIONAL')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^T / })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^V / })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'new table' }))
+
+    expect(await screen.findByText('create table · alpha')).toBeInTheDocument()
   })
 
-  it('keeps "+ new table" available once the rel domain already has tables, not just in the empty state', async () => {
+  it('keeps the label "+" available once the rel section already has tables, not just in the empty state', async () => {
     server.use(
       ...domainListHandlers([], [], [{ name: 'alpha', created_at: 1, state: 'active' }]),
       relTablesHandler('alpha', ['orders']),
@@ -386,11 +409,10 @@ describe('Explorer', () => {
     await connectAndRender()
 
     expect(await screen.findByRole('button', { name: /T orders/ })).toBeInTheDocument()
-    expect(screen.queryByText('no tables yet')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '+ new table' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'new table' })).toBeInTheDocument()
   })
 
-  it('shows "no documents yet"/"no keys yet" placeholders for empty json/kv stores; their entry links navigate to /data with the right engine', async () => {
+  it('renders only the label row for empty json/kv sections; their "+" navigates to /data with the right engine', async () => {
     server.use(
       ...domainListHandlers([{ name: 'alpha', created_at: 1 }], [{ name: 'alpha', created_at: 1, state: 'active' }], []),
       jsonDetailHandler('alpha', 0),
@@ -400,14 +422,32 @@ describe('Explorer', () => {
 
     await connectAndRender()
 
-    expect(await screen.findByText('no documents yet')).toBeInTheDocument()
-    expect(await screen.findByText('no keys yet')).toBeInTheDocument()
+    expect(await screen.findByText('JSON')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^J documents/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^K keys/ })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '+ new document' }))
+    fireEvent.click(screen.getByRole('button', { name: 'new document' }))
     expect(screen.getByTestId('data-route-state')).toHaveTextContent('/data?engine=json')
 
-    fireEvent.click(screen.getByRole('button', { name: '+ new key' }))
+    fireEvent.click(screen.getByRole('button', { name: 'new key' }))
     expect(screen.getByTestId('data-route-state')).toHaveTextContent('/data?engine=kv')
+  })
+
+  it('shows the label "+" action alongside the object row once a json/kv section is active', async () => {
+    server.use(
+      ...domainListHandlers([{ name: 'alpha', created_at: 1 }], [{ name: 'alpha', created_at: 1, state: 'active' }], []),
+      jsonDetailHandler('alpha', 2),
+      jsonIndexesHandler('alpha', 0),
+      kvKeysHandler('alpha', ['k1']),
+    )
+
+    await connectAndRender()
+
+    expect(await screen.findByRole('button', { name: /^J documents/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'new document' })).toBeInTheDocument()
+
+    expect(await screen.findByRole('button', { name: /^K keys/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'new key' })).toBeInTheDocument()
   })
 
   it('keeps the "(deleting)" tag on a collapsed row even though the engine holds no more objects', async () => {
@@ -428,7 +468,7 @@ describe('Explorer', () => {
 
     await connectAndRender()
 
-    expect(await screen.findByText('▾ first')).toBeInTheDocument()
+    expect(await screen.findByText(expandedHeader('first'))).toBeInTheDocument()
     expect(await screen.findByText('json (deleting)')).toBeInTheDocument()
   })
 
@@ -447,15 +487,15 @@ describe('Explorer', () => {
     )
 
     const { unmount } = await connectAndRender()
-    expect(await screen.findByText('▾ alpha')).toBeInTheDocument()
+    expect(await screen.findByText(expandedHeader('alpha'))).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /▸ beta/ }))
-    expect(await screen.findByText('▾ beta')).toBeInTheDocument()
+    expect(await screen.findByText(expandedHeader('beta'))).toBeInTheDocument()
 
     unmount()
 
     await connectAndRender()
-    expect(await screen.findByText('▾ beta')).toBeInTheDocument()
-    expect(screen.queryByText('▾ alpha')).not.toBeInTheDocument()
+    expect(await screen.findByText(expandedHeader('beta'))).toBeInTheDocument()
+    expect(screen.queryByText(expandedHeader('alpha'))).not.toBeInTheDocument()
   })
 })
