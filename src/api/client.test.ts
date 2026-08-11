@@ -90,6 +90,46 @@ describe('createApi', () => {
     await expect(response.text()).resolves.toBe('raw-bytes')
   })
 
+  it('fetchSilent sets the Authorization header and resolves with the raw Response, ok or not', async () => {
+    let receivedAuth: string | null = null
+    server.use(
+      http.delete(`${BASE_URL}/store-api/kv/shop/keys/gone`, ({ request }) => {
+        receivedAuth = request.headers.get('Authorization')
+        return new HttpResponse('rate limited', { status: 429 })
+      }),
+    )
+
+    const { fetchSilent } = makeApi()
+    const response = await fetchSilent('/store-api/kv/shop/keys/gone', { method: 'DELETE' })
+
+    expect(receivedAuth).toBe('Bearer test-key')
+    expect(response.ok).toBe(false)
+    expect(response.status).toBe(429)
+    await expect(response.text()).resolves.toBe('rate limited')
+  })
+
+  it('fetchSilent does not notify onCall listeners — the one path around the recorder (data/008 §5)', async () => {
+    server.use(http.delete(`${BASE_URL}/store-api/kv/shop/keys/gone`, () => new HttpResponse(null, { status: 204 })))
+
+    const { fetchSilent, onCall } = makeApi()
+    const calls: CallInfo[] = []
+    onCall((info) => calls.push(info))
+    await fetchSilent('/store-api/kv/shop/keys/gone', { method: 'DELETE' })
+
+    expect(calls).toHaveLength(0)
+  })
+
+  it('fetchSilent wraps a network failure as a status-0 ApiError without notifying', async () => {
+    server.use(http.delete(`${BASE_URL}/store-api/kv/shop/keys/gone`, () => HttpResponse.error()))
+
+    const { fetchSilent, onCall } = makeApi()
+    const calls: CallInfo[] = []
+    onCall((info) => calls.push(info))
+
+    await expect(fetchSilent('/store-api/kv/shop/keys/gone', { method: 'DELETE' })).rejects.toBeInstanceOf(ApiError)
+    expect(calls).toHaveLength(0)
+  })
+
   it('fetchNdjson sends an ndjson Accept header', async () => {
     let acceptHeader: string | null = null
     server.use(

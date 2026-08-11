@@ -132,6 +132,21 @@ describe('KvBrowser', () => {
     expect(scanCalls).toBe(1)
   })
 
+  it('opens the bulk panel from "bulk…", based on the full scan result rather than the 100-key page cap (spec data/008 §2)', async () => {
+    const allKeys = Array.from({ length: 150 }, (_, i) => `k${String(i).padStart(3, '0')}`)
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(allKeys)),
+      http.get(`${KEYS_URL}/:key`, () => rawValue('v')),
+    )
+    await connectAndRender()
+    await screen.findByText('k000')
+
+    expect(screen.queryByText(/keys scanned/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'bulk…' }))
+
+    expect(document.querySelector('.kv-bulk__scope')?.textContent).toContain('150 keys scanned (prefix "")')
+  })
+
   it('shows JSON pretty-print, plaintext, and an empty value as a plain 0-bytes value (no special state)', async () => {
     server.use(
       http.get(KEYS_URL, () => HttpResponse.json(['json-key', 'plain-key', 'empty-key'])),
@@ -249,6 +264,28 @@ describe('KvBrowser', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'delete — sure?' }))
 
     await waitFor(() => expect(screen.queryByText('gone-key')).not.toBeInTheDocument())
+    expect(await screen.findByText('select a key')).toBeInTheDocument()
+  })
+
+  it('a bulk delete that removes the currently open key clears the detail selection like a single delete (spec data/008 §6)', async () => {
+    let deleted = false
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(deleted ? [] : ['tomb-key'])),
+      http.get(keyUrl('tomb-key'), () => rawValue('bye')),
+      http.delete(keyUrl('tomb-key'), () => {
+        deleted = true
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    await connectAndRender()
+    await screen.findByText('KEY tomb-key')
+
+    fireEvent.click(screen.getByRole('button', { name: 'bulk…' }))
+    fireEvent.click(screen.getByLabelText('delete'))
+    fireEvent.click(screen.getByRole('button', { name: 'run…' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'run' }))
+
+    await waitFor(() => expect(screen.queryByText('tomb-key')).not.toBeInTheDocument())
     expect(await screen.findByText('select a key')).toBeInTheDocument()
   })
 

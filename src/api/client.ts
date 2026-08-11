@@ -41,6 +41,12 @@ export interface ApiClient {
    * Canceln des Body-Readers, nicht über ein fetch-Signal.
    */
   openStream: (path: string) => Promise<Response>
+  /**
+   * Wie `fetchRaw`, aber ohne `notify()` — der einzige Weg an `apiClient.onCall(record)` vorbei
+   * (jeder andere Pfad, typisiert oder roh, meldet sich beim Recorder). Für Fanout-Läufe, die
+   * RECENT REQUESTS sonst fluten würden (data/008 §5); wirft nie auf Nicht-2xx, nur bei Netzfehlern.
+   */
+  fetchSilent: (path: string, init?: RequestInit) => Promise<Response>
 }
 
 function pathnameOf(url: string): string {
@@ -127,6 +133,17 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
     return rawCall(path, init ?? {})
   }
 
+  async function fetchSilent(path: string, init?: RequestInit): Promise<Response> {
+    const request = new Request(`${baseUrl}${path}`, init)
+    const authHeader = getAuthHeader()
+    if (authHeader !== undefined) request.headers.set('Authorization', authHeader)
+    try {
+      return await fetchImpl(request)
+    } catch (error) {
+      throw networkApiError(error)
+    }
+  }
+
   function fetchNdjson(path: string): Promise<Response> {
     return rawCall(path, { headers: { Accept: 'application/x-ndjson' } })
   }
@@ -180,5 +197,5 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
     return response
   }
 
-  return { api, onCall, fetchRaw, fetchNdjson, postNdjson, openStream }
+  return { api, onCall, fetchRaw, fetchNdjson, postNdjson, openStream, fetchSilent }
 }
