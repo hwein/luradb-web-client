@@ -109,6 +109,16 @@ describe('RelBrowser', () => {
     expect(chipFor('customer_ref·JSONREF')).toHaveClass('rel__col-chip--json')
   })
 
+  // Der Assistent selbst (Formular-Führung, Generator, Abschluss-Fluss) ist dialogfrei in AlterTableModal.test.tsx
+  // gegen AlterTableForm getestet (jsdom-Grenze wie sql/002) — hier nur der Einstiegspunkt neben der idx-Pill.
+  it('shows the "alter table" entry point next to the index pill', async () => {
+    server.use(http.get(ROWS_URL, () => HttpResponse.json({ rows: [], row_count: 0, limit: 50, offset: 0, limit_applied: false })))
+    await connectAndRender()
+
+    await screen.findByText('idx: label')
+    expect(screen.getByRole('button', { name: 'alter table' })).toBeInTheDocument()
+  })
+
   it('lists rows via GET with limit/offset, shows the call + limit-applied note, and pages via load more', async () => {
     server.use(
       http.get(ROWS_URL, ({ request }) => {

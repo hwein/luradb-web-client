@@ -1,0 +1,220 @@
+/* --- Alter-Table-Assistent (spec sql/004) — gleiche Modal-Mechanik wie CreateTableModal (sql/002) --- */
+
+/* Author-display würde sonst das UA-`display:none` geschlossener Dialoge überstimmen. */
+.atm:not([open]) {
+  display: none;
+}
+
+.atm {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 92vw);
+  max-height: min(680px, 88vh);
+  padding: 0;
+  background: var(--panel);
+  color: var(--tx);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-card);
+  font-family: var(--font-sans);
+}
+
+.atm::backdrop {
+  background: color-mix(in oklch, var(--bg) 65%, transparent);
+}
+
+.atm__head {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.atm__title {
+  color: var(--tx);
+}
+
+.atm__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.atm__ops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--bord);
+}
+
+.atm__op {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--mut);
+  cursor: pointer;
+}
+
+.atm__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.atm__field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.atm__label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--mut);
+}
+
+.atm__input {
+  box-sizing: border-box;
+  width: 100%;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  padding: 7px 10px;
+  outline: none;
+}
+
+.atm__select {
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 9px;
+  outline: none;
+}
+
+.atm__flags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.atm__flag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+  white-space: nowrap;
+}
+
+.atm__default-input {
+  width: 160px;
+  box-sizing: border-box;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 7px;
+}
+
+.atm__error {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--err);
+}
+
+.atm__hint {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--mut);
+}
+
+.atm__ref-hint {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--eng-json-label);
+}
+
+.atm__hint-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  text-decoration: underline;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.atm__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.atm__preview-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--mut);
+}
+
+.atm__preview-editor {
+  min-height: 80px;
+  max-height: 160px;
+  overflow: auto;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  padding: 10px 12px;
+}
+
+.atm__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.atm__cancel {
+  background: transparent;
+  border: 1px solid var(--bord);
+  color: var(--tx);
+  border-radius: var(--rad-input);
+  padding: 7px 14px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.atm__insert {
+  background: var(--acc);
+  color: var(--accT);
+  border: none;
+  border-radius: var(--rad-input);
+  padding: 7px 16px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.atm__insert:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -11,6 +11,9 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   docs article by typing a few letters.
 - SQL console: a `params` field in the toolbar sends a JSON array bound to
   `?` placeholders, for any statement class.
+- Data browser (REL mode): an "alter table" assistant next to the index pill
+  generates `ADD COLUMN` / `DROP COLUMN` / `RENAME COLUMN` / `RENAME TABLE`
+  statements into the SQL editor, guided by the server's v1 restrictions.
 
 ### Changed
 

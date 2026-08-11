@@ -32,7 +32,8 @@ function formatDefaultValue(type: ColumnType, value: ColumnDefault): string {
   return quoteLiteral(value.text)
 }
 
-function columnClause(column: ColumnDef): string {
+/** Exportiert für den ALTER-TABLE-Generator (spec sql/004) — gleiche Constraint-Reihenfolge/Escaping für ADD COLUMN. */
+export function columnClause(column: ColumnDef): string {
   const parts = [column.name, column.type]
   if (column.primaryKey) {
     parts.push('PRIMARY KEY')

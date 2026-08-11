@@ -59,30 +59,36 @@ function isPkEligibleType(type: ColumnType): boolean {
   return type === 'INTEGER' || type === 'TEXT'
 }
 
-function typeAllowsDefault(type: ColumnType): boolean {
+/** Exportiert für den ALTER-TABLE-Assistenten (spec sql/004 §3) — dieselbe Typ-Eignung gilt für ADD COLUMN. */
+export function typeAllowsDefault(type: ColumnType): boolean {
   return type !== 'KVREF' && type !== 'JSONREF'
 }
 
-function typeAllowsReferences(type: ColumnType): boolean {
+export function typeAllowsReferences(type: ColumnType): boolean {
   return type === 'INTEGER' || type === 'TEXT'
 }
 
 const PK_TYPE_ERROR = 'primary key must be INTEGER or TEXT — change the type or pick a different primary key'
 
-const REF_HINTS: Partial<Record<ColumnType, string>> = {
+/** Exportiert für sql/004 (add column) — Hinweistext ist statement-unabhängig (beschreibt das Insert-Verhalten der Spalte). */
+export const REF_HINTS: Partial<Record<ColumnType, string>> = {
   KVREF: 'points to a kv key in this domain — insert validates it exists (409 if missing).',
   JSONREF: 'points to a json document key in this domain — insert validates it exists (409 if missing).',
 }
 
-/** Fehlt die Ziel-Engine der Domäne oder ist sie deleting, würde CREATE mit 409 scheitern (spec sql/002 §5) — Option deaktiviert, Grund im title. */
-function refEngineUnavailableReason(type: ColumnType, domain: DomainSummary): string | undefined {
+/**
+ * Fehlt die Ziel-Engine der Domäne oder ist sie deleting, würde das Statement mit 409 scheitern (spec sql/002 §5,
+ * wiederverwendet von sql/004 §3 für ADD COLUMN) — Option deaktiviert, Grund im title. `statement` benennt das
+ * scheiternde Statement in der Begründung (`CREATE` bzw. `ADD COLUMN`).
+ */
+export function refEngineUnavailableReason(type: ColumnType, domain: DomainSummary, statement: string): string | undefined {
   if (type === 'KVREF') {
-    return domain.engines.kv === undefined ? 'kv engine not enabled for this domain — CREATE would fail with 409' : undefined
+    return domain.engines.kv === undefined ? `kv engine not enabled for this domain — ${statement} would fail with 409` : undefined
   }
   if (type === 'JSONREF') {
     const json = domain.engines.json
-    if (json === undefined) return 'json engine not enabled for this domain — CREATE would fail with 409'
-    if (json.state === 'deleting') return 'json engine is deleting in this domain — CREATE would fail with 409'
+    if (json === undefined) return `json engine not enabled for this domain — ${statement} would fail with 409`
+    if (json.state === 'deleting') return `json engine is deleting in this domain — ${statement} would fail with 409`
     return undefined
   }
   return undefined
@@ -225,7 +231,7 @@ function ColumnRow({
           onChange={(event) => onChangeType(event.target.value as ColumnType)}
         >
           {COLUMN_TYPES.map((type) => {
-            const reason = refEngineUnavailableReason(type, domain)
+            const reason = refEngineUnavailableReason(type, domain, 'CREATE')
             return (
               <option key={type} value={type} disabled={reason !== undefined} title={reason}>
                 {type}

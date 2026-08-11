@@ -840,6 +840,23 @@
   font-size: 8px;
 }
 
+.rel__alter-table {
+  background: none;
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-pill);
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+  padding: 5px 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rel__alter-table:hover {
+  color: var(--tx);
+}
+
 .rel__expand-toggle {
   background: none;
   border: 1px solid var(--bord);
