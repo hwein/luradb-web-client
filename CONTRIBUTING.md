@@ -83,14 +83,9 @@ it, externally contributed lines would have to be excluded from that.
   New behavior comes with tests (Vitest + Testing Library; mock the API through
   MSW handlers, not ad-hoc fetch stubs).
 - **Do not edit `CHANGELOG.md` or version numbers.** Both are mechanical: the
-  changelog entry is added when your change is integrated, and the release script
-  proposes the version. The scheme is deliberately not SemVer — the client
-  consumes the LuraDB API and nothing depends on the client, so it has no
-  breaking changes of its own: **patch** = fixes and features, **minor** = a
-  server-compatibility jump (the pinned API contract or `MIN_SERVER_VERSION`
-  changed since the last release), **major** = manual maintainer decision.
-  Describe user-visible changes in the PR description so they can be recorded
-  accurately.
+  changelog entry is added when your change is integrated, and the release
+  script proposes the version. Describe user-visible changes in the PR
+  description so they can be recorded accurately.
 - The public repo's language is English — code, comments, docs and commit
   messages.
 

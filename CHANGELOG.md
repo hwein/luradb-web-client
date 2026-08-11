@@ -1,8 +1,7 @@
 # Changelog
 
 All notable changes to the LuraDB Web Client are documented in this file. The
-format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
-versioning scheme is described in [CONTRIBUTING.md](CONTRIBUTING.md).
+format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
