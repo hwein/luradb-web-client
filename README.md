@@ -65,7 +65,7 @@ against a server below that minimum (`401` means the key is invalid).
 
 | Client | Minimum LuraDB server |
 | :--- | :--- |
-| 0.1.x | 0.1.0 |
+| 0.0.x | 0.1.0 |
 
 The client is built against the latest LuraDB API contract (`CONTRACT_VERSION`,
 informational only). When a LuraDB change requires it, a new client release
