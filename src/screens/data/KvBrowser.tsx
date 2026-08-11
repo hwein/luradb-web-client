@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import type { ApiClient } from '../../api'
 import { CallLine } from '../../lib'
 import { DataHeader } from './DataHeader'
+import { KvBulkBar } from './KvBulkBar'
 import { KvDetail, type KvDetailMode } from './KvDetail'
 import { KvMasterList } from './KvMasterList'
 import { KvWatchFeed } from './KvWatchFeed'
@@ -11,6 +12,7 @@ import { invalidateKvKeys, KV_KEYS_PAGE_SIZE, kvKeysQueryOptions } from './kvEnt
 interface KvBrowserProps {
   domain: string
   apiClient: ApiClient | undefined
+  initialKey: string | undefined
 }
 
 function formatNumber(value: number): string {
@@ -18,11 +20,12 @@ function formatNumber(value: number): string {
 }
 
 /** KV-Modus des Data Browsers (spec data/002): Kopf mit Prefix-Scan/Watch-Toggle, Master-Detail, optionales Feed-Panel, Footer-CallLine. */
-export function KvBrowser({ domain, apiClient }: KvBrowserProps) {
+export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
   const queryClient = useQueryClient()
   const [prefixText, setPrefixText] = useState('')
   const [committedPrefix, setCommittedPrefix] = useState('')
   const [watchOn, setWatchOn] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
   const [visibleCount, setVisibleCount] = useState(KV_KEYS_PAGE_SIZE)
   const [mode, setMode] = useState<KvDetailMode>({ kind: 'empty' })
 
@@ -35,6 +38,11 @@ export function KvBrowser({ domain, apiClient }: KvBrowserProps) {
     setMode({ kind: 'empty' })
     setVisibleCount(KV_KEYS_PAGE_SIZE)
   }, [domain, committedPrefix])
+
+  // Ankunft mit ?key= (spec data/009 §5, analog zur rel-Filter-Ankunft): einmalig initiale Selektion, danach normale Bedienung.
+  useEffect(() => {
+    if (initialKey !== undefined) setMode({ kind: 'view', key: initialKey })
+  }, [domain, initialKey])
 
   useEffect(() => {
     const first = visibleKeys[0]
@@ -77,6 +85,14 @@ export function KvBrowser({ domain, apiClient }: KvBrowserProps) {
         </form>
         <button
           type="button"
+          className={`kv__bulk-toggle${bulkOpen ? ' kv__bulk-toggle--active' : ''}`}
+          onClick={() => setBulkOpen((value) => !value)}
+          aria-pressed={bulkOpen}
+        >
+          bulk…
+        </button>
+        <button
+          type="button"
           className={`kv__watch-toggle${watchOn ? ' kv__watch-toggle--active' : ''}`}
           onClick={() => setWatchOn((value) => !value)}
           aria-pressed={watchOn}
@@ -84,6 +100,7 @@ export function KvBrowser({ domain, apiClient }: KvBrowserProps) {
           ● live
         </button>
       </DataHeader>
+      {bulkOpen && <KvBulkBar domain={domain} apiClient={apiClient} keys={keys} prefix={committedPrefix} />}
       <div className={`data__body${watchOn ? ' data__body--watch' : ''}`}>
         <KvMasterList
           keys={visibleKeys}

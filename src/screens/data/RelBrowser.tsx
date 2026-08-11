@@ -5,7 +5,9 @@ import type { ApiClient } from '../../api'
 import type { components } from '../../api/schema'
 import { CallLine } from '../../lib'
 import { relTableDetailQueryOptions } from '../../shell/domainDetails'
+import { useDomainSummaries } from '../../shell/domains'
 import { openDocs } from '../docs/openDocs'
+import { AlterTableModal } from '../sql/AlterTableModal'
 import { DataHeader } from './DataHeader'
 import { RelRowDetail, type RelDetailMode } from './RelRowDetail'
 import { RelRowsGrid } from './RelRowsGrid'
@@ -39,6 +41,10 @@ export function RelBrowser({ domain, apiClient, table, filterCol, filterVal }: R
 
   const [expandOn, setExpandOn] = useState(false)
   const [mode, setMode] = useState<RelDetailMode>({ kind: 'empty' })
+  const [alterModalOpen, setAlterModalOpen] = useState(false)
+
+  // Gecachte Liste (Explorer nutzt denselben Query-Key) — nur für die KVREF/JSONREF-Engine-Führung im Alter-Table-Assistenten (spec sql/004 §3).
+  const domainSummary = useDomainSummaries(apiClient).find((entry) => entry.name === domain) ?? { name: domain, engines: {} }
 
   const schemaQuery = useQuery(relTableDetailQueryOptions(apiClient, domain, table, apiClient !== undefined))
   const rowsQuery = useInfiniteQuery(relRowsQueryOptions(apiClient, domain, table, expandOn, !filterActive))
@@ -74,6 +80,11 @@ export function RelBrowser({ domain, apiClient, table, filterCol, filterVal }: R
   function goToLinkDocs(): void {
     openDocs('cross-engine-links')
     void navigate('/docs')
+  }
+
+  // Absprung zum Ziel-Objekt (spec 009 §5): Ankunftsparam analog zur Filter-Ankunft, den KvBrowser/JsonBrowser als initiale Detail-Selektion übernehmen.
+  function openLinkedKey(engine: 'json' | 'kv', key: string): void {
+    void navigate(`/data?${new URLSearchParams({ engine, key }).toString()}`)
   }
 
   if (schemaQuery.isLoading) {
@@ -116,6 +127,9 @@ export function RelBrowser({ domain, apiClient, table, filterCol, filterVal }: R
           )
         })}
         <span className="data__idx-pill">{indexPillText}</span>
+        <button type="button" className="rel__alter-table" onClick={() => setAlterModalOpen(true)}>
+          alter table
+        </button>
         <button
           type="button"
           className={`rel__expand-toggle${expandOn ? ' rel__expand-toggle--active' : ''}`}
@@ -170,6 +184,7 @@ export function RelBrowser({ domain, apiClient, table, filterCol, filterVal }: R
           onDeleted={() => setMode({ kind: 'empty' })}
           onClear={() => setMode({ kind: 'empty' })}
           onConflictDocs={goToLinkDocs}
+          onOpenLink={openLinkedKey}
         />
       </div>
       <div className="data__footer mono-path">
@@ -182,6 +197,15 @@ export function RelBrowser({ domain, apiClient, table, filterCol, filterVal }: R
           'loading…'
         ) : null}
       </div>
+      {alterModalOpen && (
+        <AlterTableModal
+          domain={domainSummary}
+          apiClient={apiClient}
+          table={table}
+          schema={schemaQuery.data}
+          onClose={() => setAlterModalOpen(false)}
+        />
+      )}
     </div>
   )
 }

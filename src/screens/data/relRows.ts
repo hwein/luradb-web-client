@@ -11,7 +11,7 @@ const ROWS_PAGE_SIZE = 50
 
 export type RelRow = Record<string, unknown>
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -289,7 +289,7 @@ export async function checkDanglingLinks(
 
   // PK kann selbst Link-Spalte sein (REFERENCES-PK) — nicht doppelt projizieren.
   const sql = `SELECT ${[pk, ...linkColumns.filter((column) => column !== pk)].join(', ')} FROM ${table} LIMIT ${DANGLING_CHECK_LIMIT}`
-  const outcome = await executeSql(apiClient, domain, sql, linkColumns)
+  const outcome = await executeSql(apiClient, domain, sql, linkColumns, [])
   if (outcome.status === 'error') throw new ApiError(outcome.call.status, outcome.message)
   const result = outcome.result
   if (result.kind !== 'select') throw new ApiError(outcome.call.status, 'unexpected dangling-check response shape')

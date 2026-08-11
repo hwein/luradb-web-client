@@ -41,11 +41,11 @@ export function useEngineActivity(apiClient: ApiClient | undefined, domain: Doma
   const hasJson = domain.engines.json !== undefined
   const hasKv = domain.engines.kv !== undefined
 
-  const tablesQuery = useQuery(relTablesQueryOptions(apiClient, domain.name, hasRel))
-  const viewsQuery = useQuery(relViewsQueryOptions(apiClient, domain.name, hasRel))
-  const jsonDetailQuery = useQuery(jsonDomainDetailQueryOptions(apiClient, domain.name, hasJson))
-  const indexesQuery = useQuery(jsonIndexesQueryOptions(apiClient, domain.name, hasJson))
-  const keysQuery = useQuery(kvKeysProbeQueryOptions(apiClient, domain.name, hasKv))
+  const tablesQuery = useQuery({ ...relTablesQueryOptions(apiClient, domain.name, hasRel), refetchInterval: 60_000 })
+  const viewsQuery = useQuery({ ...relViewsQueryOptions(apiClient, domain.name, hasRel), refetchInterval: 60_000 })
+  const jsonDetailQuery = useQuery({ ...jsonDomainDetailQueryOptions(apiClient, domain.name, hasJson), refetchInterval: 60_000 })
+  const indexesQuery = useQuery({ ...jsonIndexesQueryOptions(apiClient, domain.name, hasJson), refetchInterval: 60_000 })
+  const keysQuery = useQuery({ ...kvKeysProbeQueryOptions(apiClient, domain.name, hasKv), refetchInterval: 60_000 })
 
   const rel = hasRel
     ? levelFromCounts([

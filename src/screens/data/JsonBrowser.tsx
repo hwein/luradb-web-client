@@ -4,7 +4,9 @@ import { useNavigate } from 'react-router'
 import { BASE_PATH, type ApiClient } from '../../api'
 import { CallLine } from '../../lib'
 import { jsonIndexesQueryOptions } from '../../shell/domainDetails'
+import { BulkImportModal } from './BulkImportModal'
 import { DataHeader } from './DataHeader'
+import { IndexPanel } from './IndexPanel'
 import { JsonDetail, type DetailMode } from './JsonDetail'
 import { JsonMasterList } from './JsonMasterList'
 import { isJsonObject, jsonDocumentsQueryOptions, safeJsonParse, type ParsedFilter } from './jsonDocuments'
@@ -12,6 +14,7 @@ import { isJsonObject, jsonDocumentsQueryOptions, safeJsonParse, type ParsedFilt
 interface JsonBrowserProps {
   domain: string
   apiClient: ApiClient | undefined
+  initialKey: string | undefined
 }
 
 function formatNumber(value: number): string {
@@ -36,13 +39,14 @@ function downloadNdjson(domain: string, text: string): void {
 }
 
 /** JSON-Modus des Data Browsers (spec data/001): Kopf mit Idx/Filter/Search, Master-Detail, Footer-CallLine. */
-export function JsonBrowser({ domain, apiClient }: JsonBrowserProps) {
+export function JsonBrowser({ domain, apiClient, initialKey }: JsonBrowserProps) {
   const navigate = useNavigate()
 
   const [filterText, setFilterText] = useState('')
   const [filterError, setFilterError] = useState<string | undefined>(undefined)
   const [committedFilter, setCommittedFilter] = useState<ParsedFilter | undefined>(undefined)
   const [mode, setMode] = useState<DetailMode>({ kind: 'empty' })
+  const [indexPanelOpen, setIndexPanelOpen] = useState(false)
 
   const indexesQuery = useQuery(jsonIndexesQueryOptions(apiClient, domain, true))
   const documentsQuery = useInfiniteQuery(jsonDocumentsQueryOptions(apiClient, domain, committedFilter))
@@ -63,6 +67,11 @@ export function JsonBrowser({ domain, apiClient }: JsonBrowserProps) {
   useEffect(() => {
     setMode({ kind: 'empty' })
   }, [domain, committedFilter])
+
+  // Ankunft mit ?key= (spec data/009 §5, analog zur rel-Filter-Ankunft): einmalig initiale Selektion, danach normale Bedienung.
+  useEffect(() => {
+    if (initialKey !== undefined) setMode({ kind: 'view', key: initialKey })
+  }, [domain, initialKey])
 
   useEffect(() => {
     const first = documents[0]
@@ -100,7 +109,14 @@ export function JsonBrowser({ domain, apiClient }: JsonBrowserProps) {
   return (
     <div className="data">
       <DataHeader tone="json" letter="J" path={`${domain} / json documents`}>
-        <span className="data__idx-pill">{indexPillText}</span>
+        <button
+          type="button"
+          className={`data__idx-pill data__idx-pill--toggle${indexPanelOpen ? ' data__idx-pill--active' : ''}`}
+          aria-expanded={indexPanelOpen}
+          onClick={() => setIndexPanelOpen((open) => !open)}
+        >
+          {indexPillText} {indexPanelOpen ? '▾' : '▸'}
+        </button>
         <form className="json__search" onSubmit={submitSearch}>
           <input
             className="json__filter-input"
@@ -117,7 +133,11 @@ export function JsonBrowser({ domain, apiClient }: JsonBrowserProps) {
         <button type="button" className="json__export-button" onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}>
           {exportMutation.isPending ? 'exporting…' : 'export ndjson ↓'}
         </button>
+        <BulkImportModal domain={domain} apiClient={apiClient} />
       </DataHeader>
+      {indexPanelOpen && apiClient !== undefined && (
+        <IndexPanel domain={domain} apiClient={apiClient} indexes={indexesQuery.data ?? []} loading={indexesQuery.isLoading} />
+      )}
       {filterError !== undefined && <div className="json__filter-error">{filterError}</div>}
       {exportMutation.isError && <div className="json__filter-error">{messageOf(exportMutation.error)}</div>}
       <div className="data__body">

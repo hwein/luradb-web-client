@@ -1,6 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { http, HttpResponse } from 'msw'
+import { http, HttpResponse, type RequestHandler } from 'msw'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 import { record } from '../../api'
@@ -88,8 +88,11 @@ function DataRouteProbe() {
   )
 }
 
-async function connectAndRender(initialPath = '/engines') {
+async function connectAndRender(initialPath = '/engines', extraHandlers: RequestHandler[] = []) {
   server.use(...baseHandlers())
+  // Zweiter `.use()`-Aufruf (statt gemeinsam mit baseHandlers()): MSW priorisiert den zuletzt registrierten
+  // Handler je Route — so überschreiben testspezifische Routen die Defaults zuverlässig vor dem ersten Fetch.
+  if (extraHandlers.length > 0) server.use(...extraHandlers)
   await act(() => connect(makeConnection()))
   const queryClient = createAppQueryClient()
   return render(
@@ -161,7 +164,7 @@ describe('EnginesScreen', () => {
   it('shows the empty tasks state and the compaction/janitor counters from /store-api/metrics.system', async () => {
     await connectAndRender()
 
-    expect(await screen.findByText('no client-started tasks · reindex can be triggered via REST explorer')).toBeInTheDocument()
+    expect(await screen.findByText('no client-started tasks')).toBeInTheDocument()
     await waitFor(() => expect(document.querySelector('.engines__tasks')?.textContent).toContain('compaction runs'))
     expect(document.querySelector('.engines__tasks')?.textContent).toContain('3')
     expect(document.querySelector('.engines__tasks')?.textContent).toContain('janitor runs')
@@ -192,6 +195,109 @@ describe('EnginesScreen', () => {
     },
     8000,
   )
+
+  describe('reindex trigger (spec engines/002)', () => {
+    it('disables the reindex trigger with a reason when there are no JSON domains', async () => {
+      await connectAndRender('/engines', [http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([]))])
+
+      const toggle = await screen.findByRole('button', { name: '▶ reindex…' })
+      await waitFor(() => expect(toggle).toBeDisabled())
+      expect(toggle).toHaveAttribute('title', 'no JSON domains to reindex')
+    })
+
+    it('excludes deleting JSON domains from the domain dropdown and sources fields from the shared index cache', async () => {
+      await connectAndRender('/engines', [
+        http.get(`${ORIGIN}/store-api/json/domains`, () =>
+          HttpResponse.json([
+            { name: 'shop', created_at: 1, state: 'active' },
+            { name: 'archive', created_at: 2, state: 'deleting' },
+          ]),
+        ),
+        // Die JSON-ENGINE-Karte summiert document_count/Indexe über alle JSON-Domänen (auch deleting) — ohne
+        // Handler hierfür bliebe der Request unhandled und ginge auf das echte Netzwerk (hängt, verhungert
+        // den Connection-Pool nachfolgender Tests).
+        http.get(`${ORIGIN}/store-api/json/domains/archive`, () => HttpResponse.json({ name: 'archive', created_at: 2, state: 'deleting' })),
+        http.get(`${ORIGIN}/store-api/json/archive/indexes`, () => HttpResponse.json([])),
+      ])
+
+      const toggle = await screen.findByRole('button', { name: '▶ reindex…' })
+      await waitFor(() => expect(toggle).toBeEnabled())
+      fireEvent.click(toggle)
+
+      const domainSelect = await screen.findByLabelText('reindex domain')
+      expect(within(domainSelect).getAllByRole('option').map((option) => option.textContent)).toEqual(['shop'])
+
+      const fieldSelect = screen.getByLabelText('reindex field')
+      await waitFor(() =>
+        expect(within(fieldSelect).getAllByRole('option').map((option) => option.textContent)).toEqual(['all indexes', 'city', 'email']),
+      )
+    })
+
+    it('202: closes the form, shows the task as a running row immediately, and records the POST call', async () => {
+      let requestBody: unknown
+      server.use(
+        http.post(`${ORIGIN}/store-api/json/shop/reindex`, async ({ request }) => {
+          requestBody = await request.json()
+          return HttpResponse.json({ task_id: 'task_xyz789' }, { status: 202 })
+        }),
+        // Registrierung startet sofort den 2s-Status-Poll (engines/001) — mocken, sonst ginge der Request
+        // unhandled auf das echte Netzwerk (hängt, verhungert den Connection-Pool nachfolgender Tests).
+        http.get(`${ORIGIN}/store-api/json/shop/reindex/task_xyz789`, () => HttpResponse.json({ state: 'running', processed: 0, total_estimated: 0 })),
+      )
+      await connectAndRender()
+
+      const toggle = await screen.findByRole('button', { name: '▶ reindex…' })
+      await waitFor(() => expect(toggle).toBeEnabled())
+      fireEvent.click(toggle)
+      fireEvent.click(await screen.findByRole('button', { name: 'start reindex' }))
+
+      expect(await screen.findByText('reindex shop')).toBeInTheDocument()
+      expect(screen.queryByLabelText('reindex domain')).not.toBeInTheDocument()
+      expect(requestBody).toEqual({}) // "all indexes" default ⇒ field weggelassen
+
+      expect(document.querySelector('.engines__requests')?.textContent).toContain('/store-api/json/shop/reindex')
+    })
+
+    it('sends the chosen field instead of the "all indexes" default', async () => {
+      let requestBody: unknown
+      server.use(
+        http.post(`${ORIGIN}/store-api/json/shop/reindex`, async ({ request }) => {
+          requestBody = await request.json()
+          return HttpResponse.json({ task_id: 'task_field1' }, { status: 202 })
+        }),
+        http.get(`${ORIGIN}/store-api/json/shop/reindex/task_field1`, () => HttpResponse.json({ state: 'running', processed: 0, total_estimated: 0 })),
+      )
+      await connectAndRender()
+
+      const toggle = await screen.findByRole('button', { name: '▶ reindex…' })
+      await waitFor(() => expect(toggle).toBeEnabled())
+      fireEvent.click(toggle)
+      const fieldSelect = await screen.findByLabelText('reindex field')
+      await waitFor(() => expect(within(fieldSelect).getAllByRole('option')).toHaveLength(3))
+      fireEvent.change(fieldSelect, { target: { value: 'email' } })
+      fireEvent.click(screen.getByRole('button', { name: 'start reindex' }))
+
+      await waitFor(() => expect(requestBody).toEqual({ field: 'email' }))
+    })
+
+    it('409: shows the original server message inline and leaves the task registry untouched', async () => {
+      server.use(
+        http.post(`${ORIGIN}/store-api/json/shop/reindex`, () =>
+          HttpResponse.text("re-index already running for domain 'shop' (task 61ec3e5f)", { status: 409 }),
+        ),
+      )
+      await connectAndRender()
+
+      const toggle = await screen.findByRole('button', { name: '▶ reindex…' })
+      await waitFor(() => expect(toggle).toBeEnabled())
+      fireEvent.click(toggle)
+      fireEvent.click(await screen.findByRole('button', { name: 'start reindex' }))
+
+      expect(await screen.findByText("re-index already running for domain 'shop' (task 61ec3e5f)")).toBeInTheDocument()
+      expect(screen.getByLabelText('reindex domain')).toBeInTheDocument() // Formular bleibt offen
+      expect(screen.getByText('no client-started tasks')).toBeInTheDocument() // Registry unverändert
+    })
+  })
 
   it('renders the SYSTEM throughput bar wired to /store-api/metrics (delta-integration itself covered by SystemThroughput.test.tsx)', async () => {
     await connectAndRender()

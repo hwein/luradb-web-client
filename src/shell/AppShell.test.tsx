@@ -46,7 +46,16 @@ async function renderConnectedShell(path = '/sql'): Promise<void> {
 afterEach(() => {
   disconnect()
   window.history.pushState({}, '', '/')
+  Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal')
 })
+
+// jsdom kennt showModal() nicht (nur `open` wird reflektiert) — wie Rail.test.tsx gestubbt für Tests, die den
+// öffnenden Ctrl+K-Tastendruck tatsächlich auslösen.
+function stubShowModal(): void {
+  HTMLDialogElement.prototype.showModal = function showModalStub(this: HTMLDialogElement) {
+    this.setAttribute('open', '')
+  }
+}
 
 describe('AppShell', () => {
   it('redirects / to the SQL screen', async () => {
@@ -92,6 +101,60 @@ describe('AppShell', () => {
 
     expect(await screen.findByLabelText('search docs')).toHaveFocus()
     expect(screen.getByTitle('Docs')).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('Ctrl+K opens the command palette, focused on its search input', async () => {
+    stubShowModal()
+    await renderConnectedShell('/sql')
+    await screen.findByText('run a query to see results')
+
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true })
+
+    expect(await screen.findByLabelText('command palette search')).toBeInTheDocument()
+  })
+
+  it('AltGr+K (ctrl+alt on Windows) does not open the palette', async () => {
+    stubShowModal()
+    await renderConnectedShell('/sql')
+    await screen.findByText('run a query to see results')
+
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true, altKey: true })
+
+    expect(screen.queryByLabelText('command palette search')).not.toBeInTheDocument()
+  })
+
+  it('Meta+K opens the command palette too', async () => {
+    stubShowModal()
+    await renderConnectedShell('/sql')
+    await screen.findByText('run a query to see results')
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+
+    expect(await screen.findByLabelText('command palette search')).toBeInTheDocument()
+  })
+
+  it('a second Ctrl+K closes the command palette again', async () => {
+    stubShowModal()
+    await renderConnectedShell('/sql')
+    await screen.findByText('run a query to see results')
+
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true })
+    await screen.findByLabelText('command palette search')
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true })
+
+    expect(screen.queryByLabelText('command palette search')).not.toBeInTheDocument()
+  })
+
+  it('a click on the command-palette backdrop closes it', async () => {
+    stubShowModal()
+    await renderConnectedShell('/sql')
+    await screen.findByText('run a query to see results')
+
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true })
+    await screen.findByLabelText('command palette search')
+    fireEvent.click(document.querySelector('.cmdk') as HTMLElement)
+
+    expect(screen.queryByLabelText('command palette search')).not.toBeInTheDocument()
   })
 
   it('toggles the theme via the rail pill', async () => {

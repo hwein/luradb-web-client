@@ -1,5 +1,6 @@
 import type { ApiClient, CallMeta } from '../../api'
 import { withCall } from '../../api'
+import type { components } from '../../api/schema'
 
 export interface SqlColumn {
   name: string
@@ -30,6 +31,7 @@ export type SqlOutcome =
 export interface SqlRequestBody {
   sql: string
   expand?: string[]
+  params?: unknown[]
 }
 
 /** `expand` ist nur bei SELECT gültig (sonst 400) — nur dann mitsenden (spec §4). */
@@ -37,9 +39,28 @@ export function isSelect(sql: string): boolean {
   return /^\s*select\b/i.test(sql)
 }
 
-export function buildSqlRequest(sql: string, expand: string[]): SqlRequestBody {
+export const PARAMS_ERROR = 'params must be a JSON array'
+
+export type ParamsParseResult = { ok: true; params: unknown[] } | { ok: false; error: string }
+
+/** leer/Whitespace ⇒ kein Params-Array; sonst muss der Text als JSON-Array parsen (spec sql/003 §2). */
+export function parseParams(text: string): ParamsParseResult {
+  const trimmed = text.trim()
+  if (trimmed === '') return { ok: true, params: [] }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    return { ok: false, error: PARAMS_ERROR }
+  }
+  return Array.isArray(parsed) ? { ok: true, params: parsed } : { ok: false, error: PARAMS_ERROR }
+}
+
+/** `params` gilt für jede Statement-Klasse, anders als das SELECT-only `expand` (spec sql/003 §4). */
+export function buildSqlRequest(sql: string, expand: string[], params: unknown[]): SqlRequestBody {
   const body: SqlRequestBody = { sql }
   if (isSelect(sql) && expand.length > 0) body.expand = expand
+  if (params.length > 0) body.params = params
   return body
 }
 
@@ -136,11 +157,21 @@ export function buildNdjson(result: SqlSelectResult): string {
 }
 
 /** Führt genau ein Statement aus und misst clientseitig (via withCall, spec §4). */
-export async function executeSql(apiClient: ApiClient, domain: string, sql: string, expand: string[]): Promise<SqlOutcome> {
-  const body = buildSqlRequest(sql, expand)
+export async function executeSql(
+  apiClient: ApiClient,
+  domain: string,
+  sql: string,
+  expand: string[],
+  params: unknown[],
+): Promise<SqlOutcome> {
+  const body = buildSqlRequest(sql, expand, params)
   let errorBody: unknown
   const { data, call } = await withCall<Record<string, never>>('POST', async () => {
-    const response = await apiClient.api.POST('/store-api/rel/{domain}/sql', { params: { path: { domain } }, body })
+    // Contract-`params` sind beliebige JSON-Werte; die generierte Typisierung kennt nur ein leeres Objekt je Eintrag (wie relRows/referencedBy).
+    const response = await apiClient.api.POST('/store-api/rel/{domain}/sql', {
+      params: { path: { domain } },
+      body: body as unknown as components['schemas']['SqlRequest'],
+    })
     errorBody = response.error
     return { data: response.data, response: response.response }
   })

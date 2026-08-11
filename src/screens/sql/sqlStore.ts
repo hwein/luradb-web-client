@@ -5,6 +5,8 @@ export interface SqlTab {
   name: string
   text: string
   expand: string[]
+  /** Rohtext des params-Felds (auch ungültiges JSON übersteht so einen Tab-Wechsel, spec sql/003 §3). */
+  params: string
 }
 
 interface SqlState {
@@ -26,7 +28,7 @@ function nextUntitledName(tabs: SqlTab[]): string {
 }
 
 function defaultState(): SqlState {
-  const tab: SqlTab = { id: makeId(), name: 'untitled-1.sql', text: '', expand: [] }
+  const tab: SqlTab = { id: makeId(), name: 'untitled-1.sql', text: '', expand: [], params: '' }
   return { tabs: [tab], activeId: tab.id }
 }
 
@@ -47,6 +49,7 @@ function sanitizeTabs(value: unknown): SqlTab[] {
       name: record.name,
       text: record.text,
       expand: sanitizeExpand(record.expand),
+      params: typeof record.params === 'string' ? record.params : '',
     })
   }
   return tabs
@@ -101,7 +104,7 @@ export function useSqlState(): SqlState {
 
 /** Neuer Tab (untitled-N.sql), optional mit Startinhalt, sofort aktiv. Gibt die neue Tab-Id zurück. */
 export function addTab(text = ''): string {
-  const tab: SqlTab = { id: makeId(), name: nextUntitledName(state.tabs), text, expand: [] }
+  const tab: SqlTab = { id: makeId(), name: nextUntitledName(state.tabs), text, expand: [], params: '' }
   setState({ tabs: [...state.tabs, tab], activeId: tab.id })
   return tab.id
 }
@@ -136,6 +139,10 @@ export function updateTabText(id: string, text: string): void {
 
 export function setTabExpand(id: string, expand: string[]): void {
   setState({ ...state, tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, expand } : tab)) })
+}
+
+export function updateTabParams(id: string, params: string): void {
+  setState({ ...state, tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, params } : tab)) })
 }
 
 /** Nur für Tests: In-Memory-Store aus dem aktuellen localStorage neu aufbauen. */

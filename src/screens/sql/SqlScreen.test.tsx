@@ -236,4 +236,41 @@ describe('SqlScreen', () => {
       expect(parsed.tabs).toHaveLength(2)
     })
   })
+
+  it('sends the params field as a JSON array for a ?-statement', async () => {
+    let requestBody: unknown
+    server.use(
+      http.post(SQL_URL, async ({ request }) => {
+        requestBody = await request.json()
+        return HttpResponse.json({ columns: [{ name: 'id', type: 'INTEGER' }], rows: [[1042]], row_count: 1, limit_applied: false })
+      }),
+    )
+    await connectAndRender({ insertQuery: 'SELECT id FROM orders WHERE status = ?' })
+
+    fireEvent.change(await screen.findByLabelText('params'), { target: { value: '["paid"]' } })
+    fireEvent.click(await findEnabledRun())
+
+    await waitFor(() => expect(requestBody).toEqual({ sql: 'SELECT id FROM orders WHERE status = ?', params: ['paid'] }))
+  })
+
+  it('locks Run and shows an inline error when params does not parse as a JSON array', async () => {
+    await connectAndRender({ insertQuery: 'SELECT 1' })
+    const run = await findEnabledRun()
+
+    fireEvent.change(await screen.findByLabelText('params'), { target: { value: '{}' } })
+
+    expect(await screen.findByText('params must be a JSON array')).toBeInTheDocument()
+    expect(run).toBeDisabled()
+  })
+
+  it('renders a server 400 for a wrong params count the same way as other SQL errors', async () => {
+    server.use(http.post(SQL_URL, () => HttpResponse.text('parameter count mismatch: expected 1, got 2', { status: 400 })))
+    await connectAndRender({ insertQuery: 'SELECT id FROM orders WHERE status = ?' })
+
+    fireEvent.change(await screen.findByLabelText('params'), { target: { value: '["paid", "extra"]' } })
+    fireEvent.click(await findEnabledRun())
+
+    expect(await screen.findByText(/parameter count mismatch/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '? syntax' })).toBeInTheDocument()
+  })
 })

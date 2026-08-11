@@ -29,12 +29,24 @@ export interface ApiClient {
   /** GET mit Accept: application/x-ndjson, z. B. `/store-api/json/{domain}/export`. */
   fetchNdjson: (path: string) => Promise<Response>
   /**
+   * POST mit `Content-Type: text/plain` — Gegenrichtung zu `fetchNdjson` (Bulk-Import). Liefert die Response
+   * immer zurück, auch bei Nicht-2xx (wie `openStream`): der Bulk-Endpunkt trägt Teilerfolge im 200-Body,
+   * 404/503 kommen als Klartext-Body (live geprüft) — der Aufrufer entscheidet über die Interpretation.
+   */
+  postNdjson: (path: string, body: string) => Promise<Response>
+  /**
    * Öffnet einen SSE-Stream (`Accept: text/event-stream`) und liefert die Response mit intaktem
    * Body-Stream zurück — auch bei Nicht-2xx (der Aufrufer entscheidet über 401/410). Der Recorder
    * sieht den Stream-Start als Call mit Status 'stream' (general/006). Abbruch läuft über das
    * Canceln des Body-Readers, nicht über ein fetch-Signal.
    */
   openStream: (path: string) => Promise<Response>
+  /**
+   * Wie `fetchRaw`, aber ohne `notify()` — der einzige Weg an `apiClient.onCall(record)` vorbei
+   * (jeder andere Pfad, typisiert oder roh, meldet sich beim Recorder). Für Fanout-Läufe, die
+   * RECENT REQUESTS sonst fluten würden (data/008 §5); wirft nie auf Nicht-2xx, nur bei Netzfehlern.
+   */
+  fetchSilent: (path: string, init?: RequestInit) => Promise<Response>
 }
 
 function pathnameOf(url: string): string {
@@ -121,8 +133,43 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
     return rawCall(path, init ?? {})
   }
 
+  async function fetchSilent(path: string, init?: RequestInit): Promise<Response> {
+    const request = new Request(`${baseUrl}${path}`, init)
+    const authHeader = getAuthHeader()
+    if (authHeader !== undefined) request.headers.set('Authorization', authHeader)
+    try {
+      return await fetchImpl(request)
+    } catch (error) {
+      throw networkApiError(error)
+    }
+  }
+
   function fetchNdjson(path: string): Promise<Response> {
     return rawCall(path, { headers: { Accept: 'application/x-ndjson' } })
+  }
+
+  async function postNdjson(path: string, body: string): Promise<Response> {
+    const request = new Request(`${baseUrl}${path}`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body })
+    const authHeader = getAuthHeader()
+    if (authHeader !== undefined) request.headers.set('Authorization', authHeader)
+
+    const start = performance.now()
+    let response: Response
+    try {
+      response = await fetchImpl(request)
+    } catch (error) {
+      notify({ method: request.method, path: pathnameOf(request.url), status: 0, ms: performance.now() - start, ok: false })
+      throw networkApiError(error)
+    }
+
+    notify({
+      method: request.method,
+      path: pathnameOf(request.url),
+      status: response.status,
+      ms: performance.now() - start,
+      ok: response.ok,
+    })
+    return response
   }
 
   async function openStream(path: string): Promise<Response> {
@@ -150,5 +197,5 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
     return response
   }
 
-  return { api, onCall, fetchRaw, fetchNdjson, openStream }
+  return { api, onCall, fetchRaw, fetchNdjson, postNdjson, openStream, fetchSilent }
 }

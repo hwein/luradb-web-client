@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect } from '../../app/session'
+import { resetReindexTasks } from '../../lib'
 import { SelectedDomainProvider } from '../../shell/SelectedDomainContext'
 import { server } from '../../test/msw'
 import { resetDocsState, useDocsState } from '../docs/docsStore'
@@ -49,13 +50,15 @@ function DocsRouteProbe() {
   return <p data-testid="docs-screen">docs: {docs.activeId ?? ''}</p>
 }
 
-async function connectAndRender(relDomain = false) {
-  server.use(...baseHandlers(relDomain))
+// `extraHandlers` kommen vor den Basis-Handlern in denselben `server.use()`-Aufruf (MSW: pro Aufruf gewinnt die
+// zuerst gelistete Route) — sonst würde `baseHandlers`' fixe `GET …/indexes → []` jeden Test-Override verdecken.
+async function connectAndRender(relDomain = false, extraHandlers: Parameters<typeof server.use> = [], initialPath = '/data') {
+  server.use(...extraHandlers, ...baseHandlers(relDomain))
   await act(() => connect(makeConnection()))
   const queryClient = createAppQueryClient()
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/data']}>
+      <MemoryRouter initialEntries={[initialPath]}>
         <SelectedDomainProvider>
           <Routes>
             <Route path="/data" element={<DataScreen />} />
@@ -74,9 +77,38 @@ function footerText(): string {
 afterEach(() => {
   act(() => disconnect())
   resetDocsState()
+  resetReindexTasks()
 })
 
+const INDEXES_URL = `${ORIGIN}/store-api/json/${DOMAIN}/indexes`
+
+async function openIndexPanel(): Promise<void> {
+  fireEvent.click(await screen.findByRole('button', { name: /^idx:/ }))
+}
+
 describe('JsonBrowser', () => {
+  it('arrives with ?key= (cross-engine jump from the rel row detail): selects that document initially, loaded independently of the listed page (spec data/009 §5)', async () => {
+    await connectAndRender(
+      false,
+      [
+        http.get(DOCS_URL, () =>
+          HttpResponse.json({
+            documents: [{ _key: 'cus_1', _version: 1, name: 'first' }],
+            keys: ['cus_1'],
+            total: 1,
+            offset: 0,
+            limit: 50,
+          }),
+        ),
+        documentHandler('cus_8102', 7, { name: 'M. Keller' }, '"etag-1"'),
+      ],
+      '/data?engine=json&key=cus_8102',
+    )
+
+    expect(await screen.findByText('DOCUMENT cus_8102')).toBeInTheDocument()
+    expect(screen.getByText(/"name": "M. Keller"/)).toBeInTheDocument()
+  })
+
   it('lists documents via GET when the filter is empty, and shows the raw call in the footer', async () => {
     server.use(
       http.get(DOCS_URL, ({ request }) => {
@@ -528,5 +560,107 @@ describe('JsonBrowser', () => {
     fireEvent.click(screen.getByRole('button', { name: 'export ndjson ↓' }))
 
     expect(await screen.findByText('domain not found')).toBeInTheDocument()
+  })
+
+  // Bulk-Import öffnet seit spec data/007 §1 ein Modal per natives <dialog> + showModal() — in diesem jsdom
+  // nicht implementiert (vgl. RelBrowser.test.tsx zu "check links"). Der Formular-/Ergebnis-Flow selbst ist
+  // <dialog>-frei in BulkImportModal.test.tsx gegen BulkImportForm getestet; hier nur der Einstiegspunkt.
+  it('shows the "import ndjson ↑" entry point next to export', async () => {
+    server.use(http.get(DOCS_URL, () => HttpResponse.json({ documents: [], keys: [], total: 0, offset: 0, limit: 50 })))
+    await connectAndRender()
+    await screen.findByText('no documents')
+
+    expect(screen.getByRole('button', { name: 'import ndjson ↑' })).toBeInTheDocument()
+  })
+
+  describe('index panel (spec data/006)', () => {
+    const emptyDocs = http.get(DOCS_URL, () => HttpResponse.json({ documents: [], keys: [], total: 0, offset: 0, limit: 50 }))
+
+    it('toggles the idx pill open and renders the index list in contract form (field · type · created)', async () => {
+      await connectAndRender(false, [emptyDocs, http.get(INDEXES_URL, () => HttpResponse.json([{ field: 'city', type: 'string', created_at: 1 }]))])
+
+      await openIndexPanel()
+
+      expect(await screen.findByText('city · string · 1970-01-01')).toBeInTheDocument()
+      expect(screen.getByText(`GET /store-api/json/${DOMAIN}/indexes`)).toBeInTheDocument()
+    })
+
+    it('create success invalidates the shared cache (pill text updates) and shows the reindex hint', async () => {
+      let created = false
+      let requestBody: unknown
+      await connectAndRender(false, [
+        emptyDocs,
+        http.get(INDEXES_URL, () => HttpResponse.json(created ? [{ field: 'city', type: 'string', created_at: 1 }] : [])),
+        http.post(INDEXES_URL, async ({ request }) => {
+          requestBody = await request.json()
+          created = true
+          return HttpResponse.json({ field: 'city', type: 'string', created_at: 1 }, { status: 201 })
+        }),
+      ])
+      await openIndexPanel()
+      expect(await screen.findByText('no indexes yet')).toBeInTheDocument()
+
+      fireEvent.change(screen.getByLabelText('index field'), { target: { value: 'city' } })
+      fireEvent.click(screen.getByRole('button', { name: 'create index' }))
+
+      await waitFor(() => expect(requestBody).toEqual({ field: 'city', type: 'string' }))
+      expect(await screen.findByRole('button', { name: /^idx: city/ })).toBeInTheDocument()
+      expect(screen.getByText('existing documents are not back-indexed')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'reindex now' })).toBeInTheDocument()
+    })
+
+    it('create 409 shows the original server error text inline', async () => {
+      await connectAndRender(false, [
+        emptyDocs,
+        http.get(INDEXES_URL, () => HttpResponse.json([])),
+        http.post(INDEXES_URL, () => HttpResponse.text("index on field 'city' already exists in domain 'shop'", { status: 409 })),
+      ])
+      await openIndexPanel()
+
+      fireEvent.change(screen.getByLabelText('index field'), { target: { value: 'city' } })
+      fireEvent.click(screen.getByRole('button', { name: 'create index' }))
+
+      expect(await screen.findByText("index on field 'city' already exists in domain 'shop'")).toBeInTheDocument()
+    })
+
+    it('delete removes the row from the (invalidated) list', async () => {
+      let deleted = false
+      await connectAndRender(false, [
+        emptyDocs,
+        http.get(INDEXES_URL, () => HttpResponse.json(deleted ? [] : [{ field: 'city', type: 'string', created_at: 1 }])),
+        http.delete(`${INDEXES_URL}/city`, () => {
+          deleted = true
+          return new HttpResponse(null, { status: 204 })
+        }),
+      ])
+      await openIndexPanel()
+      expect(await screen.findByText('city · string · 1970-01-01')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByTitle('search on this field stops working'))
+
+      await waitFor(() => expect(screen.queryByText('city · string · 1970-01-01')).not.toBeInTheDocument())
+      expect(screen.getByText('no indexes yet')).toBeInTheDocument()
+    })
+
+    it('"reindex now" calls startReindex with domain + the newly created field', async () => {
+      let reindexBody: unknown
+      await connectAndRender(false, [
+        emptyDocs,
+        http.get(INDEXES_URL, () => HttpResponse.json([])),
+        http.post(INDEXES_URL, () => HttpResponse.json({ field: 'city', type: 'string', created_at: 1 }, { status: 201 })),
+        http.post(`${ORIGIN}/store-api/json/${DOMAIN}/reindex`, async ({ request }) => {
+          reindexBody = await request.json()
+          return HttpResponse.json({ task_id: 'task_idx1' }, { status: 202 })
+        }),
+      ])
+      await openIndexPanel()
+
+      fireEvent.change(screen.getByLabelText('index field'), { target: { value: 'city' } })
+      fireEvent.click(screen.getByRole('button', { name: 'create index' }))
+
+      fireEvent.click(await screen.findByRole('button', { name: 'reindex now' }))
+
+      await waitFor(() => expect(reindexBody).toEqual({ field: 'city' }))
+    })
   })
 })

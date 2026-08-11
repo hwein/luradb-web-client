@@ -5,7 +5,16 @@ import { describe, expect, it } from 'vitest'
 import { createApi, type ApiClient } from '../api'
 import { createAppQueryClient } from '../app/queryClient'
 import { server } from '../test/msw'
-import { createJsonDomain, createKvDomain, createRelDomain, useDomainsPending, useDomainSummaries } from './domains'
+import {
+  createJsonDomain,
+  createKvDomain,
+  createRelDomain,
+  jsonDomainsQueryOptions,
+  kvDomainsQueryOptions,
+  relDomainsQueryOptions,
+  useDomainsPending,
+  useDomainSummaries,
+} from './domains'
 
 const BASE_URL = 'http://127.0.0.1:3000'
 
@@ -36,6 +45,14 @@ function renderProbe(apiClient: ApiClient) {
     </QueryClientProvider>,
   )
 }
+
+describe('kvDomainsQueryOptions / jsonDomainsQueryOptions / relDomainsQueryOptions', () => {
+  it('poll every 30s so foreign changes to the domain lists surface without user action (spec shell/007 §1)', () => {
+    expect(kvDomainsQueryOptions(undefined).refetchInterval).toBe(30_000)
+    expect(jsonDomainsQueryOptions(undefined).refetchInterval).toBe(30_000)
+    expect(relDomainsQueryOptions(undefined).refetchInterval).toBe(30_000)
+  })
+})
 
 describe('useDomainSummaries', () => {
   it('unions domains present in one, two, or three engines, sorted alphabetically', async () => {

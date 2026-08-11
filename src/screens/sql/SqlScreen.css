@@ -160,6 +160,22 @@
   opacity: 0.8;
 }
 
+.sql-toolbar__params {
+  width: 160px;
+  border-radius: var(--rad-input);
+}
+
+.sql-toolbar__params--error {
+  border-color: var(--err);
+}
+
+.sql-toolbar__params-error {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--err);
+  white-space: nowrap;
+}
+
 .sql-toolbar__hint {
   margin-left: auto;
   font-family: var(--font-mono);

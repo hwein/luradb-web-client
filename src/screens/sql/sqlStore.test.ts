@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { addTab, closeTab, renameTab, resetSqlState, setTabExpand, updateTabText, useSqlState } from './sqlStore'
+import { addTab, closeTab, renameTab, resetSqlState, setTabExpand, updateTabParams, updateTabText, useSqlState } from './sqlStore'
 
 beforeEach(() => {
   localStorage.clear()
@@ -74,7 +74,7 @@ describe('sqlStore', () => {
     expect(result.current.tabs[0]?.id).not.toBe(only)
   })
 
-  it('rename, updateText and setExpand mutate the target tab', () => {
+  it('rename, updateText, setExpand and updateParams mutate the target tab', () => {
     const { result } = renderHook(() => useSqlState())
     const id = result.current.tabs[0]?.id ?? ''
     act(() => {
@@ -86,9 +86,41 @@ describe('sqlStore', () => {
     act(() => {
       setTabExpand(id, ['ref'])
     })
+    act(() => {
+      updateTabParams(id, '["paid"]')
+    })
     const tab = result.current.tabs[0]
     expect(tab?.name).toBe('orders.sql')
     expect(tab?.text).toBe('SELECT 9')
     expect(tab?.expand).toEqual(['ref'])
+    expect(tab?.params).toBe('["paid"]')
+  })
+
+  it('persists the raw params text — even invalid JSON — across a reload simulation', () => {
+    const { result } = renderHook(() => useSqlState())
+    const id = result.current.tabs[0]?.id ?? ''
+    act(() => {
+      updateTabParams(id, '["paid, 42')
+    })
+    act(() => {
+      resetSqlState()
+    })
+    expect(result.current.tabs[0]?.params).toBe('["paid, 42')
+  })
+
+  it('sanitizeTabs migrates old storage entries without a params field to an empty string', () => {
+    localStorage.setItem(
+      'luradb.sqlTabs',
+      JSON.stringify({
+        tabs: [{ id: 'old-1', name: 'legacy.sql', text: 'SELECT 1', expand: [] }],
+        activeId: 'old-1',
+      }),
+    )
+    act(() => {
+      resetSqlState()
+    })
+    const { result } = renderHook(() => useSqlState())
+    expect(result.current.tabs).toHaveLength(1)
+    expect(result.current.tabs[0]?.params).toBe('')
   })
 })

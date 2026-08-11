@@ -32,6 +32,7 @@ export function kvDomainsQueryOptions(apiClient: ApiClient | undefined) {
       return data
     },
     enabled: apiClient !== undefined,
+    refetchInterval: 30_000,
   })
 }
 
@@ -46,6 +47,7 @@ export function jsonDomainsQueryOptions(apiClient: ApiClient | undefined) {
       return data
     },
     enabled: apiClient !== undefined,
+    refetchInterval: 30_000,
   })
 }
 
@@ -60,6 +62,7 @@ export function relDomainsQueryOptions(apiClient: ApiClient | undefined) {
       return data
     },
     enabled: apiClient !== undefined,
+    refetchInterval: 30_000,
   })
 }
 

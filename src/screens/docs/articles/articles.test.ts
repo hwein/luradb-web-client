@@ -57,4 +57,9 @@ describe('searchArticles', () => {
   it('returns no hits when nothing matches', () => {
     expect(searchArticles('xyznonexistentterm')).toEqual([])
   })
+
+  it('finds AUTOINCREMENT in the lurasql article body', () => {
+    const hits = searchArticles('AUTOINCREMENT')
+    expect(hits.some((hit) => hit.article.id === 'lurasql')).toBe(true)
+  })
 })

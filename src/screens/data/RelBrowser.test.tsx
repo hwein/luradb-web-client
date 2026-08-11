@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse, type HttpHandler } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -109,6 +109,16 @@ describe('RelBrowser', () => {
     expect(chipFor('customer_ref·JSONREF')).toHaveClass('rel__col-chip--json')
   })
 
+  // Der Assistent selbst (Formular-Führung, Generator, Abschluss-Fluss) ist dialogfrei in AlterTableModal.test.tsx
+  // gegen AlterTableForm getestet (jsdom-Grenze wie sql/002) — hier nur der Einstiegspunkt neben der idx-Pill.
+  it('shows the "alter table" entry point next to the index pill', async () => {
+    server.use(http.get(ROWS_URL, () => HttpResponse.json({ rows: [], row_count: 0, limit: 50, offset: 0, limit_applied: false })))
+    await connectAndRender()
+
+    await screen.findByText('idx: label')
+    expect(screen.getByRole('button', { name: 'alter table' })).toBeInTheDocument()
+  })
+
   it('lists rows via GET with limit/offset, shows the call + limit-applied note, and pages via load more', async () => {
     server.use(
       http.get(ROWS_URL, ({ request }) => {
@@ -191,6 +201,149 @@ describe('RelBrowser', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'docs' })[0]!)
     expect(await screen.findByTestId('docs-screen')).toHaveTextContent('docs: cross-engine-links')
+  })
+
+  it('shows expanded link sections below the field list (KVREF utf8 raw text, JSONREF pretty document); hidden without _expanded and while editing (spec data/009)', async () => {
+    server.use(
+      http.get(ROWS_URL, ({ request }) => {
+        const expand = new URL(request.url).searchParams.get('expand')
+        const rows =
+          expand === '*'
+            ? [
+                {
+                  id: 1,
+                  total: 10,
+                  label: 'valid',
+                  cart_ref: 'cart_1',
+                  customer_ref: 'doc_1',
+                  _expanded: {
+                    cart_ref: { encoding: 'utf8', exists: true, value: 'raw cart text' },
+                    customer_ref: { document: { name: 'A. Roth' }, exists: true },
+                  },
+                },
+              ]
+            : [{ id: 1, total: 10, label: 'valid', cart_ref: 'cart_1', customer_ref: 'doc_1' }]
+        return HttpResponse.json({ rows, row_count: rows.length, limit: 50, offset: 0, limit_applied: false })
+      }),
+    )
+    await connectAndRender()
+    await screen.findByText('ROW 1')
+    expect(screen.queryByText('cart_ref · kv value')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'expand' }))
+
+    expect(await screen.findByText('cart_ref · kv value')).toBeInTheDocument()
+    expect(screen.getByText('raw cart text')).toBeInTheDocument()
+    expect(screen.getByText('customer_ref · json document')).toBeInTheDocument()
+    expect(screen.getByText(/"name": "A. Roth"/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'open in kv browser →' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'open in json browser →' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'edit' }))
+    expect(screen.queryByText('cart_ref · kv value')).not.toBeInTheDocument()
+  })
+
+  it('renders a non-utf8 KVREF resolution as JSON, and skips the section entirely for a NULL link cell (spec data/009 §2)', async () => {
+    server.use(
+      http.get(ROWS_URL, ({ request }) => {
+        const expand = new URL(request.url).searchParams.get('expand')
+        const rows =
+          expand === '*'
+            ? [
+                {
+                  id: 1,
+                  total: 10,
+                  label: 'binary',
+                  cart_ref: 'cart_1',
+                  customer_ref: null,
+                  _expanded: { cart_ref: { encoding: 'base64', exists: true, value: 'AAA=' } },
+                },
+              ]
+            : [{ id: 1, total: 10, label: 'binary', cart_ref: 'cart_1', customer_ref: null }]
+        return HttpResponse.json({ rows, row_count: rows.length, limit: 50, offset: 0, limit_applied: false })
+      }),
+    )
+    await connectAndRender()
+    await screen.findByText('ROW 1')
+
+    fireEvent.click(screen.getByRole('button', { name: 'expand' }))
+
+    expect(await screen.findByText('cart_ref · kv value')).toBeInTheDocument()
+    expect(screen.getByText(/"encoding": "base64"/)).toBeInTheDocument()
+    expect(screen.getByText(/"value": "AAA="/)).toBeInTheDocument()
+    expect(screen.queryByText('customer_ref · json document')).not.toBeInTheDocument()
+  })
+
+  it('shows the dangling state in an expanded section (muted + docs link) without a jump action (spec data/009 §3/§5)', async () => {
+    server.use(
+      http.get(ROWS_URL, ({ request }) => {
+        const expand = new URL(request.url).searchParams.get('expand')
+        const rows =
+          expand === '*'
+            ? [
+                {
+                  id: 1,
+                  total: 10,
+                  label: 'dangling',
+                  cart_ref: 'cart_missing',
+                  customer_ref: 'doc_missing',
+                  _expanded: { cart_ref: { exists: false, value: null }, customer_ref: { document: null, exists: false } },
+                },
+              ]
+            : [{ id: 1, total: 10, label: 'dangling', cart_ref: 'cart_missing', customer_ref: 'doc_missing' }]
+        return HttpResponse.json({ rows, row_count: rows.length, limit: 50, offset: 0, limit_applied: false })
+      }),
+    )
+    await connectAndRender()
+    await screen.findByText('ROW 1')
+
+    fireEvent.click(screen.getByRole('button', { name: 'expand' }))
+    await screen.findByText('cart_ref · kv value')
+
+    const detail = within(document.querySelector('.rel-detail')!)
+    expect(detail.getAllByText('{"exists":false} — dangling link ·', { exact: false })).toHaveLength(2)
+    expect(detail.queryByRole('button', { name: 'open in kv browser →' })).not.toBeInTheDocument()
+    expect(detail.queryByRole('button', { name: 'open in json browser →' })).not.toBeInTheDocument()
+
+    fireEvent.click(detail.getAllByRole('button', { name: 'docs' })[0]!)
+    expect(await screen.findByTestId('docs-screen')).toHaveTextContent('docs: cross-engine-links')
+  })
+
+  it('"open in kv browser" jumps to the KV browser with the linked key selected (spec data/009 §5)', async () => {
+    server.use(
+      http.get(ROWS_URL, ({ request }) => {
+        const expand = new URL(request.url).searchParams.get('expand')
+        const rows =
+          expand === '*'
+            ? [
+                {
+                  id: 1,
+                  total: 10,
+                  label: 'valid',
+                  cart_ref: 'cart_1',
+                  customer_ref: 'doc_1',
+                  _expanded: {
+                    cart_ref: { encoding: 'utf8', exists: true, value: 'cart-contents' },
+                    customer_ref: { document: { name: 'A. Roth' }, exists: true },
+                  },
+                },
+              ]
+            : [{ id: 1, total: 10, label: 'valid', cart_ref: 'cart_1', customer_ref: 'doc_1' }]
+        return HttpResponse.json({ rows, row_count: rows.length, limit: 50, offset: 0, limit_applied: false })
+      }),
+    )
+    await connectAndRender(`/data?engine=rel&table=${TABLE}`, [
+      http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json(['cart_1', 'cart_2'])),
+      http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys/cart_1`, () => new HttpResponse('cart-contents', { headers: { 'content-type': 'application/octet-stream' } })),
+    ])
+    await screen.findByText('ROW 1')
+
+    fireEvent.click(screen.getByRole('button', { name: 'expand' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'open in kv browser →' }))
+
+    expect(await screen.findByText('shop / kv keys')).toBeInTheDocument()
+    expect(await screen.findByText('KEY cart_1')).toBeInTheDocument()
+    expect(screen.getByText('cart-contents')).toBeInTheDocument()
   })
 
   it('creates a row via POST, leaving the autoincrement PK out of the body, then selects the new row', async () => {

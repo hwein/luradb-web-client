@@ -8,10 +8,13 @@ import {
   blankFormState,
   buildRowPayload,
   deleteRow,
+  expandedOf,
   formStateFromRow,
   formatCellValue,
   insertRow,
   isConflict,
+  isDangling,
+  isRecord,
   updateRow,
   type RelRow,
   type RowFormState,
@@ -32,6 +35,7 @@ interface RelRowDetailProps {
   onDeleted: () => void
   onClear: () => void
   onConflictDocs: () => void
+  onOpenLink: (engine: 'json' | 'kv', key: string) => void
 }
 
 function messageOf(error: unknown): string {
@@ -137,8 +141,85 @@ function RelRowForm({ domain, apiClient, columns, form, isInsert, onFieldText, o
   )
 }
 
+interface ExpandedLinkSectionProps {
+  column: ColumnInfo
+  resolution: Record<string, unknown>
+  linkedKey: string
+  onOpenLink: (engine: 'json' | 'kv', key: string) => void
+  onOpenDocs: () => void
+}
+
+/** KVREF `encoding==="utf8"` → roher `value`-Text; anderes Encoding → die Resolution unverfälscht als JSON (spec 009 §2). */
+function expandedContentText(column: ColumnInfo, resolution: Record<string, unknown>): string {
+  if (column.type === 'JSONREF') return JSON.stringify(resolution.document, null, 2)
+  if (resolution.encoding === 'utf8') return typeof resolution.value === 'string' ? resolution.value : String(resolution.value)
+  return JSON.stringify(resolution, null, 2)
+}
+
+/** Eine Sektion je REF-Spalte mit Auflösung (spec 009 §1–3/§5): Kopf im Ziel-Farbton + Sprungaktion, Inhalt als mono-Block, Dangling wie im Grid. */
+function ExpandedLinkSection({ column, resolution, linkedKey, onOpenLink, onOpenDocs }: ExpandedLinkSectionProps) {
+  const engine = column.type === 'JSONREF' ? 'json' : 'kv'
+  const dangling = isDangling(resolution)
+  return (
+    <div className="rel-detail__expanded-section">
+      <div className="rel-detail__expanded-head">
+        <span className={`rel-detail__expanded-label rel-detail__expanded-label--${engine}`}>
+          {column.name} · {engine === 'json' ? 'json document' : 'kv value'}
+        </span>
+        {!dangling && (
+          <button type="button" className="rel-detail__expanded-open" onClick={() => onOpenLink(engine, linkedKey)}>
+            open in {engine} browser →
+          </button>
+        )}
+      </div>
+      {dangling ? (
+        <div className="rel-detail__expanded-dangling">
+          {'{"exists":false}'} — dangling link ·{' '}
+          <button type="button" className="rel-detail__doc-link" onClick={onOpenDocs}>
+            docs
+          </button>
+        </div>
+      ) : (
+        <pre className="rel-detail__expanded-value">{expandedContentText(column, resolution)}</pre>
+      )}
+    </div>
+  )
+}
+
+interface ExpandedLinkSectionsProps {
+  columns: ColumnInfo[]
+  row: RelRow
+  onOpenLink: (engine: 'json' | 'kv', key: string) => void
+  onOpenDocs: () => void
+}
+
+/** Verlinkte Store-Inhalte einer Zeile (spec 009 §1): eine Sektion je KVREF/JSONREF-Spalte mit Auflösung, Reihenfolge = Schema. */
+function ExpandedLinkSections({ columns, row, onOpenLink, onOpenDocs }: ExpandedLinkSectionsProps) {
+  const expanded = expandedOf(row)
+  if (expanded === undefined) return null
+  return (
+    <>
+      {columns.map((column) => {
+        if (column.type !== 'KVREF' && column.type !== 'JSONREF') return null
+        const resolution = expanded[column.name]
+        if (!isRecord(resolution)) return null
+        return (
+          <ExpandedLinkSection
+            key={column.name}
+            column={column}
+            resolution={resolution}
+            linkedKey={String(row[column.name])}
+            onOpenLink={onOpenLink}
+            onOpenDocs={onOpenDocs}
+          />
+        )
+      })}
+    </>
+  )
+}
+
 /** Detail-Spalte (spec §3): Feld-Formular aus dem Schema, edit/delete mit Bestätigung, "+ new row"-Formular, 409-Zeile mit why?-Link. */
-export function RelRowDetail({ domain, apiClient, table, columns, mode, row, onCreated, onDeleted, onClear, onConflictDocs }: RelRowDetailProps) {
+export function RelRowDetail({ domain, apiClient, table, columns, mode, row, onCreated, onDeleted, onClear, onConflictDocs, onOpenLink }: RelRowDetailProps) {
   const queryClient = useQueryClient()
 
   const [editing, setEditing] = useState(false)
@@ -308,6 +389,8 @@ export function RelRowDetail({ domain, apiClient, table, columns, mode, row, onC
           ))}
         </div>
       )}
+
+      {!editing && <ExpandedLinkSections columns={columns} row={row} onOpenLink={onOpenLink} onOpenDocs={onConflictDocs} />}
 
       {updateMutation.isError && <ErrorLine error={updateMutation.error} onConflictDocs={onConflictDocs} />}
       {deleteMutation.isError && <ErrorLine error={deleteMutation.error} onConflictDocs={onConflictDocs} />}

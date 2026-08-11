@@ -90,6 +90,46 @@ describe('createApi', () => {
     await expect(response.text()).resolves.toBe('raw-bytes')
   })
 
+  it('fetchSilent sets the Authorization header and resolves with the raw Response, ok or not', async () => {
+    let receivedAuth: string | null = null
+    server.use(
+      http.delete(`${BASE_URL}/store-api/kv/shop/keys/gone`, ({ request }) => {
+        receivedAuth = request.headers.get('Authorization')
+        return new HttpResponse('rate limited', { status: 429 })
+      }),
+    )
+
+    const { fetchSilent } = makeApi()
+    const response = await fetchSilent('/store-api/kv/shop/keys/gone', { method: 'DELETE' })
+
+    expect(receivedAuth).toBe('Bearer test-key')
+    expect(response.ok).toBe(false)
+    expect(response.status).toBe(429)
+    await expect(response.text()).resolves.toBe('rate limited')
+  })
+
+  it('fetchSilent does not notify onCall listeners — the one path around the recorder (data/008 §5)', async () => {
+    server.use(http.delete(`${BASE_URL}/store-api/kv/shop/keys/gone`, () => new HttpResponse(null, { status: 204 })))
+
+    const { fetchSilent, onCall } = makeApi()
+    const calls: CallInfo[] = []
+    onCall((info) => calls.push(info))
+    await fetchSilent('/store-api/kv/shop/keys/gone', { method: 'DELETE' })
+
+    expect(calls).toHaveLength(0)
+  })
+
+  it('fetchSilent wraps a network failure as a status-0 ApiError without notifying', async () => {
+    server.use(http.delete(`${BASE_URL}/store-api/kv/shop/keys/gone`, () => HttpResponse.error()))
+
+    const { fetchSilent, onCall } = makeApi()
+    const calls: CallInfo[] = []
+    onCall((info) => calls.push(info))
+
+    await expect(fetchSilent('/store-api/kv/shop/keys/gone', { method: 'DELETE' })).rejects.toBeInstanceOf(ApiError)
+    expect(calls).toHaveLength(0)
+  })
+
   it('fetchNdjson sends an ndjson Accept header', async () => {
     let acceptHeader: string | null = null
     server.use(
@@ -103,6 +143,44 @@ describe('createApi', () => {
     await fetchNdjson('/store-api/json/shop/export')
 
     expect(acceptHeader).toBe('application/x-ndjson')
+  })
+
+  it('postNdjson sends a text/plain Content-Type with the body and auth header, and resolves on 200', async () => {
+    let contentType: string | null = null
+    let auth: string | null = null
+    let receivedBody = ''
+    server.use(
+      http.post(`${BASE_URL}/store-api/json/shop/bulk`, async ({ request }) => {
+        contentType = request.headers.get('Content-Type')
+        auth = request.headers.get('Authorization')
+        receivedBody = await request.text()
+        return HttpResponse.json({ imported: 1, failed: 0, errors: [] })
+      }),
+    )
+
+    const { postNdjson, onCall } = makeApi()
+    const calls: CallInfo[] = []
+    onCall((info) => calls.push(info))
+    const response = await postNdjson('/store-api/json/shop/bulk', '{"_key":"a"}\n')
+
+    expect(contentType).toBe('text/plain')
+    expect(auth).toBe('Bearer test-key')
+    expect(receivedBody).toBe('{"_key":"a"}\n')
+    expect(calls[0]).toMatchObject({ method: 'POST', path: '/store-api/json/shop/bulk', status: 200, ok: true })
+    await expect(response.json()).resolves.toEqual({ imported: 1, failed: 0, errors: [] })
+  })
+
+  it('postNdjson returns a non-2xx response without throwing and records the numeric status', async () => {
+    server.use(http.post(`${BASE_URL}/store-api/json/missing/bulk`, () => new HttpResponse("domain 'missing' not found", { status: 404 })))
+
+    const { postNdjson, onCall } = makeApi()
+    const calls: CallInfo[] = []
+    onCall((info) => calls.push(info))
+    const response = await postNdjson('/store-api/json/missing/bulk', '{}\n')
+
+    expect(response.status).toBe(404)
+    expect(calls[0]).toMatchObject({ method: 'POST', path: '/store-api/json/missing/bulk', status: 404, ok: false })
+    await expect(response.text()).resolves.toBe("domain 'missing' not found")
   })
 
   it('reports network failures as a status-0 ApiError and notifies listeners', async () => {

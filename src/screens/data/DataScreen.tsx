@@ -12,13 +12,14 @@ function parseEngine(value: string | null): Engine {
   return value === 'kv' || value === 'rel' ? value : 'json'
 }
 
-/** Screen-Gerüst (spec §1): Modus+Objekt aus `?engine=&table=&filterCol=&filterVal=` (Deep-Link), ohne Ziel JSON-Modus der gewählten Domäne. */
+/** Screen-Gerüst (spec §1): Modus+Objekt aus `?engine=&table=&filterCol=&filterVal=&key=` (Deep-Link), ohne Ziel JSON-Modus der gewählten Domäne. */
 export function DataScreen() {
   const [searchParams] = useSearchParams()
   const engine = parseEngine(searchParams.get('engine'))
   const table = searchParams.get('table') ?? undefined
   const filterCol = searchParams.get('filterCol') ?? undefined
   const filterVal = searchParams.get('filterVal') ?? undefined
+  const key = searchParams.get('key') ?? undefined
 
   const session = useSession()
   const apiClient = session.status === 'connected' ? session.apiClient : undefined
@@ -32,7 +33,7 @@ export function DataScreen() {
     )
   }
 
-  if (engine === 'kv') return <KvBrowser domain={selected} apiClient={apiClient} />
+  if (engine === 'kv') return <KvBrowser domain={selected} apiClient={apiClient} initialKey={key} />
   if (engine === 'rel') {
     if (table === undefined) {
       return (
@@ -43,5 +44,5 @@ export function DataScreen() {
     }
     return <RelBrowser domain={selected} apiClient={apiClient} table={table} filterCol={filterCol} filterVal={filterVal} />
   }
-  return <JsonBrowser domain={selected} apiClient={apiClient} />
+  return <JsonBrowser domain={selected} apiClient={apiClient} initialKey={key} />
 }

@@ -11,23 +11,58 @@
   padding-top: 12px;
 }
 
+.explorer__domain-card {
+  background: var(--panel);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad);
+  padding: 3px;
+}
+
 .explorer__domain-header {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 5px 6px;
-  border-radius: 6px;
-  background: var(--panel);
   font-family: var(--font-mono);
   font-weight: 600;
   font-size: 12px;
+  color: var(--tx);
+}
+
+.explorer__domain-chevron {
+  color: var(--acc);
 }
 
 .explorer__sections {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding-left: 12px;
+}
+
+.explorer__section-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px 3px;
+}
+
+.explorer__section-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.explorer__section-dot--rel {
+  background: var(--eng-rel-border);
+}
+
+.explorer__section-dot--json {
+  background: var(--eng-json-border);
+}
+
+.explorer__section-dot--kv {
+  background: var(--eng-kv-border);
 }
 
 .explorer__section-label {
@@ -35,20 +70,23 @@
   font-weight: 600;
   font-size: 9.5px;
   letter-spacing: 0.1em;
-  padding: 8px 6px 3px;
   color: var(--mut);
 }
 
-.explorer__section-label--rel {
-  color: var(--eng-rel-label);
+.explorer__section-add {
+  margin-left: auto;
+  padding: 1px 4px;
+  background: transparent;
+  border: none;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.explorer__section-label--json {
-  color: var(--eng-json-label);
-}
-
-.explorer__section-label--kv {
-  color: var(--eng-kv-label);
+.explorer__section-add:hover {
+  color: var(--acc);
 }
 
 .explorer__object-row {
@@ -68,7 +106,7 @@
 }
 
 .explorer__object-row:hover {
-  background: var(--panel);
+  background: var(--panel2);
 }
 
 .explorer__object-row--muted {
@@ -154,10 +192,6 @@
   flex-direction: column;
   gap: 2px;
   padding: 2px 6px 10px;
-}
-
-.explorer__section-placeholder {
-  padding: 4px 6px;
 }
 
 .explorer__links-box {

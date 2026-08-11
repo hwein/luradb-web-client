@@ -70,6 +70,132 @@
   flex-shrink: 0;
 }
 
+/* JSON-Modus macht die Pill zum Panel-Toggle (spec data/006 §1); die REL-Pill (RelBrowser.tsx) bleibt ein reiner Anzeige-Span. */
+.data__idx-pill--toggle {
+  background: transparent;
+  cursor: pointer;
+}
+
+.data__idx-pill--toggle:hover {
+  color: var(--tx);
+}
+
+.data__idx-pill--active {
+  border-color: var(--acc);
+  color: var(--tx);
+}
+
+/* --- JSON-Index-Panel (spec data/006) ----------------------------------- */
+
+.idx-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 16px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-card);
+}
+
+.idx-panel__hint {
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.idx-panel__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.idx-panel__row-text {
+  color: var(--tx);
+}
+
+.idx-panel__delete {
+  margin-left: auto;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.idx-panel__reindex-hint {
+  color: var(--warn);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.idx-panel__reindex-hint button {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--acc);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.idx-panel__form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.idx-panel__field-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.idx-panel__type-select {
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 8px;
+  flex-shrink: 0;
+}
+
+.idx-panel__create {
+  background: var(--acc);
+  color: var(--accT);
+  border: none;
+  border-radius: var(--rad-input);
+  padding: 6px 14px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.idx-panel__create:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.idx-panel__error {
+  color: var(--err);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
 .json__search {
   margin-left: auto;
   display: flex;
@@ -119,6 +245,21 @@
 .json__export-button:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+.json__import-button {
+  background: none;
+  border: none;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.json__import-button:hover {
+  color: var(--tx);
 }
 
 .json__filter-error {
@@ -490,8 +631,243 @@
   border-color: transparent;
 }
 
+.kv__bulk-toggle {
+  background: none;
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-pill);
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+  padding: 5px 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.kv__bulk-toggle--active {
+  background: var(--eng-kv-chip-bg);
+  color: var(--eng-kv-chip-tx);
+  border-color: transparent;
+}
+
 .data__body--watch {
   grid-template-columns: 1fr 380px 260px;
+}
+
+/* --- KV Bulk-Leiste (spec data/008) -------------------------------------- */
+
+.kv-bulk {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 16px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-card);
+}
+
+.kv-bulk__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kv-bulk__scope {
+  color: var(--mut);
+}
+
+.kv-bulk__contains-input {
+  width: 200px;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.kv-bulk__count {
+  margin-left: auto;
+  color: var(--tx);
+}
+
+.kv-bulk__preview {
+  max-height: 160px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--bord);
+  border-radius: var(--rad);
+  background: var(--panel2);
+}
+
+.kv-bulk__preview-row {
+  padding: 5px 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--tx);
+  border-bottom: 1px solid var(--bord);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kv-bulk__preview-row:last-child {
+  border-bottom: none;
+}
+
+.kv-bulk__hint {
+  padding: 8px 10px;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.kv-bulk__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.kv-bulk__action {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.kv-bulk__run {
+  margin-left: auto;
+  background: var(--acc);
+  color: var(--accT);
+  border: none;
+  border-radius: var(--rad-input);
+  padding: 6px 14px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.kv-bulk__run:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.kv-bulk__confirm {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kv-bulk__confirm-text {
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.kv-bulk__confirm-irreversible {
+  color: var(--err);
+}
+
+.kv-bulk__confirm-run {
+  background: var(--err);
+  color: var(--accT);
+  border: none;
+  border-radius: var(--rad-input);
+  padding: 6px 14px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.kv-bulk__confirm-cancel {
+  background: none;
+  border: none;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.kv-bulk__null-hint {
+  color: var(--warn);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.kv-bulk__null-docs {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--acc);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.kv-bulk__call-pattern {
+  color: var(--mut);
+}
+
+.kv-bulk__progress {
+  color: var(--mut);
+}
+
+.kv-bulk__error {
+  color: var(--err);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.kv-bulk__result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kv-bulk__summary {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--tx);
+}
+
+.kv-bulk__summary-failed {
+  color: var(--err);
+}
+
+.kv-bulk__error-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 200px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--bord);
+  border-radius: var(--rad);
+  background: var(--panel2);
+}
+
+.kv-bulk__error-entry {
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--tx);
 }
 
 .kv-list {
@@ -838,6 +1214,23 @@
 .rel__col-chip__pk {
   color: var(--acc);
   font-size: 8px;
+}
+
+.rel__alter-table {
+  background: none;
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-pill);
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+  padding: 5px 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rel__alter-table:hover {
+  color: var(--tx);
 }
 
 .rel__expand-toggle {
@@ -1234,6 +1627,73 @@
   cursor: pointer;
 }
 
+/* --- REL row detail: expandierte Link-Werte (spec data/009) ------------- */
+
+.rel-detail__expanded-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rel-detail__expanded-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.rel-detail__expanded-label {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.rel-detail__expanded-label--json {
+  color: var(--eng-json-label);
+}
+
+.rel-detail__expanded-label--kv {
+  color: var(--eng-kv-label);
+}
+
+.rel-detail__expanded-open {
+  margin-left: auto;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--acc);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rel-detail__expanded-open:hover {
+  text-decoration: underline;
+}
+
+.rel-detail__expanded-value {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad);
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--tx);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rel-detail__expanded-dangling {
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
 /* --- Dangling-Report-Dialog (spec data/004 §4) -------------------------- */
 
 .dlr:not([open]) {
@@ -1334,4 +1794,177 @@
   font-family: var(--font-sans);
   font-size: 12px;
   cursor: pointer;
+}
+
+/* --- Bulk-Import-Dialog (spec data/007) --------------------------------- */
+
+.bim:not([open]) {
+  display: none;
+}
+
+.bim {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 92vw);
+  max-height: min(720px, 88vh);
+  padding: 0;
+  background: var(--panel);
+  color: var(--tx);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-card);
+  font-family: var(--font-sans);
+}
+
+.bim::backdrop {
+  background: color-mix(in oklch, var(--bg) 65%, transparent);
+}
+
+.bim__head {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.bim__title {
+  color: var(--tx);
+}
+
+.bim__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bim__input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bim__file {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--acc);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.bim__file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.bim__line-count {
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.bim__textarea {
+  flex: 1;
+  min-height: 220px;
+  box-sizing: border-box;
+  resize: vertical;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.bim__error {
+  color: var(--err);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.bim__result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bim__summary {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--tx);
+}
+
+.bim__summary-failed {
+  color: var(--err);
+}
+
+.bim__error-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--bord);
+  border-radius: var(--rad);
+  background: var(--panel2);
+}
+
+.bim__error-entry {
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--tx);
+}
+
+.bim__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.bim__close {
+  background: transparent;
+  border: 1px solid var(--bord);
+  color: var(--tx);
+  border-radius: var(--rad-input);
+  padding: 7px 14px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bim__import {
+  background: var(--acc);
+  color: var(--accT);
+  border: none;
+  border-radius: var(--rad-input);
+  padding: 7px 16px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bim__import:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

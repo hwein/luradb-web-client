@@ -14,13 +14,14 @@ import { SqlResults } from './SqlResults'
 import { SqlTabStrip } from './SqlTabStrip'
 import { SqlToolbar } from './SqlToolbar'
 import { sqlBaseExtensions } from './editor'
-import { buildCreateViewSql, buildNdjson, executeSql, type SqlOutcome, type SqlSelectResult } from './sqlRun'
+import { buildCreateViewSql, buildNdjson, executeSql, parseParams, type SqlOutcome, type SqlSelectResult } from './sqlRun'
 import {
   addTab,
   closeTab,
   renameTab,
   setActiveTab,
   setTabExpand,
+  updateTabParams,
   updateTabText,
   useSqlState,
 } from './sqlStore'
@@ -84,8 +85,8 @@ export function SqlScreen() {
 
   // Alle Request-Parameter als mutate-Variablen: TanStack aktualisiert die mutationFn erst im Effect —
   // eine Closure über apiClient/selected wäre direkt nach einem Commit einen Render alt (Muster: JsonDetail).
-  const run = useMutation<SqlOutcome, Error, { apiClient: ApiClient; domain: string; sql: string; expand: string[] }>({
-    mutationFn: ({ apiClient: client, domain, sql, expand }) => executeSql(client, domain, sql, expand),
+  const run = useMutation<SqlOutcome, Error, { apiClient: ApiClient; domain: string; sql: string; expand: string[]; params: unknown[] }>({
+    mutationFn: ({ apiClient: client, domain, sql, expand, params }) => executeSql(client, domain, sql, expand, params),
     onSuccess: (outcome, variables) => {
       // Schema-Änderungen (u. a. save-as-view) frisch in den Explorer spiegeln (spec §6).
       if (outcome.status === 'ok' && outcome.result.kind === 'ddl') {
@@ -95,16 +96,20 @@ export function SqlScreen() {
     },
   })
 
+  // Rohtext-Feld, geparst für Run-Guard und Body (spec sql/003 §2/§4); leer/Whitespace ⇒ ok mit [].
+  const paramsResult = parseParams(activeTab?.params ?? '')
+  const paramsError = paramsResult.ok ? undefined : paramsResult.error
+
   // Eine Quelle für Button-disabled UND Klick-Guard — sonst verpufft ein Klick im Fenster zwischen
   // Domänen-Query und Default-Selektion still (Button schon enabled, selected noch null).
-  const canRun = hasRel && apiClient !== undefined && selected !== null && activeTab !== undefined && !run.isPending
+  const canRun = hasRel && apiClient !== undefined && selected !== null && activeTab !== undefined && paramsError === undefined && !run.isPending
 
   // Live-Handler in Refs, damit die (stabile) CodeMirror-Keymap immer den aktuellen Tab-Stand nutzt.
   const runRef = useRef<() => void>(() => {})
   const saveRef = useRef<() => void>(() => {})
   runRef.current = () => {
-    if (!canRun || activeTab === undefined || apiClient === undefined || selected === null) return
-    run.mutate({ apiClient, domain: selected, sql: activeTab.text, expand: activeTab.expand })
+    if (!canRun || activeTab === undefined || apiClient === undefined || selected === null || !paramsResult.ok) return
+    run.mutate({ apiClient, domain: selected, sql: activeTab.text, expand: activeTab.expand, params: paramsResult.params })
   }
   saveRef.current = () => {
     if (!hasRel || activeTab === undefined) return
@@ -167,7 +172,7 @@ export function SqlScreen() {
     setSavingView(false)
     const trimmed = name.trim()
     if (trimmed === '' || activeTab === undefined || apiClient === undefined || selected === null) return
-    run.mutate({ apiClient, domain: selected, sql: buildCreateViewSql(trimmed, activeTab.text), expand: [] })
+    run.mutate({ apiClient, domain: selected, sql: buildCreateViewSql(trimmed, activeTab.text), expand: [], params: [] })
   }
 
   if (activeTab === undefined) return null
@@ -191,6 +196,9 @@ export function SqlScreen() {
           runDisabled={!canRun}
           expand={activeTab.expand}
           onExpandChange={(expand) => setTabExpand(activeTab.id, expand)}
+          params={activeTab.params}
+          onParamsChange={(params) => updateTabParams(activeTab.id, params)}
+          paramsError={paramsError}
           onRun={() => runRef.current()}
           running={run.isPending}
           docsOpen={docsOpen}

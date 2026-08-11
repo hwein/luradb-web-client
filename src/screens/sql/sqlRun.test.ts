@@ -6,6 +6,8 @@ import {
   docIdForStatus,
   isSelect,
   messageFromError,
+  PARAMS_ERROR,
+  parseParams,
   parseSqlResult,
   statementLabel,
   type SqlSelectResult,
@@ -13,13 +15,52 @@ import {
 
 describe('buildSqlRequest', () => {
   it('includes expand only for SELECT with a non-empty column list', () => {
-    expect(buildSqlRequest('SELECT * FROM t', ['a'])).toEqual({ sql: 'SELECT * FROM t', expand: ['a'] })
-    expect(buildSqlRequest('  select id from t', ['*'])).toEqual({ sql: '  select id from t', expand: ['*'] })
+    expect(buildSqlRequest('SELECT * FROM t', ['a'], [])).toEqual({ sql: 'SELECT * FROM t', expand: ['a'] })
+    expect(buildSqlRequest('  select id from t', ['*'], [])).toEqual({ sql: '  select id from t', expand: ['*'] })
   })
 
   it('omits expand for non-SELECT statements or an empty list (avoids the 400 trap)', () => {
-    expect(buildSqlRequest('INSERT INTO t VALUES (1)', ['a'])).toEqual({ sql: 'INSERT INTO t VALUES (1)' })
-    expect(buildSqlRequest('SELECT 1', [])).toEqual({ sql: 'SELECT 1' })
+    expect(buildSqlRequest('INSERT INTO t VALUES (1)', ['a'], [])).toEqual({ sql: 'INSERT INTO t VALUES (1)' })
+    expect(buildSqlRequest('SELECT 1', [], [])).toEqual({ sql: 'SELECT 1' })
+  })
+
+  it('includes params for SELECT and for DML alike (unlike the SELECT-only expand)', () => {
+    expect(buildSqlRequest('SELECT * FROM t WHERE status = ?', [], ['paid'])).toEqual({
+      sql: 'SELECT * FROM t WHERE status = ?',
+      params: ['paid'],
+    })
+    expect(buildSqlRequest('UPDATE t SET a = ? WHERE id = ?', [], ['x', 1])).toEqual({
+      sql: 'UPDATE t SET a = ? WHERE id = ?',
+      params: ['x', 1],
+    })
+    expect(buildSqlRequest('INSERT INTO t (a) VALUES (?)', [], [42])).toEqual({
+      sql: 'INSERT INTO t (a) VALUES (?)',
+      params: [42],
+    })
+  })
+
+  it('omits params for an empty array', () => {
+    expect(buildSqlRequest('SELECT 1', [], [])).toEqual({ sql: 'SELECT 1' })
+  })
+})
+
+describe('parseParams', () => {
+  it('treats empty/whitespace text as an empty params array (field omitted from the body)', () => {
+    expect(parseParams('')).toEqual({ ok: true, params: [] })
+    expect(parseParams('   ')).toEqual({ ok: true, params: [] })
+  })
+
+  it('parses a JSON array as-is', () => {
+    expect(parseParams('["paid", 42]')).toEqual({ ok: true, params: ['paid', 42] })
+  })
+
+  it('rejects JSON that parses but is not an array', () => {
+    expect(parseParams('{}')).toEqual({ ok: false, error: PARAMS_ERROR })
+    expect(parseParams('42')).toEqual({ ok: false, error: PARAMS_ERROR })
+  })
+
+  it('rejects text that is not valid JSON at all', () => {
+    expect(parseParams('[1,')).toEqual({ ok: false, error: PARAMS_ERROR })
   })
 })
 

@@ -9,23 +9,17 @@
   --font-sans: 'IBM Plex Sans', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
 
-  /* Engine-Hues + Status: themen-unabhängig (Runtime überschreibt nur Flächen-Tokens) */
-  --eng-rel-label: oklch(0.72 0.12 230);
+  /* Chips tragen eigene Fläche (dunkler Grund, heller Text) und lesen in beiden Themes. */
   --eng-rel-chip-bg: oklch(0.3 0.07 230);
   --eng-rel-chip-tx: oklch(0.82 0.12 230);
-  --eng-json-label: oklch(0.78 0.13 75);
   --eng-json-chip-bg: oklch(0.32 0.08 75);
   --eng-json-chip-tx: oklch(0.85 0.13 75);
-  --eng-kv-label: oklch(0.75 0.12 150);
   --eng-kv-chip-bg: oklch(0.3 0.07 150);
   --eng-kv-chip-tx: oklch(0.83 0.12 150);
   /* Kartenränder (Styleguide "ENGINE HUES" Spezimen): dunkler/gesättigter als die Label-Töne. */
   --eng-rel-border: oklch(0.6 0.12 230);
   --eng-json-border: oklch(0.65 0.13 75);
   --eng-kv-border: oklch(0.6 0.12 150);
-  --ok: oklch(0.75 0.15 150);
-  --err: oklch(0.7 0.16 25);
-  --warn: oklch(0.75 0.13 75);
 
   --rad-chip: 4px;
   --rad-input: 7px;
@@ -45,6 +39,14 @@
   --acc: #7aa7e0;
   --accT: #0e1014;
 
+  /* Label-/Status-Töne tragen keine eigene Fläche — ihre Helligkeit folgt dem Theme. */
+  --eng-rel-label: oklch(0.72 0.12 230);
+  --eng-json-label: oklch(0.78 0.13 75);
+  --eng-kv-label: oklch(0.75 0.12 150);
+  --ok: oklch(0.75 0.15 150);
+  --err: oklch(0.7 0.16 25);
+  --warn: oklch(0.75 0.13 75);
+
   /* Logo-Layer (Logo-Guide 04): fixe Markenfarben, je Theme dunkle/helle Werte */
   --logo-rel: oklch(0.6 0.12 230);
   --logo-json: oklch(0.65 0.13 75);
@@ -58,9 +60,18 @@
   --edbg: #fbfbf9;
   --bord: #d8d8d0;
   --tx: #22252a;
-  --mut: #70757e;
-  --acc: oklch(0.52 0.13 230);
+  --mut: #676a73;
+  /* Handoff-Hue 230 traf den Dark-Akzent (#7aa7e0 ≈ Hue 257) nicht — L/C wie dort notiert. */
+  --acc: oklch(0.52 0.13 257);
   --accT: #ffffff;
+
+  /* Dark-Werte (L ≈ 0.75) tragen auf hellen Flächen nicht — abgedunkelt wie die Logo-Töne. */
+  --eng-rel-label: oklch(0.5 0.13 230);
+  --eng-json-label: oklch(0.5 0.11 75);
+  --eng-kv-label: oklch(0.5 0.13 150);
+  --ok: oklch(0.5 0.14 150);
+  --err: oklch(0.53 0.2 25);
+  --warn: oklch(0.53 0.12 75);
 
   --logo-rel: oklch(0.5 0.13 230);
   --logo-json: oklch(0.55 0.13 75);

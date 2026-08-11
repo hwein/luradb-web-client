@@ -54,13 +54,13 @@ function watchStream(frames: string[]) {
   })
 }
 
-async function connectAndRender() {
+async function connectAndRender(initialPath = '/data?engine=kv') {
   server.use(...baseHandlers())
   await act(() => connect(makeConnection()))
   const queryClient = createAppQueryClient()
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/data?engine=kv']}>
+      <MemoryRouter initialEntries={[initialPath]}>
         <SelectedDomainProvider>
           <Routes>
             <Route path="/data" element={<DataScreen />} />
@@ -81,6 +81,18 @@ afterEach(() => {
 })
 
 describe('KvBrowser', () => {
+  it('arrives with ?key= (cross-engine jump from the rel row detail): selects that key initially, even though it is not first in the list (spec data/009 §5)', async () => {
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(['alpha', 'cart_1'])),
+      http.get(keyUrl('alpha'), () => rawValue('a')),
+      http.get(keyUrl('cart_1'), () => rawValue('cart-contents')),
+    )
+    await connectAndRender('/data?engine=kv&key=cart_1')
+
+    expect(await screen.findByText('KEY cart_1')).toBeInTheDocument()
+    expect(screen.getByText('cart-contents')).toBeInTheDocument()
+  })
+
   it('scans keys via GET and shows the call in the footer; Scan commits a new prefix', async () => {
     let lastPrefix: string | null = null
     server.use(
@@ -130,6 +142,21 @@ describe('KvBrowser', () => {
     expect(await screen.findByText('k149')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'load more' })).not.toBeInTheDocument()
     expect(scanCalls).toBe(1)
+  })
+
+  it('opens the bulk panel from "bulk…", based on the full scan result rather than the 100-key page cap (spec data/008 §2)', async () => {
+    const allKeys = Array.from({ length: 150 }, (_, i) => `k${String(i).padStart(3, '0')}`)
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(allKeys)),
+      http.get(`${KEYS_URL}/:key`, () => rawValue('v')),
+    )
+    await connectAndRender()
+    await screen.findByText('k000')
+
+    expect(screen.queryByText(/keys scanned/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'bulk…' }))
+
+    expect(document.querySelector('.kv-bulk__scope')?.textContent).toContain('150 keys scanned (prefix "")')
   })
 
   it('shows JSON pretty-print, plaintext, and an empty value as a plain 0-bytes value (no special state)', async () => {
@@ -249,6 +276,28 @@ describe('KvBrowser', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'delete — sure?' }))
 
     await waitFor(() => expect(screen.queryByText('gone-key')).not.toBeInTheDocument())
+    expect(await screen.findByText('select a key')).toBeInTheDocument()
+  })
+
+  it('a bulk delete that removes the currently open key clears the detail selection like a single delete (spec data/008 §6)', async () => {
+    let deleted = false
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(deleted ? [] : ['tomb-key'])),
+      http.get(keyUrl('tomb-key'), () => rawValue('bye')),
+      http.delete(keyUrl('tomb-key'), () => {
+        deleted = true
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    await connectAndRender()
+    await screen.findByText('KEY tomb-key')
+
+    fireEvent.click(screen.getByRole('button', { name: 'bulk…' }))
+    fireEvent.click(screen.getByLabelText('delete'))
+    fireEvent.click(screen.getByRole('button', { name: 'run…' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'run' }))
+
+    await waitFor(() => expect(screen.queryByText('tomb-key')).not.toBeInTheDocument())
     expect(await screen.findByText('select a key')).toBeInTheDocument()
   })
 
