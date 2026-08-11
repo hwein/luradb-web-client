@@ -82,6 +82,10 @@ it, externally contributed lines would have to be excluded from that.
 - `npm run check` (runs before `npm test`) and `npm test` must both be green.
   New behavior comes with tests (Vitest + Testing Library; mock the API through
   MSW handlers, not ad-hoc fetch stubs).
+- **Do not edit `CHANGELOG.md` or version numbers.** Both are mechanical: the
+  changelog entry is added when your change is integrated, and the release
+  script proposes the version. Describe user-visible changes in the PR
+  description so they can be recorded accurately.
 - The public repo's language is English — code, comments, docs and commit
   messages.
 
