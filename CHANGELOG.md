@@ -14,6 +14,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Data browser (REL mode): an "alter table" assistant next to the index pill
   generates `ADD COLUMN` / `DROP COLUMN` / `RENAME COLUMN` / `RENAME TABLE`
   statements into the SQL editor, guided by the server's v1 restrictions.
+- Engines & jobs: a "▶ reindex…" trigger in the tasks card starts a JSON
+  domain reindex (all indexes or one field) without the REST explorer.
 
 ### Changed
 
