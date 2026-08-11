@@ -9,6 +9,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Explorer: the expanded domain renders as a bordered card; each engine section
   is a single label row (color dot, "+" action) without empty-state placeholders.
+- Domain lists and the expanded explorer domain now refresh automatically
+  (every 30–60s), so changes made by other clients appear without a reload.
 
 ## [0.0.1] - 2026-08-11
 

@@ -52,10 +52,10 @@ export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
   const hasJson = domain.engines.json !== undefined
   const hasKv = domain.engines.kv !== undefined
 
-  const tablesQuery = useQuery(relTablesQueryOptions(apiClient, domain.name, hasRel))
-  const viewsQuery = useQuery(relViewsQueryOptions(apiClient, domain.name, hasRel))
-  const jsonDetailQuery = useQuery(jsonDomainDetailQueryOptions(apiClient, domain.name, hasJson))
-  const indexesQuery = useQuery(jsonIndexesQueryOptions(apiClient, domain.name, hasJson))
+  const tablesQuery = useQuery({ ...relTablesQueryOptions(apiClient, domain.name, hasRel), refetchInterval: 30_000 })
+  const viewsQuery = useQuery({ ...relViewsQueryOptions(apiClient, domain.name, hasRel), refetchInterval: 30_000 })
+  const jsonDetailQuery = useQuery({ ...jsonDomainDetailQueryOptions(apiClient, domain.name, hasJson), refetchInterval: 30_000 })
+  const indexesQuery = useQuery({ ...jsonIndexesQueryOptions(apiClient, domain.name, hasJson), refetchInterval: 30_000 })
   const activity = useEngineActivity(apiClient, domain)
   const [tableModalOpen, setTableModalOpen] = useState(false)
 

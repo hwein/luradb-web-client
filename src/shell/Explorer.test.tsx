@@ -2,7 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Connection } from '../app/connections'
 import { createAppQueryClient } from '../app/queryClient'
 import { connect, disconnect } from '../app/session'
@@ -10,6 +10,25 @@ import { resetSqlState, useSqlState } from '../screens/sql/sqlStore'
 import { server } from '../test/msw'
 import { Explorer } from './Explorer'
 import { SelectedDomainProvider } from './SelectedDomainContext'
+
+interface RecordedQueryOptions {
+  queryKey: readonly unknown[]
+  refetchInterval?: number | false
+}
+
+const { useQuerySpy } = vi.hoisted(() => ({ useQuerySpy: vi.fn<(options: RecordedQueryOptions) => void>() }))
+
+/** Records the options every `useQuery` call receives (spec shell/007 §7) — delegates to the real implementation unchanged. */
+vi.mock('@tanstack/react-query', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-query')>()
+  return {
+    ...actual,
+    useQuery: (options: RecordedQueryOptions) => {
+      useQuerySpy(options)
+      return (actual.useQuery as unknown as (options: RecordedQueryOptions) => unknown)(options)
+    },
+  }
+})
 
 const ORIGIN = window.location.origin
 
@@ -497,5 +516,78 @@ describe('Explorer', () => {
     await connectAndRender()
     expect(await screen.findByText(expandedHeader('beta'))).toBeInTheDocument()
     expect(screen.queryByText(expandedHeader('alpha'))).not.toBeInTheDocument()
+  })
+})
+
+describe('polling intervals (spec shell/007)', () => {
+  it('gives ExpandedDomain a 30s refetchInterval and useEngineActivity a 60s refetchInterval on their detail/probe queries', async () => {
+    useQuerySpy.mockClear()
+    server.use(
+      ...domainListHandlers(
+        [
+          { name: 'alpha', created_at: 1 },
+          { name: 'beta', created_at: 1 },
+        ],
+        [
+          { name: 'alpha', created_at: 1, state: 'active' },
+          { name: 'beta', created_at: 1, state: 'active' },
+        ],
+        [
+          { name: 'alpha', created_at: 1, state: 'active' },
+          { name: 'beta', created_at: 1, state: 'active' },
+        ],
+      ),
+      relTablesHandler('alpha', []),
+      relViewsHandler('alpha', []),
+      jsonDetailHandler('alpha', 0),
+      jsonIndexesHandler('alpha', 0),
+      kvKeysHandler('alpha', []),
+      relTablesHandler('beta', []),
+      relViewsHandler('beta', []),
+      jsonDetailHandler('beta', 0),
+      jsonIndexesHandler('beta', 0),
+      kvKeysHandler('beta', []),
+    )
+
+    await connectAndRender()
+    await screen.findByText(expandedHeader('alpha'))
+    await screen.findByRole('button', { name: /▸ beta/ })
+
+    function refetchIntervalsFor(key: readonly unknown[]): (number | false | undefined)[] {
+      return useQuerySpy.mock.calls
+        .filter(([options]) => JSON.stringify(options.queryKey) === JSON.stringify(key))
+        .map(([options]) => options.refetchInterval)
+    }
+
+    // alpha is expanded: ExpandedDomain's own detail query (30s) and useEngineActivity's copy of the same key
+    // (60s, called internally by ExpandedDomain too) are both active observers on these four shared keys.
+    for (const key of [
+      ['rel-tables', 'alpha'],
+      ['rel-views', 'alpha'],
+      ['json-domain-detail', 'alpha'],
+      ['json-indexes', 'alpha'],
+    ]) {
+      const intervals = refetchIntervalsFor(key)
+      expect(intervals).toContain(30_000)
+      expect(intervals).toContain(60_000)
+    }
+
+    // the kv probe is useEngineActivity-only, even for the expanded domain (ExpandedDomain never queries it directly).
+    const alphaKvProbe = refetchIntervalsFor(['kv-keys-probe', 'alpha'])
+    expect(alphaKvProbe.length).toBeGreaterThan(0)
+    expect(alphaKvProbe.every((value) => value === 60_000)).toBe(true)
+
+    // beta stays collapsed: only useEngineActivity (via CollapsedDomainRow) observes its keys -> 60s only, never 30s.
+    for (const key of [
+      ['rel-tables', 'beta'],
+      ['rel-views', 'beta'],
+      ['json-domain-detail', 'beta'],
+      ['json-indexes', 'beta'],
+      ['kv-keys-probe', 'beta'],
+    ]) {
+      const intervals = refetchIntervalsFor(key)
+      expect(intervals.length).toBeGreaterThan(0)
+      expect(intervals.every((value) => value === 60_000)).toBe(true)
+    }
   })
 })
