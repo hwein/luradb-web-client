@@ -38,6 +38,14 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Docs: the LuraSQL article now also covers column types, constraints,
   `ALTER TABLE` restrictions, and identifier/limit rules.
 
+### Fixed
+
+- Light theme: status, engine-label and accent colors were tuned for the dark
+  theme and washed out on light surfaces — request status ("200 OK"), REST
+  method labels, KVREF/JSONREF markers, SQL string literals and secondary text
+  are now legible throughout. The light accent also matches the brand blue
+  again instead of drifting towards teal.
+
 ## [0.0.1] - 2026-08-11
 
 ### Added
