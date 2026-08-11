@@ -19,6 +19,9 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Data browser (JSON mode): the idx pill opens an index management panel —
   create or delete field indexes, with a one-click reindex prompt right after
   creating one.
+- Data browser (JSON mode): an "import ndjson ↑" button next to export opens
+  a bulk-import modal — paste or load an NDJSON file, then POST it in one
+  shot and see an `imported · failed` summary with a full per-line error list.
 
 ### Changed
 

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router'
 import { BASE_PATH, type ApiClient } from '../../api'
 import { CallLine } from '../../lib'
 import { jsonIndexesQueryOptions } from '../../shell/domainDetails'
+import { BulkImportModal } from './BulkImportModal'
 import { DataHeader } from './DataHeader'
 import { IndexPanel } from './IndexPanel'
 import { JsonDetail, type DetailMode } from './JsonDetail'
@@ -126,6 +127,7 @@ export function JsonBrowser({ domain, apiClient }: JsonBrowserProps) {
         <button type="button" className="json__export-button" onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}>
           {exportMutation.isPending ? 'exporting…' : 'export ndjson ↓'}
         </button>
+        <BulkImportModal domain={domain} apiClient={apiClient} />
       </DataHeader>
       {indexPanelOpen && apiClient !== undefined && (
         <IndexPanel domain={domain} apiClient={apiClient} indexes={indexesQuery.data ?? []} loading={indexesQuery.isLoading} />

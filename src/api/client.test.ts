@@ -105,6 +105,44 @@ describe('createApi', () => {
     expect(acceptHeader).toBe('application/x-ndjson')
   })
 
+  it('postNdjson sends a text/plain Content-Type with the body and auth header, and resolves on 200', async () => {
+    let contentType: string | null = null
+    let auth: string | null = null
+    let receivedBody = ''
+    server.use(
+      http.post(`${BASE_URL}/store-api/json/shop/bulk`, async ({ request }) => {
+        contentType = request.headers.get('Content-Type')
+        auth = request.headers.get('Authorization')
+        receivedBody = await request.text()
+        return HttpResponse.json({ imported: 1, failed: 0, errors: [] })
+      }),
+    )
+
+    const { postNdjson, onCall } = makeApi()
+    const calls: CallInfo[] = []
+    onCall((info) => calls.push(info))
+    const response = await postNdjson('/store-api/json/shop/bulk', '{"_key":"a"}\n')
+
+    expect(contentType).toBe('text/plain')
+    expect(auth).toBe('Bearer test-key')
+    expect(receivedBody).toBe('{"_key":"a"}\n')
+    expect(calls[0]).toMatchObject({ method: 'POST', path: '/store-api/json/shop/bulk', status: 200, ok: true })
+    await expect(response.json()).resolves.toEqual({ imported: 1, failed: 0, errors: [] })
+  })
+
+  it('postNdjson returns a non-2xx response without throwing and records the numeric status', async () => {
+    server.use(http.post(`${BASE_URL}/store-api/json/missing/bulk`, () => new HttpResponse("domain 'missing' not found", { status: 404 })))
+
+    const { postNdjson, onCall } = makeApi()
+    const calls: CallInfo[] = []
+    onCall((info) => calls.push(info))
+    const response = await postNdjson('/store-api/json/missing/bulk', '{}\n')
+
+    expect(response.status).toBe(404)
+    expect(calls[0]).toMatchObject({ method: 'POST', path: '/store-api/json/missing/bulk', status: 404, ok: false })
+    await expect(response.text()).resolves.toBe("domain 'missing' not found")
+  })
+
   it('reports network failures as a status-0 ApiError and notifies listeners', async () => {
     server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.error()))
 

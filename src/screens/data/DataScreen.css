@@ -247,6 +247,21 @@
   cursor: default;
 }
 
+.json__import-button {
+  background: none;
+  border: none;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.json__import-button:hover {
+  color: var(--tx);
+}
+
 .json__filter-error {
   padding: 6px 16px;
   background: var(--panel);
@@ -1477,4 +1492,177 @@
   font-family: var(--font-sans);
   font-size: 12px;
   cursor: pointer;
+}
+
+/* --- Bulk-Import-Dialog (spec data/007) --------------------------------- */
+
+.bim:not([open]) {
+  display: none;
+}
+
+.bim {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 92vw);
+  max-height: min(720px, 88vh);
+  padding: 0;
+  background: var(--panel);
+  color: var(--tx);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-card);
+  font-family: var(--font-sans);
+}
+
+.bim::backdrop {
+  background: color-mix(in oklch, var(--bg) 65%, transparent);
+}
+
+.bim__head {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.bim__title {
+  color: var(--tx);
+}
+
+.bim__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bim__input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bim__file {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--acc);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.bim__file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.bim__line-count {
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.bim__textarea {
+  flex: 1;
+  min-height: 220px;
+  box-sizing: border-box;
+  resize: vertical;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.bim__error {
+  color: var(--err);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.bim__result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bim__summary {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--tx);
+}
+
+.bim__summary-failed {
+  color: var(--err);
+}
+
+.bim__error-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--bord);
+  border-radius: var(--rad);
+  background: var(--panel2);
+}
+
+.bim__error-entry {
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--tx);
+}
+
+.bim__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.bim__close {
+  background: transparent;
+  border: 1px solid var(--bord);
+  color: var(--tx);
+  border-radius: var(--rad-input);
+  padding: 7px 14px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bim__import {
+  background: var(--acc);
+  color: var(--accT);
+  border: none;
+  border-radius: var(--rad-input);
+  padding: 7px 16px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bim__import:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

@@ -540,6 +540,17 @@ describe('JsonBrowser', () => {
     expect(await screen.findByText('domain not found')).toBeInTheDocument()
   })
 
+  // Bulk-Import öffnet seit spec data/007 §1 ein Modal per natives <dialog> + showModal() — in diesem jsdom
+  // nicht implementiert (vgl. RelBrowser.test.tsx zu "check links"). Der Formular-/Ergebnis-Flow selbst ist
+  // <dialog>-frei in BulkImportModal.test.tsx gegen BulkImportForm getestet; hier nur der Einstiegspunkt.
+  it('shows the "import ndjson ↑" entry point next to export', async () => {
+    server.use(http.get(DOCS_URL, () => HttpResponse.json({ documents: [], keys: [], total: 0, offset: 0, limit: 50 })))
+    await connectAndRender()
+    await screen.findByText('no documents')
+
+    expect(screen.getByRole('button', { name: 'import ndjson ↑' })).toBeInTheDocument()
+  })
+
   describe('index panel (spec data/006)', () => {
     const emptyDocs = http.get(DOCS_URL, () => HttpResponse.json({ documents: [], keys: [], total: 0, offset: 0, limit: 50 }))
 
