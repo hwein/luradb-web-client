@@ -14,6 +14,10 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - KV set null now keeps the key listed and shows an explicit NULL state.
 - Requires LuraDB 0.2.0 or newer.
 
+### Fixed
+
+- Scrollbars and native controls now follow the active theme.
+
 ## [0.0.3] - 2026-08-12
 
 ### Fixed
