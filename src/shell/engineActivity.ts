@@ -16,6 +16,8 @@ export interface EngineActivity {
   json: EngineActivityLevel | undefined
   kv: EngineActivityLevel | undefined
   kvKeyCount: number | undefined
+  /** Belegbare Objektzahl über alle vorhandenen Engines; undefined bis alle Quellen settled sind (Nachtrag admin/001). */
+  objectCount: number | undefined
 }
 
 interface CountQuery {
@@ -47,21 +49,24 @@ export function useEngineActivity(apiClient: ApiClient | undefined, domain: Doma
   const indexesQuery = useQuery({ ...jsonIndexesQueryOptions(apiClient, domain.name, hasJson), refetchInterval: 60_000 })
   const keysQuery = useQuery({ ...kvKeysProbeQueryOptions(apiClient, domain.name, hasKv), refetchInterval: 60_000 })
 
-  const rel = hasRel
-    ? levelFromCounts([
-        { isSuccess: tablesQuery.isSuccess, count: tablesQuery.data?.length ?? 0 },
-        { isSuccess: viewsQuery.isSuccess, count: viewsQuery.data?.length ?? 0 },
-      ])
+  const relCounts: CountQuery[] = [
+    { isSuccess: tablesQuery.isSuccess, count: tablesQuery.data?.length ?? 0 },
+    { isSuccess: viewsQuery.isSuccess, count: viewsQuery.data?.length ?? 0 },
+  ]
+  const jsonCounts: CountQuery[] = [
+    { isSuccess: jsonDetailQuery.isSuccess, count: jsonDetailQuery.data?.document_count ?? 0 },
+    { isSuccess: indexesQuery.isSuccess, count: indexesQuery.data?.length ?? 0 },
+  ]
+  const kvCounts: CountQuery[] = [{ isSuccess: keysQuery.isSuccess, count: keysQuery.data?.length ?? 0 }]
+
+  const rel = hasRel ? levelFromCounts(relCounts) : undefined
+  const json = hasJson ? levelFromCounts(jsonCounts) : undefined
+  const kv = hasKv ? levelFromCounts(kvCounts) : undefined
+
+  const allCounts = [...(hasRel ? relCounts : []), ...(hasJson ? jsonCounts : []), ...(hasKv ? kvCounts : [])]
+  const objectCount = allCounts.every((query) => query.isSuccess)
+    ? allCounts.reduce((sum, query) => sum + query.count, 0)
     : undefined
 
-  const json = hasJson
-    ? levelFromCounts([
-        { isSuccess: jsonDetailQuery.isSuccess, count: jsonDetailQuery.data?.document_count ?? 0 },
-        { isSuccess: indexesQuery.isSuccess, count: indexesQuery.data?.length ?? 0 },
-      ])
-    : undefined
-
-  const kv = hasKv ? levelFromCounts([{ isSuccess: keysQuery.isSuccess, count: keysQuery.data?.length ?? 0 }]) : undefined
-
-  return { rel, json, kv, kvKeyCount: kv === 'active' ? keysQuery.data?.length : undefined }
+  return { rel, json, kv, kvKeyCount: kv === 'active' ? keysQuery.data?.length : undefined, objectCount }
 }

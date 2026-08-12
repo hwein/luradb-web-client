@@ -39,7 +39,7 @@ afterEach(() => {
 })
 
 describe('DomainsCard', () => {
-  it('renders engine dots based on activity (contains objects), not registry presence, and only the JSON document_count as an object number', async () => {
+  it('renders engine dots based on activity (contains objects), not registry presence, and the object count summed across all engines (nachtrag admin/001)', async () => {
     server.use(
       http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })),
       http.get(`${ORIGIN}/store-api/domains`, () =>
@@ -68,13 +68,15 @@ describe('DomainsCard', () => {
       expect(shopRow?.querySelector('.admin-domains__dot--json')).toBeInTheDocument()
       expect(shopRow?.querySelector('.admin-domains__dot--kv')).toBeInTheDocument()
       expect(shopRow?.querySelector('.admin-domains__dot--rel')).not.toBeInTheDocument()
+      // 52123 Dokumente + 1 kv-Key -> 52.1k über alle Engines summiert.
       expect(screen.getByText('52.1k objects')).toBeInTheDocument()
     })
 
+    // kv-only-Domäne zeigt ihre Key-Zahl statt gar keiner Zahl (Nachtrag admin/001).
     const sessionsRow = screen.getByText('sessions').closest('.admin-domains__row')
     await waitFor(() => expect(sessionsRow?.querySelector('.admin-domains__dot--kv')).toBeInTheDocument())
     expect(sessionsRow?.querySelector('.admin-domains__dot--json')).not.toBeInTheDocument()
-    expect(sessionsRow?.textContent).not.toContain('objects')
+    await waitFor(() => expect(sessionsRow?.textContent).toContain('1 objects'))
   })
 
   it('shows no dots for a domain registered in all three engines but holding no objects yet', async () => {
@@ -94,7 +96,7 @@ describe('DomainsCard', () => {
     await act(() => connect(makeConnection()))
     renderConnected()
 
-    // "0 objects" beweist, dass die Detail-Query settled ist (document_count: 0 ist eine gültige Zahl) -> die
+    // "0 objects" beweist, dass alle Aktivitäts-Quellen settled sind (objectCount erscheint erst dann) -> die
     // Dot-Abwesenheit lässt sich erst ab diesem Zeitpunkt verlässlich prüfen.
     await waitFor(() => {
       expect(screen.getByText('0 objects')).toBeInTheDocument()
