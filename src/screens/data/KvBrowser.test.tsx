@@ -344,6 +344,31 @@ describe('KvBrowser', () => {
     expect(await screen.findByText('select a key')).toBeInTheDocument()
   })
 
+  it('a bulk set null over the currently open key refetches its value: the detail switches to the NULL marker', async () => {
+    let nulled = false
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(['null-key'])),
+      http.get(keyUrl('null-key'), () => (nulled ? new HttpResponse(null, { status: 204 }) : rawValue('old value'))),
+      http.patch(`${keyUrl('null-key')}/null`, () => {
+        nulled = true
+        return new HttpResponse(null, { status: 200 })
+      }),
+    )
+    await connectAndRender()
+    await screen.findByText('KEY null-key')
+    expect(screen.getByText('old value')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'bulk…' }))
+    fireEvent.click(screen.getByLabelText('set null'))
+    fireEvent.click(screen.getByRole('button', { name: 'run…' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'run' }))
+
+    expect(await screen.findByText('NULL')).toBeInTheDocument()
+    expect(screen.getByText('explicit null state — GET answers 204')).toBeInTheDocument()
+    expect(screen.queryByText('old value')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'null-key' })).toBeInTheDocument()
+  })
+
   it('creates a new key via PUT with the given key and value, then selects it', async () => {
     let putBody: string | undefined
     server.use(
