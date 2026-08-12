@@ -5,6 +5,10 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Docs: the view now fills the window height; sidebar and article scroll independently.
+
 ## [0.0.2] - 2026-08-11
 
 ### Added
