@@ -93,6 +93,47 @@ describe('KvBrowser', () => {
     expect(screen.getByText('cart-contents')).toBeInTheDocument()
   })
 
+  it('reveals a deep ?key= arrival in the master list: the display slice grows to the key position and marks it selected (nachtrag data/009)', async () => {
+    const keys = Array.from({ length: 150 }, (_, i) => `k_${String(i).padStart(3, '0')}`)
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(keys)),
+      http.get(keyUrl('k_120'), () => rawValue('deep value')),
+    )
+    await connectAndRender('/data?engine=kv&key=k_120')
+
+    expect(await screen.findByText('KEY k_120')).toBeInTheDocument()
+    // Index 120 liegt hinter der ersten Anzeige-Stufe (100) — die Liste muss bis zum Key erweitert sein.
+    const row = await screen.findByRole('button', { name: 'k_120' })
+    expect(row).toHaveClass('kv-list__row--selected')
+  })
+
+  it('keeps the ?key= arrival selection when the key list is already in the query cache (nachtrag data/009: auto-select overwrote it)', async () => {
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(['alpha', 'cart_1'])),
+      http.get(keyUrl('alpha'), () => rawValue('a')),
+      http.get(keyUrl('cart_1'), () => rawValue('cart-contents')),
+    )
+    // Erster Besuch ohne ?key= füllt den Query-Cache (Auto-Select auf den ersten Key), dann Ankunft per Jump.
+    const { queryClient, unmount } = await connectAndRender()
+    expect(await screen.findByText('KEY alpha')).toBeInTheDocument()
+    unmount()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/data?engine=kv&key=cart_1']}>
+          <SelectedDomainProvider>
+            <Routes>
+              <Route path="/data" element={<DataScreen />} />
+            </Routes>
+          </SelectedDomainProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('KEY cart_1')).toBeInTheDocument()
+    expect(screen.getByText('cart-contents')).toBeInTheDocument()
+  })
+
   it('scans keys via GET and shows the call in the footer; Scan commits a new prefix', async () => {
     let lastPrefix: string | null = null
     server.use(

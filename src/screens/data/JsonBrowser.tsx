@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { BASE_PATH, type ApiClient } from '../../api'
 import { CallLine } from '../../lib'
@@ -45,7 +45,9 @@ export function JsonBrowser({ domain, apiClient, initialKey }: JsonBrowserProps)
   const [filterText, setFilterText] = useState('')
   const [filterError, setFilterError] = useState<string | undefined>(undefined)
   const [committedFilter, setCommittedFilter] = useState<ParsedFilter | undefined>(undefined)
-  const [mode, setMode] = useState<DetailMode>({ kind: 'empty' })
+  // Ankunft mit ?key= (spec data/009 §5) als Initial-State: als nachgezogener Effekt verlor die Selektion
+  // gegen den Auto-Select, sobald die Dokument-Liste bereits im Query-Cache lag (Nachtrag data/009).
+  const [mode, setMode] = useState<DetailMode>(() => (initialKey === undefined ? { kind: 'empty' } : { kind: 'view', key: initialKey }))
   const [indexPanelOpen, setIndexPanelOpen] = useState(false)
 
   const indexesQuery = useQuery(jsonIndexesQueryOptions(apiClient, domain, true))
@@ -64,14 +66,13 @@ export function JsonBrowser({ domain, apiClient, initialKey }: JsonBrowserProps)
   const lastPage = pages[pages.length - 1]
 
   // Neuer Domänen-/Filterkontext ⇒ Auswahl verwerfen, dann greift Auto-Select auf das erste Ergebnis.
+  // Beim Mount übersprungen, sonst räumte er die Ankunfts-Selektion.
+  const contextRef = useRef({ domain, committedFilter })
   useEffect(() => {
+    if (contextRef.current.domain === domain && contextRef.current.committedFilter === committedFilter) return
+    contextRef.current = { domain, committedFilter }
     setMode({ kind: 'empty' })
   }, [domain, committedFilter])
-
-  // Ankunft mit ?key= (spec data/009 §5, analog zur rel-Filter-Ankunft): einmalig initiale Selektion, danach normale Bedienung.
-  useEffect(() => {
-    if (initialKey !== undefined) setMode({ kind: 'view', key: initialKey })
-  }, [domain, initialKey])
 
   useEffect(() => {
     const first = documents[0]

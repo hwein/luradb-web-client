@@ -56,7 +56,7 @@ async function connectAndRender(relDomain = false, extraHandlers: Parameters<typ
   server.use(...extraHandlers, ...baseHandlers(relDomain))
   await act(() => connect(makeConnection()))
   const queryClient = createAppQueryClient()
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialPath]}>
         <SelectedDomainProvider>
@@ -68,6 +68,7 @@ async function connectAndRender(relDomain = false, extraHandlers: Parameters<typ
       </MemoryRouter>
     </QueryClientProvider>,
   )
+  return { queryClient, ...view }
 }
 
 function footerText(): string {
@@ -107,6 +108,40 @@ describe('JsonBrowser', () => {
 
     expect(await screen.findByText('DOCUMENT cus_8102')).toBeInTheDocument()
     expect(screen.getByText(/"name": "M. Keller"/)).toBeInTheDocument()
+  })
+
+  it('keeps the ?key= arrival selection when the document list is already in the query cache (nachtrag data/009: auto-select overwrote it)', async () => {
+    // Erster Besuch ohne ?key= füllt den Query-Cache (Auto-Select auf das erste Dokument), dann Ankunft per Jump.
+    const { queryClient, unmount } = await connectAndRender(false, [
+      http.get(DOCS_URL, () =>
+        HttpResponse.json({
+          documents: [{ _key: 'cus_1', _version: 1, name: 'first' }],
+          keys: ['cus_1'],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        }),
+      ),
+      documentHandler('cus_1', 1, { name: 'first' }, '"etag-0"'),
+      documentHandler('cus_8102', 7, { name: 'M. Keller' }, '"etag-1"'),
+    ])
+    expect(await screen.findByText('DOCUMENT cus_1')).toBeInTheDocument()
+    unmount()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/data?engine=json&key=cus_8102']}>
+          <SelectedDomainProvider>
+            <Routes>
+              <Route path="/data" element={<DataScreen />} />
+            </Routes>
+          </SelectedDomainProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('DOCUMENT cus_8102')).toBeInTheDocument()
+    expect(await screen.findByText(/"name": "M. Keller"/)).toBeInTheDocument()
   })
 
   it('lists documents via GET when the filter is empty, and shows the raw call in the footer', async () => {

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { ApiClient } from '../../api'
 import { CallLine } from '../../lib'
 import { DataHeader } from './DataHeader'
@@ -27,27 +27,36 @@ export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
   const [watchOn, setWatchOn] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [visibleCount, setVisibleCount] = useState(KV_KEYS_PAGE_SIZE)
-  const [mode, setMode] = useState<KvDetailMode>({ kind: 'empty' })
+  // Ankunft mit ?key= (spec data/009 §5) als Initial-State: als nachgezogener Effekt verlor die Selektion
+  // gegen den Auto-Select, sobald die Key-Liste bereits im Query-Cache lag (Nachtrag data/009).
+  const [mode, setMode] = useState<KvDetailMode>(() => (initialKey === undefined ? { kind: 'empty' } : { kind: 'view', key: initialKey }))
 
   const keysQuery = useQuery(kvKeysQueryOptions(apiClient, domain, committedPrefix))
   const keys = keysQuery.data?.keys ?? []
   const visibleKeys = keys.slice(0, visibleCount)
 
   // Neuer Domänen-/Prefixkontext ⇒ Auswahl verwerfen und Anzeige-Stufe zurücksetzen, dann greift Auto-Select.
+  // Beim Mount übersprungen, sonst räumte er die Ankunfts-Selektion.
+  const contextRef = useRef({ domain, committedPrefix })
   useEffect(() => {
+    if (contextRef.current.domain === domain && contextRef.current.committedPrefix === committedPrefix) return
+    contextRef.current = { domain, committedPrefix }
     setMode({ kind: 'empty' })
     setVisibleCount(KV_KEYS_PAGE_SIZE)
   }, [domain, committedPrefix])
-
-  // Ankunft mit ?key= (spec data/009 §5, analog zur rel-Filter-Ankunft): einmalig initiale Selektion, danach normale Bedienung.
-  useEffect(() => {
-    if (initialKey !== undefined) setMode({ kind: 'view', key: initialKey })
-  }, [domain, initialKey])
 
   useEffect(() => {
     const first = visibleKeys[0]
     if (mode.kind === 'empty' && first !== undefined) setMode({ kind: 'view', key: first })
   }, [mode, visibleKeys])
+
+  // Selektion außerhalb der Anzeige-Stufe (?key=-Ankunft tief in der Liste) ⇒ Stufe bis zur Key-Position erweitern,
+  // damit die Master-Liste die Auswahl zeigt (Nachtrag data/009); die Liste scrollt selbst zur Selektion.
+  useEffect(() => {
+    if (mode.kind !== 'view' || keysQuery.data === undefined) return
+    const index = keysQuery.data.keys.indexOf(mode.key)
+    if (index >= visibleCount) setVisibleCount(Math.ceil((index + 1) / KV_KEYS_PAGE_SIZE) * KV_KEYS_PAGE_SIZE)
+  }, [mode, keysQuery.data, visibleCount])
 
   // Frische Liste ohne den selektierten Key (delete extern / TTL-Ablauf) ⇒ Auswahl räumen — gelöscht ist gelöscht (Autor-Entscheid 2026-07-18).
   // isFetching-Guard: während eines Refetches (z. B. direkt nach create-Invalidierung) ist data noch der alte Stand — nicht darauf räumen.
