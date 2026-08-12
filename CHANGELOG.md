@@ -5,6 +5,16 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-08-12
+
+### Fixed
+
+- Docs: the view now fills the window height; sidebar and article scroll independently.
+- Data browser (REL mode): with expand active, the row detail no longer repeats the raw link key above the resolved value section.
+- Data browser (REL mode): expanded value sections now use the available panel height instead of a fixed 240px cap.
+- Data browser: "open in kv/json browser" from a REL row detail now reliably selects the target, also when the list was already loaded; the kv key list scrolls to the selection and marks it.
+- Admin: the domains card counts objects across all engines (documents, kv keys, tables, views) instead of JSON documents only.
+
 ## [0.0.2] - 2026-08-11
 
 ### Added
@@ -58,6 +68,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   permissions, key rotation); configuration; and built-in docs. Packaged as a
   Tauri 2 desktop app.
 
-[unreleased]: https://github.com/hwein/luradb-web-client/compare/v0.0.2...HEAD
+[unreleased]: https://github.com/hwein/luradb-web-client/compare/v0.0.3...HEAD
+[0.0.3]: https://github.com/hwein/luradb-web-client/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/hwein/luradb-web-client/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/hwein/luradb-web-client/releases/tag/v0.0.1

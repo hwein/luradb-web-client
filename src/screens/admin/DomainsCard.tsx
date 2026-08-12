@@ -1,7 +1,6 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import type { ApiClient } from '../../api'
-import { jsonDomainDetailQueryOptions } from '../../shell/domainDetails'
 import {
   createJsonDomain,
   createKvDomain,
@@ -63,12 +62,10 @@ interface DomainRowProps {
   domain: DomainSummary
 }
 
-/** Eine Domain-Zeile (spec admin/001 §3): Dots, JSON-document_count, 🗑 → Inline-Bestätigung → Löschkaskade. */
+/** Eine Domain-Zeile (spec admin/001 §3, Nachtrag): Dots, belegbare Objektzahl über alle Engines, 🗑 → Inline-Bestätigung → Löschkaskade. */
 function DomainRow({ apiClient, domain }: DomainRowProps) {
   const queryClient = useQueryClient()
   const [armed, setArmed] = useState(false)
-  const hasJson = domain.engines.json !== undefined
-  const jsonDetail = useQuery(jsonDomainDetailQueryOptions(apiClient, domain.name, hasJson))
   const activity = useEngineActivity(apiClient, domain)
   const isDeleting = domain.engines.json?.state === 'deleting' || domain.engines.rel?.state === 'deleting'
   const engines = ENGINE_ORDER.filter((engine) => domain.engines[engine] !== undefined)
@@ -81,15 +78,13 @@ function DomainRow({ apiClient, domain }: DomainRowProps) {
     },
   })
 
-  const documentCount = jsonDetail.data?.document_count
-
   return (
     <div className="admin-domains__item">
       <div className={`admin-domains__row${isDeleting ? ' admin-domains__row--muted' : ''}`}>
         <span className="admin-domains__name">{domain.name}</span>
         <EngineDots activity={activity} />
         <span className="admin-domains__spacer" />
-        {typeof documentCount === 'number' && <span className="admin-domains__count">{formatCount(documentCount)} objects</span>}
+        {activity.objectCount !== undefined && <span className="admin-domains__count">{formatCount(activity.objectCount)} objects</span>}
         <button type="button" className="admin-domains__trash" title="delete domain" onClick={() => setArmed(true)}>
           🗑
         </button>
