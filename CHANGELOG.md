@@ -17,6 +17,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - Scrollbars and native controls now follow the active theme.
+- Editable configuration values no longer render a stray button background.
 
 ## [0.0.3] - 2026-08-12
 
