@@ -8,6 +8,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - Docs: the view now fills the window height; sidebar and article scroll independently.
+- Data browser (REL mode): with expand active, the row detail no longer repeats the raw link key above the resolved value section.
+- Data browser (REL mode): expanded value sections now use the available panel height instead of a fixed 240px cap.
 
 ## [0.0.2] - 2026-08-11
 

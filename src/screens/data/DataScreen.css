@@ -1629,10 +1629,13 @@
 
 /* --- REL row detail: expandierte Link-Werte (spec data/009) ------------- */
 
+/* Sektionen teilen sich den Restraum der Detail-Spalte; unter 160px scrollt die Spalte außen. */
 .rel-detail__expanded-section {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1 1 0;
+  min-height: 160px;
 }
 
 .rel-detail__expanded-head {
@@ -1674,7 +1677,8 @@
 
 .rel-detail__expanded-value {
   margin: 0;
-  max-height: 240px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   background: var(--edbg);
   border: 1px solid var(--bord);

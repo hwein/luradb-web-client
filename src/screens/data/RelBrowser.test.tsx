@@ -203,7 +203,7 @@ describe('RelBrowser', () => {
     expect(await screen.findByTestId('docs-screen')).toHaveTextContent('docs: cross-engine-links')
   })
 
-  it('shows expanded link sections below the field list (KVREF utf8 raw text, JSONREF pretty document); hidden without _expanded and while editing (spec data/009)', async () => {
+  it('shows expanded link sections replacing the raw key field rows (KVREF utf8 raw text, JSONREF pretty document); hidden without _expanded and while editing (spec data/009 + nachtrag)', async () => {
     server.use(
       http.get(ROWS_URL, ({ request }) => {
         const expand = new URL(request.url).searchParams.get('expand')
@@ -229,6 +229,8 @@ describe('RelBrowser', () => {
     await connectAndRender()
     await screen.findByText('ROW 1')
     expect(screen.queryByText('cart_ref · kv value')).not.toBeInTheDocument()
+    // Ohne Expand zeigt die Feld-Liste den rohen Key.
+    expect(within(document.querySelector('.rel-detail')!).getByText('cart_1')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'expand' }))
 
@@ -238,6 +240,11 @@ describe('RelBrowser', () => {
     expect(screen.getByText(/"name": "A. Roth"/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'open in kv browser →' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'open in json browser →' })).toBeInTheDocument()
+    // Die Sektion ersetzt die Key-Feldzeile — weder Label noch roher Key erscheinen doppelt (Nachtrag).
+    const detail = within(document.querySelector('.rel-detail')!)
+    expect(detail.queryByText('cart_ref')).not.toBeInTheDocument()
+    expect(detail.queryByText('cart_1')).not.toBeInTheDocument()
+    expect(detail.queryByText('doc_1')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'edit' }))
     expect(screen.queryByText('cart_ref · kv value')).not.toBeInTheDocument()
@@ -272,6 +279,8 @@ describe('RelBrowser', () => {
     expect(screen.getByText(/"encoding": "base64"/)).toBeInTheDocument()
     expect(screen.getByText(/"value": "AAA="/)).toBeInTheDocument()
     expect(screen.queryByText('customer_ref · json document')).not.toBeInTheDocument()
+    // NULL-Zelle hat keine Sektion — ihre Feldzeile bleibt stehen.
+    expect(within(document.querySelector('.rel-detail')!).getByText('customer_ref')).toBeInTheDocument()
   })
 
   it('shows the dangling state in an expanded section (muted + docs link) without a jump action (spec data/009 §3/§5)', async () => {

@@ -141,6 +141,13 @@ function RelRowForm({ domain, apiClient, columns, form, isInsert, onFieldText, o
   )
 }
 
+/** Auflösung einer REF-Spalte aus `_expanded` — Grundlage für die Wert-Sektion UND fürs Ausblenden der Key-Feldzeile (Nachtrag: der Key wird nicht wiederholt). */
+function resolutionOf(column: ColumnInfo, expanded: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (column.type !== 'KVREF' && column.type !== 'JSONREF') return undefined
+  const value = expanded?.[column.name]
+  return isRecord(value) ? value : undefined
+}
+
 interface ExpandedLinkSectionProps {
   column: ColumnInfo
   resolution: Record<string, unknown>
@@ -200,9 +207,8 @@ function ExpandedLinkSections({ columns, row, onOpenLink, onOpenDocs }: Expanded
   return (
     <>
       {columns.map((column) => {
-        if (column.type !== 'KVREF' && column.type !== 'JSONREF') return null
-        const resolution = expanded[column.name]
-        if (!isRecord(resolution)) return null
+        const resolution = resolutionOf(column, expanded)
+        if (resolution === undefined) return null
         return (
           <ExpandedLinkSection
             key={column.name}
@@ -342,6 +348,8 @@ export function RelRowDetail({ domain, apiClient, table, columns, mode, row, onC
     )
   }
 
+  const expanded = expandedOf(row)
+
   return (
     <div className="rel-detail">
       <div className="rel-detail__head">
@@ -381,12 +389,15 @@ export function RelRowDetail({ domain, apiClient, table, columns, mode, row, onC
         />
       ) : (
         <div className="rel-detail__fields">
-          {columns.map((column) => (
-            <div className="rel-detail__field-row" key={column.name}>
-              <span className="rel-detail__field-label">{column.name}</span>
-              <span className="rel-detail__field-value">{formatCellValue(row[column.name])}</span>
-            </div>
-          ))}
+          {/* REF-Spalten mit gerenderter Wert-Sektion erscheinen nicht zusätzlich als Key-Zeile (Nachtrag data/009). */}
+          {columns
+            .filter((column) => resolutionOf(column, expanded) === undefined)
+            .map((column) => (
+              <div className="rel-detail__field-row" key={column.name}>
+                <span className="rel-detail__field-label">{column.name}</span>
+                <span className="rel-detail__field-value">{formatCellValue(row[column.name])}</span>
+              </div>
+            ))}
         </div>
       )}
 
