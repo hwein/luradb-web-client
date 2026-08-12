@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "check": "tsc --noEmit && eslint .",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "version": "node scripts/sync-version.mjs && git add src-tauri/Cargo.toml",
     "release": "node scripts/release.mjs",
     "api:types": "node scripts/api-types.mjs",
@@ -37,6 +38,7 @@
     "smol-toml": "^1.7.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tauri-apps/cli": "^2.11.4",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.0.1",

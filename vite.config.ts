@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import react from '@vitejs/plugin-react'
 import type { ProxyOptions } from 'vite'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 
 // Backend nicht erreichbar ⇒ 502 statt Vites generischem 500 (general/004 unterscheidet "server unreachable" am Status).
 function localServerProxy(): ProxyOptions {
@@ -43,5 +43,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // e2e/ gehört Playwright (braucht Server + Key); Vitest würde die *.spec.ts sonst einsammeln.
+    exclude: [...configDefaults.exclude, 'e2e/**'],
   },
 })
