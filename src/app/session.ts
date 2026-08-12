@@ -69,7 +69,13 @@ export async function connect(connection: Connection): Promise<void> {
   })
   if (probe === undefined) {
     const suffix = failureDetail === undefined ? '' : ` — ${failureDetail}`
-    setState({ status: 'error', connection, message: `server unreachable at ${transport.baseUrl}${suffix}` })
+    // Heuristik: ein TLS-Handshake-Fehler ist im Fetch-Exception-Text nicht von "Server aus" zu unterscheiden
+    // (spec 009) — der Hinweis erscheint deshalb bei jedem unreachable https://-Ziel ohne gesetztes Flag.
+    const certHint =
+      env === 'desktop' && connection.type.url.startsWith('https://') && connection.type.acceptInvalidCerts !== true
+        ? ' — if this server uses a self-signed certificate, enable "Accept self-signed certificates" in the connection settings'
+        : ''
+    setState({ status: 'error', connection, message: `server unreachable at ${transport.baseUrl}${suffix}${certHint}` })
     return
   }
 

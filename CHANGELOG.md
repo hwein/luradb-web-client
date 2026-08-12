@@ -5,6 +5,10 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Desktop: connections can opt in to accepting self-signed TLS certificates, per connection.
+
 ## [0.0.3] - 2026-08-12
 
 ### Fixed

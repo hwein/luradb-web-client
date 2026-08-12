@@ -1,7 +1,7 @@
 import { authWithoutSecret } from './connectionRegistry'
 
 // künftig: | { kind: 'shm'; … } (SHM/UDS-Local-Bypass, Backlog)
-export type ConnectionType = { kind: 'rest'; url: string }
+export type ConnectionType = { kind: 'rest'; url: string; acceptInvalidCerts?: boolean }
 // künftig: | { kind: 'user-password'; … } (Server-Konzept steht aus)
 export type AuthMethod = { kind: 'api-key'; key?: string }
 
@@ -29,7 +29,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isConnectionType(value: unknown): value is ConnectionType {
-  return isRecord(value) && value.kind === 'rest' && typeof value.url === 'string'
+  return (
+    isRecord(value) &&
+    value.kind === 'rest' &&
+    typeof value.url === 'string' &&
+    (value.acceptInvalidCerts === undefined || typeof value.acceptInvalidCerts === 'boolean')
+  )
 }
 
 function isAuthMethod(value: unknown): value is AuthMethod {

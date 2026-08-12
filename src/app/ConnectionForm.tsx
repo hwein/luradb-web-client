@@ -25,6 +25,7 @@ function initialValues(target: FormTarget): Record<string, string | boolean> {
   return {
     name: base?.name ?? '',
     url: base?.type.url ?? '',
+    acceptInvalidCerts: base?.type.acceptInvalidCerts ?? false,
     key: '',
     remember: base?.auth.key !== undefined,
   }
@@ -52,7 +53,11 @@ function buildConnection(target: FormTarget, values: Record<string, string | boo
   return {
     id: base?.id ?? crypto.randomUUID(),
     name: String(values.name ?? ''),
-    type: { kind: 'rest', url: normalizeServerUrl(String(values.url ?? '')) },
+    type: {
+      kind: 'rest',
+      url: normalizeServerUrl(String(values.url ?? '')),
+      acceptInvalidCerts: Boolean(values.acceptInvalidCerts),
+    },
     auth: { kind: 'api-key', key: typedKey !== '' ? typedKey : base?.auth.key },
     lastUsed: base?.lastUsed,
   }
@@ -107,10 +112,13 @@ interface ConnectionFormFieldProps {
 function ConnectionFormField({ field, value, onChange }: ConnectionFormFieldProps) {
   if (field.kind === 'checkbox') {
     return (
-      <label className="connection-form__checkbox">
-        <input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} />
-        {field.label}
-      </label>
+      <div className="connection-form__field">
+        <label className="connection-form__checkbox">
+          <input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} />
+          {field.label}
+        </label>
+        {field.hint !== undefined && <span className="connection-form__hint mono-path">{field.hint}</span>}
+      </div>
     )
   }
   return (

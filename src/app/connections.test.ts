@@ -113,6 +113,34 @@ describe('touchLastUsed', () => {
   })
 })
 
+describe('acceptInvalidCerts', () => {
+  it('roundtrips true through storage', () => {
+    const connection = makeConnection({ type: { kind: 'rest', url: 'http://127.0.0.1:3000', acceptInvalidCerts: true } })
+    upsertConnection(connection, { remember: false })
+
+    expect(loadConnections()).toEqual([{ supported: true, connection }])
+  })
+
+  it('stays supported when the field is absent (existing entries default to false)', () => {
+    upsertConnection(makeConnection(), { remember: false })
+
+    const [entry] = loadConnections()
+    expect(entry?.supported).toBe(true)
+  })
+
+  it('marks the entry unsupported when the stored field is not a boolean', () => {
+    const raw = {
+      id: 'conn-1',
+      name: 'local',
+      type: { kind: 'rest', url: 'http://127.0.0.1:3000', acceptInvalidCerts: 'yes' },
+      auth: { kind: 'api-key' },
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: 1, connections: [raw] }))
+
+    expect(loadConnections()).toEqual([{ supported: false, id: 'conn-1', name: 'local' }])
+  })
+})
+
 describe('maskKey', () => {
   it('keeps a short prefix and suffix for long keys', () => {
     expect(maskKey('lura_1234567890abcdef1240')).toBe('lura_…40')
