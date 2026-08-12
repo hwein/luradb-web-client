@@ -59,7 +59,7 @@ function Harness({ onClose }: { onClose: () => void }) {
 
 async function renderConnectedPalette(onClose: () => void = () => {}) {
   server.use(
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1 }])),
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1, state: 'active' }])),
     http.get(`${ORIGIN}/store-api/rel/domains`, () =>

@@ -43,10 +43,19 @@ const restType = {
         },
       ]
     }
-    return [{ name: 'url', label: 'Server URL', kind: 'text', required: true }]
+    return [
+      { name: 'url', label: 'Server URL', kind: 'text', required: true },
+      {
+        name: 'acceptInvalidCerts',
+        label: 'Accept self-signed certificates',
+        kind: 'checkbox',
+        hint: 'disables all TLS certificate verification for this connection — any certificate is accepted and traffic (including the API key) could be intercepted',
+      },
+    ]
   },
   buildTransport(type: RestType, env: Environment): Transport {
-    if (env === 'desktop') return { baseUrl: type.url, fetchImpl: getTransport().fetchImpl }
+    if (env === 'desktop')
+      return { baseUrl: type.url, fetchImpl: getTransport({ acceptInvalidCerts: type.acceptInvalidCerts === true }).fetchImpl }
     return { baseUrl: window.location.origin, fetchImpl: fetch }
   },
   hostLabel(type: RestType, env: Environment): string {

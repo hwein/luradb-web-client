@@ -41,7 +41,7 @@ afterEach(() => {
 describe('DomainsCard', () => {
   it('renders engine dots based on activity (contains objects), not registry presence, and the object count summed across all engines (nachtrag admin/001)', async () => {
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
       http.get(`${ORIGIN}/store-api/domains`, () =>
         HttpResponse.json([
           { name: 'shop', created_at: 1 },
@@ -81,7 +81,7 @@ describe('DomainsCard', () => {
 
   it('shows no dots for a domain registered in all three engines but holding no objects yet', async () => {
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: 'fresh', created_at: 1 }])),
       http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([{ name: 'fresh', created_at: 1, state: 'active' }])),
       http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([{ name: 'fresh', created_at: 1, state: 'active' }])),
@@ -107,7 +107,7 @@ describe('DomainsCard', () => {
 
   it('renders a domain flagged deleting (by any engine) as a muted row', async () => {
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([{ name: 'old', created_at: 1, state: 'deleting' }])),
       http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
@@ -125,7 +125,7 @@ describe('DomainsCard', () => {
 
   it('arms, confirms, and deletes across every engine the domain has; a partial failure lists inline per engine', async () => {
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1 }])),
       http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1, state: 'active' }])),
       http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1, state: 'active' }])),
@@ -157,7 +157,7 @@ describe('DomainsCard', () => {
   it('cancel collapses the confirm inline without calling DELETE', async () => {
     let deleteCalled = false
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1 }])),
       http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
@@ -183,7 +183,7 @@ describe('DomainsCard', () => {
     let jsonCreateCalls = 0
     let relCreateCalls = 0
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),

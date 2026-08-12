@@ -5,6 +5,22 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-12
+
+### Added
+
+- Desktop: connections can opt in to accepting self-signed TLS certificates, per connection.
+
+### Changed
+
+- KV set null now keeps the key listed and shows an explicit NULL state.
+- Requires LuraDB 0.2.0 or newer.
+
+### Fixed
+
+- Scrollbars and native controls now follow the active theme.
+- Editable configuration values no longer render a stray button background.
+
 ## [0.0.3] - 2026-08-12
 
 ### Fixed
@@ -68,7 +84,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   permissions, key rotation); configuration; and built-in docs. Packaged as a
   Tauri 2 desktop app.
 
-[unreleased]: https://github.com/hwein/luradb-web-client/compare/v0.0.3...HEAD
+[unreleased]: https://github.com/hwein/luradb-web-client/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/hwein/luradb-web-client/compare/v0.0.3...v0.1.0
 [0.0.3]: https://github.com/hwein/luradb-web-client/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/hwein/luradb-web-client/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/hwein/luradb-web-client/releases/tag/v0.0.1

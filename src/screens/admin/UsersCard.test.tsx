@@ -44,7 +44,7 @@ function domainHandlers() {
 }
 
 function versionHandler() {
-  return http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' }))
+  return http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' }))
 }
 
 afterEach(() => {

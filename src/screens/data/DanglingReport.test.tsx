@@ -45,7 +45,7 @@ function Harness({ columns, onClose }: { columns: ColumnInfo[]; onClose: () => v
 
 /** Rendert `DanglingReportContent` ohne die native `<dialog>`-Hülle (showModal() ist in diesem jsdom nicht implementiert). */
 async function renderContent(onClose: () => void = () => {}, columns: ColumnInfo[] = COLUMNS) {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })))
+  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
   await act(() => connect(makeConnection()))
 
   const queryClient = createAppQueryClient()

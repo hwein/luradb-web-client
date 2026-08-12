@@ -33,7 +33,7 @@ function watchStream(frames: string[]) {
 }
 
 async function connectSession(): Promise<void> {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })))
+  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
   await act(() => connect(makeConnection()))
 }
 

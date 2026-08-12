@@ -1,5 +1,11 @@
+import { QueryClient } from '@tanstack/react-query'
+import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
+import { createApi } from '../../api'
+import { server } from '../../test/msw'
 import { kvKeysQueryOptions, kvValueQueryOptions, parseTtlSeconds, tryParseJson } from './kvEntries'
+
+const BASE_URL = 'http://127.0.0.1:3000'
 
 describe('tryParseJson', () => {
   it('returns the parsed value for valid JSON', () => {
@@ -32,6 +38,16 @@ describe('kvValueQueryOptions', () => {
   it('is disabled without an active connection or a selected key', () => {
     expect(kvValueQueryOptions(undefined, 'shop', 'cart:1').enabled).toBe(false)
     expect(kvValueQueryOptions(undefined, 'shop', undefined).enabled).toBe(false)
+  })
+
+  it('maps a 204 response to the explicit null state (contract 0.2.0: set_null is an upsert, not a tombstone)', async () => {
+    server.use(http.get(`${BASE_URL}/store-api/kv/shop/keys/nulled`, () => new HttpResponse(null, { status: 204 })))
+    const apiClient = createApi({ baseUrl: BASE_URL, fetchImpl: fetch, getAuthHeader: () => 'Bearer test-key' })
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+    const value = await queryClient.fetchQuery(kvValueQueryOptions(apiClient, 'shop', 'nulled'))
+
+    expect(value).toEqual({ state: 'null' })
   })
 })
 

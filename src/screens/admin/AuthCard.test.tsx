@@ -36,7 +36,7 @@ describe('AuthCard', () => {
   it('derives auth.enabled = true (green) from a 401 on the headerless probe, sending no Authorization header', async () => {
     let sawAuthHeader = false
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
       http.get(`${ORIGIN}/store-api/domains`, ({ request }) => {
         if (request.headers.has('authorization')) sawAuthHeader = true
         return new HttpResponse(null, { status: 401 })
@@ -53,7 +53,7 @@ describe('AuthCard', () => {
 
   it('derives auth.enabled = false (red) with a warning from a 200 on the headerless probe', async () => {
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
     )
     await act(() => connect(makeConnection()))
@@ -66,7 +66,7 @@ describe('AuthCard', () => {
 
   it('always shows the static scheme and the toml explanatory note', async () => {
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
       http.get(`${ORIGIN}/store-api/domains`, () => new HttpResponse(null, { status: 401 })),
     )
     await act(() => connect(makeConnection()))

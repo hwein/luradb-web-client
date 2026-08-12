@@ -29,7 +29,7 @@ function makeConnection(): Connection {
 
 function baseHandlers(relDomain: boolean) {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([{ name: DOMAIN, created_at: 1, state: 'active' }])),
     http.get(`${ORIGIN}/store-api/rel/domains`, () =>

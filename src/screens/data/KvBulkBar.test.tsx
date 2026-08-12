@@ -44,7 +44,7 @@ function Harness({ keys, prefix = '' }: { keys: string[]; prefix?: string }) {
 }
 
 async function renderBar(keys: string[], prefix = '') {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })))
+  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
   await act(() => connect(makeConnection()))
 
   const queryClient = createAppQueryClient()
@@ -149,12 +149,12 @@ describe('KvBulkBar', () => {
     expect(bodies).toEqual(['', ''])
   })
 
-  it('runs PATCH …/null for "set null" and shows the honest tombstone hint', async () => {
+  it('runs PATCH …/null for "set null" and shows the explicit-null-state hint', async () => {
     server.use(http.patch(`${KEYS_URL}/:key/null`, () => new HttpResponse(null, { status: 200 })))
     await renderBar(['a'])
 
     fireEvent.click(screen.getByLabelText('set null'))
-    expect(screen.getByText(/server stores null as a tombstone — reads answer 404 \(like delete\)/)).toBeInTheDocument()
+    expect(screen.getByText(/sets an explicit null state — the key stays listed, reads answer 204/)).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'run…' }))
     fireEvent.click(await screen.findByRole('button', { name: 'run' }))
@@ -162,7 +162,7 @@ describe('KvBulkBar', () => {
     expect(screen.getByText('failed 0')).toBeInTheDocument()
   })
 
-  it('the tombstone hint docs link opens the kv-engine article', async () => {
+  it('the null-state hint docs link opens the kv-engine article', async () => {
     await renderBar(['a'])
     fireEvent.click(screen.getByLabelText('set null'))
 

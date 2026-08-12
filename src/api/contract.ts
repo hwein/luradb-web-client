@@ -30,7 +30,7 @@ export const CONTRACT_VERSION: SemVer = parseSemVer(openapiDocument.info.version
  * zu nutzen, das ältere Server nicht können — im selben Commit, mit Begründung.
  * Ausschließlich manuelle Maintainer-Entscheidung.
  */
-export const MIN_SERVER_VERSION = '0.1.0'
+export const MIN_SERVER_VERSION = '0.2.0'
 const minServer = parseSemVer(MIN_SERVER_VERSION)
 
 export interface CompatibilityResult {
