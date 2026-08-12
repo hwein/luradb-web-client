@@ -35,7 +35,7 @@ function makeConnection(): Connection {
 
 function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: DOMAIN, created_at: 1 }])),
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
@@ -247,24 +247,26 @@ describe('KvBrowser', () => {
     expect(await screen.findByRole('button', { name: 'edit' })).toBeInTheDocument()
   })
 
-  it('arms and confirms "set null": PATCHes …/null; today the server tombstones the key, so it vanishes like a delete', async () => {
+  it('arms and confirms "set null": PATCHes …/null; the key stays listed (server 0.2.0 upsert) and the detail shows the NULL marker', async () => {
     let nulled = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(nulled ? [] : ['tomb-key'])),
-      http.get(keyUrl('tomb-key'), () => (nulled ? new HttpResponse('not found', { status: 404 }) : rawValue('value'))),
-      http.patch(`${keyUrl('tomb-key')}/null`, () => {
+      http.get(KEYS_URL, () => HttpResponse.json(['null-key'])),
+      http.get(keyUrl('null-key'), () => (nulled ? new HttpResponse(null, { status: 204 }) : rawValue('value'))),
+      http.patch(`${keyUrl('null-key')}/null`, () => {
         nulled = true
         return new HttpResponse(null, { status: 200 })
       }),
     )
     await connectAndRender()
+    await screen.findByText('KEY null-key')
 
     fireEvent.click(await screen.findByRole('button', { name: 'set null' }))
     fireEvent.click(await screen.findByRole('button', { name: 'set null — sure?' }))
 
-    await waitFor(() => expect(screen.queryByText('tomb-key')).not.toBeInTheDocument())
-    expect(screen.getByText('no keys')).toBeInTheDocument()
-    expect(screen.getByText('select a key')).toBeInTheDocument()
+    expect(await screen.findByText('NULL')).toBeInTheDocument()
+    expect(screen.getByText('explicit null state — GET answers 204')).toBeInTheDocument()
+    expect(screen.getByText('null-key')).toBeInTheDocument()
+    expect(screen.getByText('KEY null-key')).toBeInTheDocument()
   })
 
   it('re-scanning with an unchanged prefix refetches: a key that expired server-side vanishes from list and detail', async () => {

@@ -7,7 +7,7 @@ describe('contract', () => {
   })
 
   it('reads CONTRACT_VERSION from the pinned openapi.json', () => {
-    expect(CONTRACT_VERSION).toEqual({ major: 0, minor: 1, patch: 0 })
+    expect(CONTRACT_VERSION).toEqual({ major: 0, minor: 2, patch: 0 })
   })
 })
 

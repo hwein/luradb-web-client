@@ -43,10 +43,12 @@ export function invalidateKvKeys(queryClient: QueryClient, domain: string): void
   void queryClient.invalidateQueries({ queryKey: ['kv-keys-probe', domain] })
 }
 
-/** Ergebnis eines Value-Reads: `not-found` deckt sowohl "nie existiert" als auch "gelöscht/getombstoned" ab (404 ununterscheidbar, live geprüft). */
-export type KvValue = { state: 'found'; bytes: number; text: string } | { state: 'not-found' }
+/** Ergebnis eines Value-Reads: `not-found` deckt "nie existiert", "gelöscht" und "abgelaufen" ab (404); `null` ist der explizite
+ *  Null-State (204, Contract 0.2.0) — anders als `not-found` bleibt der Key registriert und im Scan sichtbar. */
+export type KvValue = { state: 'found'; bytes: number; text: string } | { state: 'not-found' } | { state: 'null' }
 
-/** GET über `fetchRaw` (Roh-Body, kein JSON-Zwang) — 404 wird gefangen und als eigener Zustand modelliert statt als Query-Error. */
+/** GET über `fetchRaw` (Roh-Body, kein JSON-Zwang) — 404 wird gefangen und als eigener Zustand modelliert statt als Query-Error;
+ *  204 (expliziter Null-State) wird vor dem Body-Read abgefangen, da ein Null-Key sonst von einem Leer-Wert ununterscheidbar wäre. */
 export function kvValueQueryOptions(apiClient: ApiClient | undefined, domain: string, key: string | undefined) {
   return queryOptions({
     queryKey: ['kv-value', domain, key ?? ''] as const,
@@ -54,6 +56,7 @@ export function kvValueQueryOptions(apiClient: ApiClient | undefined, domain: st
       if (!apiClient || key === undefined) throw new Error('kv value query requires an active connection and key')
       try {
         const response = await apiClient.fetchRaw(kvKeyPath(domain, key))
+        if (response.status === 204) return { state: 'null' }
         const text = await response.text()
         return { state: 'found', bytes: new TextEncoder().encode(text).length, text }
       } catch (error) {

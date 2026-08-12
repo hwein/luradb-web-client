@@ -9,7 +9,7 @@ A relational table can hold link columns that point into the other two engines o
 2. **Resolution is a request parameter, never SQL.** Add `"expand":["customer_ref"]` to the `/sql` body, or `?expand=*` on browse — the wildcard resolves all link columns ("full resolve").
 3. **Dangling links never break a query.** LEFT-JOIN semantics: the row is returned, the expanded entry says `{"exists":false}`. NULL, empty, and deleted are three distinct states.
 
-In practice, the "empty" branch of `KVREF` (`{"exists":true,"value":null}` — a key that exists but was emptied) is not observable yet: the [Key-Value engine](docs:kv-engine)'s `null` write currently produces the same tombstone as a delete, so an emptied KV key resolves exactly like a dangling one. `JSONREF` doesn't have this gap — a document either exists with content or it doesn't.
+In practice, the "empty" branch of `KVREF` (`{"exists":true,"value":null}`) is exactly what the [Key-Value engine](docs:kv-engine)'s `set null` produces: the key stays registered in an explicit null state, so an emptied link resolves as existing-but-empty and stays distinguishable from a dangling one. `JSONREF` has no such state — a document either exists with content or it doesn't.
 
 ## Example
 

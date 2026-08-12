@@ -1012,6 +1012,10 @@
   word-break: break-word;
 }
 
+.kv-detail__value--null {
+  color: var(--mut);
+}
+
 .kv-detail__meta {
   font-family: var(--font-mono);
   font-size: 10.5px;

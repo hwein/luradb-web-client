@@ -9,6 +9,11 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Desktop: connections can opt in to accepting self-signed TLS certificates, per connection.
 
+### Changed
+
+- KV set null now keeps the key listed and shows an explicit NULL state.
+- Requires LuraDB 0.2.0 or newer.
+
 ## [0.0.3] - 2026-08-12
 
 ### Fixed

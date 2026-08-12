@@ -165,7 +165,7 @@ export function KvBulkBar({ domain, apiClient, keys, prefix }: KvBulkBarProps) {
 
       {action === 'set-null' && (
         <div className="kv-bulk__null-hint">
-          server stores null as a tombstone — reads answer 404 (like delete){' '}
+          sets an explicit null state — the key stays listed, reads answer 204{' '}
           <button type="button" className="kv-bulk__null-docs" onClick={openNullDocs}>
             docs
           </button>

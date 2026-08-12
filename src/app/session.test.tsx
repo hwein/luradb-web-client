@@ -76,21 +76,21 @@ describe('connect', () => {
   })
 
   it('connects to any server at or above the minimum', async () => {
+    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.1' })))
+    render(<SessionProbe />)
+
+    await act(() => connect(makeConnection()))
+
+    expect(screen.getByTestId('session')).toHaveTextContent(/connected 0\.2\.1/)
+  })
+
+  it('connects cleanly on a matching version', async () => {
     server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
     render(<SessionProbe />)
 
     await act(() => connect(makeConnection()))
 
-    expect(screen.getByTestId('session')).toHaveTextContent(/connected 0\.2\.0/)
-  })
-
-  it('connects cleanly on a matching version', async () => {
-    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })))
-    render(<SessionProbe />)
-
-    await act(() => connect(makeConnection()))
-
-    expect(screen.getByTestId('session')).toHaveTextContent('connected 0.1.0')
+    expect(screen.getByTestId('session')).toHaveTextContent('connected 0.2.0')
   })
 })
 
@@ -160,7 +160,7 @@ describe('self-signed certificate hint (desktop, unreachable https://)', () => {
 
 describe('disconnect', () => {
   it('returns to the unauthenticated gate', async () => {
-    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })))
+    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
     render(<SessionProbe />)
     await act(() => connect(makeConnection()))
     expect(screen.getByTestId('session')).toHaveTextContent('connected')

@@ -32,15 +32,15 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Gibt alle angelegten User zurück (Admins und reguläre User).
-         *     API Keys werden nicht ausgegeben — nur Name, Rolle und Erstellungszeitpunkt.
+         * Returns all created users (admins and regular users).
+         *     API keys are not included — only name, role, and creation timestamp.
          */
         get: operations["list_users"];
         put?: never;
         /**
-         * Legt einen neuen User mit der Rolle `User` an.
-         *     Der API Key wird **ausschließlich in dieser Response** zurückgegeben und danach nicht mehr gespeichert.
-         *     Nur Admins dürfen diesen Endpunkt aufrufen.
+         * Creates a new user with the `User` role.
+         *     The API key is returned **only in this response** and is not stored afterward.
+         *     Only admins may call this endpoint.
          */
         post: operations["create_user"];
         delete?: never;
@@ -60,8 +60,8 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Löscht einen User und alle seine Domain-Permissions.
-         *     Der API Key des Users wird sofort ungültig — laufende Requests mit dem alten Key erhalten danach `401`.
+         * Deletes a user and all of their domain permissions.
+         *     The user's API key becomes invalid immediately — in-flight requests with the old key then get `401`.
          */
         delete: operations["delete_user"];
         options?: never;
@@ -79,9 +79,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Setzt oder überschreibt die Zugriffsberechtigung eines Users auf eine Domain.
-         *     `access` muss `"read"`, `"write"` oder `"ddl"` sein — jede Stufe schließt die
-         *     niedrigeren ein. Für `kv` muss die Domain existieren; `json`/`rel` prüfen nur den Namen.
+         * Sets or overwrites a user's access permission on a domain.
+         *     `access` must be `"read"`, `"write"`, or `"ddl"` — each level includes the
+         *     lower ones. For `kv` the domain must exist; `json`/`rel` only check the name.
          */
         post: operations["set_permission"];
         delete?: never;
@@ -101,9 +101,9 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Entzieht einem User die Zugriffsberechtigung auf eine bestimmte Domain.
-         *     `?store_type=json`/`rel` entzieht eine JSON-/rel-Domain-Permission (Default: kv).
-         *     Nach diesem Aufruf erhalten Requests des Users auf diese Domain `403 Forbidden`.
+         * Revokes a user's access permission on a specific domain.
+         *     `?store_type=json`/`rel` revokes a JSON/rel domain permission (default: kv).
+         *     After this call, the user's requests to this domain get `403 Forbidden`.
          */
         delete: operations["remove_permission"];
         options?: never;
@@ -121,9 +121,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Generiert einen neuen API Key für den User und invalidiert den alten sofort.
-         *     Der neue Key wird **ausschließlich in dieser Response** zurückgegeben.
-         *     Verwende dies bei Key-Leaks oder regelmäßiger Key-Rotation.
+         * Generates a new API key for the user and immediately invalidates the old one.
+         *     The new key is returned **only in this response**.
+         *     Use this after key leaks or for regular key rotation.
          */
         post: operations["rotate_key"];
         delete?: never;
@@ -429,7 +429,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Retrieves the raw byte value for a key. Returns 404 if the key does not exist or has expired. */
+        /** Retrieves the raw byte value for a key. Returns 204 for a key in the null state and 404 if the key does not exist or has expired. */
         get: operations["get_key"];
         /**
          * Inserts or updates a value for the given key (upsert semantics).
@@ -458,8 +458,8 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Writes an explicit null/tombstone marker for a key without removing it from the keyspace.
-         *     Useful for signalling soft-deletes in distributed or CDC scenarios.
+         * Sets the key to an explicit null value (upsert): the key stays registered and appears in scans,
+         *     but carries no data — GET answers 204. A write like any other; it resets a previously set TTL.
          */
         patch: operations["set_null"];
         trace?: never;
@@ -764,7 +764,7 @@ export interface components {
             name: string;
         };
         CreateUserResponse: {
-            /** @description API Key (nur einmalig sichtbar — danach nicht mehr abrufbar). */
+            /** @description API key (visible only once — cannot be retrieved afterward). */
             api_key: string;
             name: string;
             role: string;
@@ -845,7 +845,7 @@ export interface components {
             state: string;
         };
         RotateKeyResponse: {
-            /** @description Neuer API Key (nur einmalig sichtbar — danach nicht mehr abrufbar). */
+            /** @description New API key (visible only once — cannot be retrieved afterward). */
             api_key: string;
             name: string;
         };
@@ -882,11 +882,11 @@ export interface components {
             total: number;
         };
         SetPermissionRequest: {
-            /** @description Zugriffsebene: `"read"`, `"write"` oder `"ddl"` (spec rel/011). */
+            /** @description Access level: `"read"`, `"write"` or `"ddl"` (spec rel/011). */
             access: string;
-            /** @description Name der Domain. */
+            /** @description Domain name. */
             domain: string;
-            /** @description Store-Typ der Domain: `"kv"` (Default), `"json"` (spec json/012) oder `"rel"` (spec rel/011). */
+            /** @description Store type of the domain: `"kv"` (default), `"json"` (spec json/012) or `"rel"` (spec rel/011). */
             store_type?: string | null;
         };
         SqlRequest: {
@@ -926,9 +926,9 @@ export interface components {
             role: string;
         };
         VersionResponse: {
-            /** @description API-Contract-Version — identisch mit `info.version` des Contracts. */
+            /** @description API contract version — identical to the contract's `info.version`. */
             api_version: string;
-            /** @description Server-Version (CARGO_PKG_VERSION). */
+            /** @description Server version (CARGO_PKG_VERSION). */
             server_version: string;
         };
         ViewSummary: {
@@ -973,7 +973,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Liste aller User (ohne API Keys) */
+            /** @description List of all users (without API keys) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -997,7 +997,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description User angelegt. API Key einmalig in der Response. */
+            /** @description User created. API key is shown once in the response. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -1006,14 +1006,14 @@ export interface operations {
                     "application/json": components["schemas"]["CreateUserResponse"];
                 };
             };
-            /** @description Ungültiger Name */
+            /** @description Invalid name */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description User existiert bereits */
+            /** @description User already exists */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1034,14 +1034,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description User und alle Permissions gelöscht */
+            /** @description User and all permissions deleted */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description User nicht gefunden */
+            /** @description User not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1066,21 +1066,21 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Permission gesetzt */
+            /** @description Permission set */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Ungültige access- oder domain-Angabe */
+            /** @description Invalid access or domain value */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description User oder Domain nicht gefunden */
+            /** @description User or domain not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1092,28 +1092,28 @@ export interface operations {
     remove_permission: {
         parameters: {
             query?: {
-                /** @description 'kv' (Default), 'json' oder 'rel' */
+                /** @description 'kv' (default), 'json' or 'rel' */
                 store_type?: string;
             };
             header?: never;
             path: {
                 /** @description Username */
                 name: string;
-                /** @description Domain-Name */
+                /** @description Domain name */
                 domain: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Permission entzogen */
+            /** @description Permission revoked */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Permission nicht gefunden */
+            /** @description Permission not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1134,7 +1134,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Neuer API Key generiert (einmalig sichtbar) */
+            /** @description New API key generated (visible once) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1143,7 +1143,7 @@ export interface operations {
                     "application/json": components["schemas"]["RotateKeyResponse"];
                 };
             };
-            /** @description User nicht gefunden */
+            /** @description User not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2086,7 +2086,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Value (raw bytes) */
+            /** @description Value (raw bytes; an empty value yields an empty body) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2094,6 +2094,13 @@ export interface operations {
                 content: {
                     "application/octet-stream": unknown;
                 };
+            };
+            /** @description Key exists in the explicit null state (set via PATCH …/null) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Invalid key */
             400: {
@@ -2244,7 +2251,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Key set to null (tombstone) */
+            /** @description Key set to the null value state */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3139,7 +3146,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Server- und API-Contract-Version */
+            /** @description Server and API contract version */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3148,7 +3155,7 @@ export interface operations {
                     "application/json": components["schemas"]["VersionResponse"];
                 };
             };
-            /** @description Unauthorized — gültiger API-Key erforderlich */
+            /** @description Unauthorized — a valid API key is required */
             401: {
                 headers: {
                     [name: string]: unknown;

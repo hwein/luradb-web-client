@@ -30,7 +30,7 @@ function ConnectionProbe() {
 }
 
 async function connectSuccessfully(): Promise<void> {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.1.0' })))
+  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
   await act(() => connect(makeConnection()))
 }
 
@@ -62,7 +62,7 @@ describe('useConnection', () => {
 
     await waitFor(() =>
       expect(screen.getByTestId('connection')).toHaveTextContent(
-        `state:[connected] host:[${window.location.host}${BASE_PATH}] auth:[bearer ✓ admin] server:[luradb 0.1.0] uptime:[up 1h 11m]`,
+        `state:[connected] host:[${window.location.host}${BASE_PATH}] auth:[bearer ✓ admin] server:[luradb 0.2.0] uptime:[up 1h 11m]`,
       ),
     )
     act(() => disconnect())
@@ -78,7 +78,7 @@ describe('useConnection', () => {
     renderProbe()
 
     await waitFor(() => expect(screen.getByTestId('connection')).toHaveTextContent('auth:[bearer ✓ admin]'))
-    expect(screen.getByTestId('connection')).toHaveTextContent('server:[luradb 0.1.0] uptime:[]')
+    expect(screen.getByTestId('connection')).toHaveTextContent('server:[luradb 0.2.0] uptime:[]')
     act(() => disconnect())
   })
 })

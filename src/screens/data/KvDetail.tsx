@@ -290,6 +290,11 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
             <CodeEditor value={editText} onChange={setEditText} ariaLabel="value editor" placeholder="value" />
           </div>
         </>
+      ) : value.state === 'null' ? (
+        <>
+          <pre className="kv-detail__value kv-detail__value--null">NULL</pre>
+          <div className="kv-detail__meta">explicit null state — GET answers 204</div>
+        </>
       ) : (
         <>
           <pre className="kv-detail__value">{renderValue(value.text)}</pre>
