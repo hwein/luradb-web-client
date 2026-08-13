@@ -58,14 +58,10 @@ builds from source on all three — see [Build from source](#build-from-source).
 
 Each client release declares a **minimum LuraDB server version** it supports.
 On connect the client calls `GET /version` and refuses to operate against a
-server below that minimum.
-
-| Client | Minimum LuraDB server |
-| :--- | :--- |
-| 0.0.x | 0.1.0 |
-
-When a LuraDB change requires it, a new client release raises the minimum;
-older releases stay downloadable but unmaintained.
+server below that minimum. When a LuraDB change requires it, a new client
+release raises the minimum — each raise is noted in that release's
+[CHANGELOG](CHANGELOG.md) entry. Older releases stay downloadable but
+unmaintained.
 
 ## Build from source
 
