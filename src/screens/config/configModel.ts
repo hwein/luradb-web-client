@@ -1,10 +1,8 @@
 import { parse, TomlError } from 'smol-toml'
-import { patchToml, splitTomlPath, type TomlEdit } from '../../lib/tomlPatch'
 
-// Modell + Diff-Logik des Config-Screens (spec config/001 §2–§5): rein textbasiert; smol-toml nur zum Parsen/Anzeigen.
+// Modell des Config-Screens (spec config/003): rein lesend — Parsen, Karten-Aufbau, Masking; smol-toml nur zum Parsen.
 
-export type ConfigValueKind = 'string' | 'number' | 'boolean' | 'enum' | 'array' | 'other'
-export type EditableValue = string | number | boolean
+export type ConfigValueKind = 'string' | 'number' | 'boolean' | 'array' | 'other'
 
 export interface ConfigRow {
   /** Voller Pfad inkl. Array-Indizes, z. B. `server.port`, `auth.admins[0].api_key`, `log.modules.rel`. */
@@ -16,8 +14,6 @@ export interface ConfigRow {
   value: unknown
   display: string
   masked: boolean
-  editable: boolean
-  enumOptions?: string[]
 }
 
 export interface ConfigCard {
@@ -42,13 +38,6 @@ export interface ConfigParseError {
 
 export type ConfigModel = ConfigParsed | ConfigParseError
 
-export interface PendingChange {
-  old: EditableValue
-  new: EditableValue
-}
-
-export type PendingDiff = ReadonlyMap<string, PendingChange>
-
 export const MASKED_DISPLAY = '••••••'
 
 // Design-Gruppierung der Karten (Prototyp Z. 287–356); nicht abgedeckte Sektionen bekommen eine eigene Karte.
@@ -62,7 +51,6 @@ const CARD_GROUPS: readonly string[][] = [
   ['log'],
 ]
 
-const KNOWN_ENUMS: Record<string, string[]> = { 'log.level': ['info', 'verbose', 'prod'] }
 const MASK_KEY = /(^|_)(api_)?key$|secret|password/i
 
 function isTable(value: unknown): value is Record<string, unknown> {
@@ -79,13 +67,15 @@ function formatArray(value: unknown[]): string {
   return `[${value.map(formatScalar).join(', ')}]`
 }
 
-/** Anzeigeform eines Wertes; maskierte Werte erscheinen nie unmaskiert. */
-export function formatValue(value: unknown, masked: boolean): string {
-  return masked ? MASKED_DISPLAY : formatScalar(value)
-}
-
 function isMasked(key: string, value: unknown): boolean {
   return MASK_KEY.test(key) || (typeof value === 'string' && value.includes('changeme'))
+}
+
+/** Zerlegt einen Wertpfad an seinem letzten Punkt in (Sektion, Key). */
+function splitTomlPath(path: string): { section: string; key: string } {
+  const dot = path.lastIndexOf('.')
+  if (dot === -1) return { section: '', key: path }
+  return { section: path.slice(0, dot), key: path.slice(dot + 1) }
 }
 
 function pushRow(rows: ConfigRow[], byPath: Map<string, ConfigRow>, row: ConfigRow): void {
@@ -116,22 +106,17 @@ function flatten(path: string, value: unknown, lead: string, rows: ConfigRow[], 
       value,
       display: formatArray(value),
       masked: isMasked(key, value),
-      editable: false,
     })
     return
   }
 
-  const insideArray = path.includes('[')
-  const enumOptions = KNOWN_ENUMS[path]
   let kind: ConfigValueKind
-  if (enumOptions !== undefined && typeof value === 'string') kind = 'enum'
-  else if (typeof value === 'boolean') kind = 'boolean'
+  if (typeof value === 'boolean') kind = 'boolean'
   else if (typeof value === 'number') kind = 'number'
   else if (typeof value === 'string') kind = 'string'
   else kind = 'other'
 
   const masked = isMasked(key, value)
-  const editable = !insideArray && kind !== 'other'
   pushRow(rows, byPath, {
     path,
     section,
@@ -141,8 +126,6 @@ function flatten(path: string, value: unknown, lead: string, rows: ConfigRow[], 
     value,
     display: masked ? MASKED_DISPLAY : formatScalar(value),
     masked,
-    editable,
-    enumOptions,
   })
 }
 
@@ -191,31 +174,4 @@ export function buildConfig(text: string): ConfigModel {
   }
 
   return { ok: true, cards, rowsByPath }
-}
-
-/** Setzt/aktualisiert/entfernt einen Diff-Eintrag; Rücksetzen auf den Originalwert (typbewusst) entfernt ihn. */
-export function applyRowEdit(
-  diff: PendingDiff,
-  path: string,
-  oldValue: EditableValue,
-  newValue: EditableValue,
-): Map<string, PendingChange> {
-  const next = new Map(diff)
-  if (newValue === oldValue) next.delete(path)
-  else next.set(path, { old: oldValue, new: newValue })
-  return next
-}
-
-function pendingToEdits(diff: PendingDiff): TomlEdit[] {
-  const edits: TomlEdit[] = []
-  for (const [path, change] of diff) {
-    const { section, key } = splitTomlPath(path)
-    edits.push({ section, key, value: change.new })
-  }
-  return edits
-}
-
-/** Der herunterzuladende Text: Original mit allen Pending-Änderungen gepatcht. */
-export function applyPending(originalText: string, diff: PendingDiff): string {
-  return patchToml(originalText, pendingToEdits(diff))
 }

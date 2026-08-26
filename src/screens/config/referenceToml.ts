@@ -1,6 +1,6 @@
 // Repräsentative luradb.toml als Test-Fixture (spec config/001): reale Keys/Werte aus dem Prototyp
 // (Z. 279–368) + Sektionsliste der Spec. Deckt Kommentare, auskommentierte Keys, alle Werttypen,
-// eine Array-of-Tables ([[auth.admins]]) und eine dotted Section ([log.modules]) ab — fordert den Patcher.
+// eine Array-of-Tables ([[auth.admins]]) und eine dotted Section ([log.modules]) ab.
 export const REFERENCE_TOML = `# LuraDB server configuration
 # Read once at startup — replace this file and restart to apply changes.
 

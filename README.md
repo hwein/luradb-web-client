@@ -26,7 +26,7 @@ work areas between them.
 | **REST Explorer** | Request builder over the OpenAPI contract; every response in raw form |
 | **Engines & Jobs** | Status and metric cards, running tasks, recent requests |
 | **Admin** | Domains, users and domain permissions, key rotation |
-| **Configuration** | View, diff and download `luradb.toml` (apply = restart) |
+| **Configuration** | View `luradb.toml` (read-only; edit on the server & restart) |
 | **Docs** | Built-in documentation, contextually linked (F1, "why?" on errors) |
 
 ## Guiding principles

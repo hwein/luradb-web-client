@@ -1,12 +1,13 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
-import { applyPending, type PendingChange } from './configModel'
+import { describe, expect, it } from 'vitest'
 import { ConfigScreen } from './ConfigScreen'
 import { REFERENCE_TOML } from './referenceToml'
 
 function renderLoaded() {
-  localStorage.setItem('luradb.toml', REFERENCE_TOML)
-  return render(<ConfigScreen />)
+  render(<ConfigScreen />)
+  fireEvent.click(screen.getByRole('button', { name: 'paste…' }))
+  fireEvent.change(screen.getByPlaceholderText('paste luradb.toml contents…'), { target: { value: REFERENCE_TOML } })
+  fireEvent.click(screen.getByRole('button', { name: 'load pasted toml' }))
 }
 
 function rowOf(label: string): HTMLElement {
@@ -17,24 +18,21 @@ function rowOf(label: string): HTMLElement {
 }
 
 describe('ConfigScreen', () => {
-  it('shows the empty-state notice and the load actions when nothing is loaded', () => {
+  it('shows the empty-state notice (no edit promise) and the load actions when nothing is loaded', () => {
     render(<ConfigScreen />)
 
-    expect(screen.getByText(/no toml loaded/)).toBeInTheDocument()
+    expect(screen.getByText(/no toml loaded.*load yours to view it/)).toBeInTheDocument()
     expect(screen.getByText('open file…')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'paste…' })).toBeInTheDocument()
     expect(screen.queryByPlaceholderText('filter keys…')).not.toBeInTheDocument()
   })
 
-  it('loads a pasted toml, persists it, and renders the section cards', () => {
-    render(<ConfigScreen />)
-    fireEvent.click(screen.getByRole('button', { name: 'paste…' }))
-    fireEvent.change(screen.getByPlaceholderText('paste luradb.toml contents…'), { target: { value: REFERENCE_TOML } })
-    fireEvent.click(screen.getByRole('button', { name: 'load pasted toml' }))
+  it('loads a pasted toml and renders the section cards, without persisting it to localStorage', () => {
+    renderLoaded()
 
     expect(screen.getByText('[server]')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '3000' })).toBeInTheDocument()
-    expect(localStorage.getItem('luradb.toml')).toBe(REFERENCE_TOML)
+    expect(screen.getByText('3000')).toBeInTheDocument()
+    expect(localStorage.getItem('luradb.toml')).toBeNull()
   })
 
   it('masks the changeme api_key with •••••• and ⚠, never rendering the raw secret', () => {
@@ -45,41 +43,13 @@ describe('ConfigScreen', () => {
     expect(screen.queryByText(/changeme/)).not.toBeInTheDocument()
   })
 
-  it('edits a number value into a pending change with a "was" note', () => {
+  it('renders a boolean value as plain green text, not a button', () => {
     renderLoaded()
-    fireEvent.click(screen.getByRole('button', { name: '3000' }))
-    const input = screen.getByDisplayValue('3000')
-    fireEvent.change(input, { target: { value: '3001' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
 
-    expect(screen.getByText('1 pending change')).toBeInTheDocument()
-    expect(screen.getByText('server.port 3000→3001')).toBeInTheDocument()
-    expect(screen.getByText('was 3000')).toBeInTheDocument()
-  })
-
-  it('picks a log.level enum via the segmented control', () => {
-    renderLoaded()
-    fireEvent.click(screen.getByRole('button', { name: 'info' }))
-
-    expect(screen.getByText('log.level verbose→info')).toBeInTheDocument()
-  })
-
-  it('toggles a boolean value', () => {
-    renderLoaded()
-    fireEvent.click(within(rowOf('swagger_enabled')).getByRole('button', { name: 'true' }))
-
-    expect(screen.getByText('server.swagger_enabled true→false')).toBeInTheDocument()
-  })
-
-  it('reverts all pending changes', () => {
-    renderLoaded()
-    fireEvent.click(screen.getByRole('button', { name: 'info' }))
-    expect(screen.getByText('1 pending change')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'revert' }))
-
-    expect(screen.queryByText('1 pending change')).not.toBeInTheDocument()
-    expect(screen.queryByText('log.level verbose→info')).not.toBeInTheDocument()
+    const value = within(rowOf('swagger_enabled')).getByText('true')
+    expect(value.tagName).toBe('SPAN')
+    expect(value.className).toContain('config-row__value--bool')
+    expect(within(rowOf('swagger_enabled')).queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('filters rows by key substring', () => {
@@ -90,36 +60,30 @@ describe('ConfigScreen', () => {
     expect(screen.queryByText('bind_address')).not.toBeInTheDocument()
   })
 
-  it('downloads the patched toml (content == applyPending over the pending diff)', async () => {
-    const blobs: Blob[] = []
-    Object.defineProperty(URL, 'createObjectURL', {
-      value: (blob: Blob) => {
-        blobs.push(blob)
-        return 'blob:mock'
-      },
-      configurable: true,
-    })
-    Object.defineProperty(URL, 'revokeObjectURL', { value: () => {}, configurable: true })
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+  it('removes a stale localStorage entry left by the old edit-and-persist behavior on mount', () => {
+    localStorage.setItem('luradb.toml', REFERENCE_TOML)
 
+    render(<ConfigScreen />)
+
+    expect(localStorage.getItem('luradb.toml')).toBeNull()
+  })
+
+  it('does not open an input when a value is clicked (no edit entry point)', () => {
     renderLoaded()
-    fireEvent.click(screen.getByRole('button', { name: '3000' }))
-    const input = screen.getByDisplayValue('3000')
-    fireEvent.change(input, { target: { value: '3001' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
-    fireEvent.click(screen.getByRole('button', { name: 'download updated toml ↓' }))
+    const textboxesBefore = screen.getAllByRole('textbox').length
 
-    const expected = applyPending(REFERENCE_TOML, new Map<string, PendingChange>([['server.port', { old: 3000, new: 3001 }]]))
-    const downloaded = blobs[0]
-    expect(downloaded).toBeDefined()
-    const content = await new Promise<string>((resolve) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(String(reader.result))
-      reader.readAsText(downloaded!)
-    })
-    expect(content).toBe(expected)
-    expect(expected).toContain('port = 3001            # HTTP listen port')
+    fireEvent.click(screen.getByText('3000'))
 
-    vi.restoreAllMocks()
+    expect(screen.getAllByRole('textbox').length).toBe(textboxesBefore)
+    expect(screen.queryByDisplayValue('3000')).not.toBeInTheDocument()
+  })
+
+  it('never renders the removed pending-bar or download actions', () => {
+    renderLoaded()
+
+    expect(screen.queryByRole('button', { name: 'download toml ↓' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'download updated toml ↓' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'revert' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/pending change/)).not.toBeInTheDocument()
   })
 })

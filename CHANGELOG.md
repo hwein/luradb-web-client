@@ -5,6 +5,14 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Removed
+
+- Configuration: editing values and downloading a patched `luradb.toml` — the screen is a read-only viewer; edit the file on the server and restart.
+
+### Security
+
+- Configuration: the loaded `luradb.toml` (including masked keys) is no longer stored in the browser; an existing stored copy is removed on first visit.
+
 ### Added
 
 - Admin: BACKUPS card — list, run, download, upload, restore and delete backup archives (requires LuraDB ≥ 0.3.0 with `backup.enabled`).
