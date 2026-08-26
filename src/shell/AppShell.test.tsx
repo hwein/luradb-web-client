@@ -29,6 +29,7 @@ async function renderConnectedShell(path = '/sql'): Promise<void> {
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/store-api/backups`, () => HttpResponse.json({ backups: [], running: null })),
     http.get(`${ORIGIN}/health`, () => HttpResponse.json({ status: 'ok', uptime_secs: 4260 })),
   )
   await act(() => connect(makeConnection()))

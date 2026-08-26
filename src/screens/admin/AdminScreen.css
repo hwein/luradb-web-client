@@ -71,6 +71,19 @@
   min-width: 0;
 }
 
+/* --- Untere Zeile der rechten Spalte: BACKUPS | SERVER LOG (Prototyp Z. 225) --- */
+
+.admin-index__lower {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.admin-index__lower > * {
+  min-width: 0;
+}
+
 /* --- Karten-Grundgerüst, geteilt von DOMAINS/AUTH (Prototyp Z. 195/206) ------- */
 
 .admin-card {
@@ -528,6 +541,278 @@
 }
 
 .admin-users__create-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- BACKUPS-Karte (Prototyp Z. 225–231, spec admin/003) ----------------- */
+
+.admin-backups__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.admin-backups__dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mut);
+}
+
+.admin-backups__dot--ok {
+  background: var(--ok);
+}
+
+.admin-backups__dot--err {
+  background: var(--err);
+}
+
+.admin-backups__dot--running {
+  background: var(--acc);
+}
+
+.admin-backups__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-backups__schedule {
+  color: var(--mut);
+}
+
+.admin-backups__size {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--mut);
+}
+
+.admin-backups__actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-backups__action {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--acc);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.admin-backups__action:disabled {
+  color: var(--mut);
+  cursor: not-allowed;
+}
+
+.admin-backups__dismiss,
+.admin-backups__trash {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--mut);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.admin-backups__dismiss:hover,
+.admin-backups__trash:hover {
+  color: var(--tx);
+}
+
+.admin-backups__confirm {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--tx);
+}
+
+.admin-backups__confirm-action {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--err);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-backups__confirm-cancel {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--mut);
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-backups__error {
+  padding: 0 16px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--err);
+  overflow-wrap: anywhere;
+}
+
+.admin-backups__notice,
+.admin-backups__empty {
+  padding: 11px 16px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--mut);
+}
+
+.admin-backups__foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 11px 16px;
+}
+
+.admin-backups__run {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--acc);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.admin-backups__run:disabled {
+  color: var(--mut);
+  cursor: not-allowed;
+}
+
+.admin-backups__upload {
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.admin-backups__upload:hover {
+  color: var(--tx);
+}
+
+.admin-backups__file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+/* --- Inline-Formular "run backup now" (spec admin/003 §5) --- */
+
+.admin-backups__run-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 11px 16px;
+}
+
+.admin-backups__segments {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-backups__segment {
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-chip);
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+
+.admin-backups__segment--active {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--accT);
+}
+
+.admin-backups__select {
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 7px;
+  outline: none;
+  min-width: 0;
+}
+
+.admin-backups__run-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-backups__check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+  cursor: pointer;
+}
+
+.admin-backups__spacer {
+  flex: 1;
+}
+
+.admin-backups__cancel {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.admin-backups__start {
+  background: var(--acc);
+  color: var(--accT);
+  border: none;
+  border-radius: var(--rad-input);
+  padding: 5px 12px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.admin-backups__start:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

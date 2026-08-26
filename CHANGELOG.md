@@ -5,6 +5,10 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Admin: BACKUPS card — list, run, download, upload, restore and delete backup archives (requires LuraDB ≥ 0.3.0 with `backup.enabled`).
+
 ## [0.1.0] - 2026-08-12
 
 ### Added

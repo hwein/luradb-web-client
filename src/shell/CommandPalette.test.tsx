@@ -131,12 +131,12 @@ describe('CommandPaletteContent', () => {
     const input = screen.getByLabelText('command palette search')
 
     // Leere Eingabe zeigt keine Docs — erst nach Eingabe erscheint der Treffer (spec §2).
-    expect(screen.queryByText('Export today, scheduled backup on the roadmap')).not.toBeInTheDocument()
+    expect(screen.queryByText('Scoped NDJSON backups, restored over REST')).not.toBeInTheDocument()
 
     fireEvent.change(input, { target: { value: 'backup' } })
 
     expect(screen.queryByText('shop')).not.toBeInTheDocument()
-    const docRow = await screen.findByText('Export today, scheduled backup on the roadmap')
+    const docRow = await screen.findByText('Scoped NDJSON backups, restored over REST')
     fireEvent.click(docRow)
 
     expect(screen.getByTestId('route-state').textContent).toBe('/docs')

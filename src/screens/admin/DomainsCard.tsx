@@ -18,7 +18,7 @@ import { useEngineActivity, type EngineActivity } from '../../shell/engineActivi
 import { runEngineCascade, type Engine } from '../../shell/engineCascade'
 
 const ENGINE_ORDER: Engine[] = ['kv', 'json', 'rel']
-const NAME_PATTERN = /^[a-zA-Z0-9_-]+$/
+export const NAME_PATTERN = /^[a-zA-Z0-9_-]+$/
 
 const CREATORS: Record<Engine, (apiClient: ApiClient, name: string) => Promise<void>> = {
   kv: createKvDomain,
@@ -40,7 +40,7 @@ function formatCount(value: number): string {
   return value < 1000 ? String(value) : `${(value / 1000).toFixed(1)}k`
 }
 
-function invalidateDomainLists(queryClient: QueryClient): void {
+export function invalidateDomainLists(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: KV_DOMAINS_KEY })
   void queryClient.invalidateQueries({ queryKey: JSON_DOMAINS_KEY })
   void queryClient.invalidateQueries({ queryKey: REL_DOMAINS_KEY })

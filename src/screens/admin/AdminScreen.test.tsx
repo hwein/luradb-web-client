@@ -27,6 +27,7 @@ function baseHandlers(adminOk: boolean) {
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/store-api/backups`, () => HttpResponse.json({ backups: [], running: null })),
   ]
 }
 
@@ -57,11 +58,12 @@ describe('AdminScreen', () => {
     expect(screen.queryByPlaceholderText('new domain (max 50 chars)')).not.toBeInTheDocument()
   })
 
-  it('renders the designed DOMAINS + AUTH cards for an admin key', async () => {
+  it('renders the designed DOMAINS + AUTH + BACKUPS cards for an admin key', async () => {
     await renderAt('/admin', true)
 
     expect(await screen.findByPlaceholderText('new domain (max 50 chars)')).toBeInTheDocument()
     expect(screen.getByText('AUTH')).toBeInTheDocument()
+    expect(screen.getByText('BACKUPS')).toBeInTheDocument()
   })
 
   it('redirects an unknown admin section to the index', async () => {

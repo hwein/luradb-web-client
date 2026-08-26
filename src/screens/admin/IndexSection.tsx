@@ -1,6 +1,7 @@
 import { useCapabilities } from '../../app/capabilities'
 import { useSession } from '../../app/session'
 import { AuthCard } from './AuthCard'
+import { BackupsCard } from './BackupsCard'
 import { DomainsCard } from './DomainsCard'
 import { UsersCard } from './UsersCard'
 
@@ -27,6 +28,10 @@ export function IndexSection() {
         </div>
         <div className="admin-index__column admin-index__column--right">
           <UsersCard apiClient={apiClient} />
+          {/* Rechte Zelle bleibt bis admin/004 (SERVER LOG) leer. */}
+          <div className="admin-index__lower">
+            <BackupsCard apiClient={apiClient} />
+          </div>
         </div>
       </div>
     </div>

@@ -25,6 +25,22 @@ describe('apiErrorFromResponse', () => {
     const err = await apiErrorFromResponse(response)
     expect(err.message).toBe('Internal Server Error')
   })
+
+  it('uses a plaintext body (trimmed) as the message', async () => {
+    const response = new Response('  503 Service Unavailable: backup is disabled (backup.enabled = false)\n', {
+      status: 503,
+      statusText: 'Service Unavailable',
+    })
+    const err = await apiErrorFromResponse(response)
+    expect(err.message).toBe('503 Service Unavailable: backup is disabled (backup.enabled = false)')
+    expect(err.body).toBeUndefined()
+  })
+
+  it('keeps statusText for a JSON body without error/message', async () => {
+    const response = new Response(JSON.stringify({ detail: 'nope' }), { status: 400, statusText: 'Bad Request' })
+    const err = await apiErrorFromResponse(response)
+    expect(err.message).toBe('Bad Request')
+  })
 })
 
 describe('networkApiError', () => {
