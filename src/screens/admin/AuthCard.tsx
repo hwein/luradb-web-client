@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { useSession } from '../../app/session'
+import { useConnectedSession } from '../../app/session'
 import { authEnabledProbeQueryOptions } from './authProbe'
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : 'request failed'
+}
 
 function AuthEnabledValue({ enabled }: { enabled: boolean | undefined }) {
   if (enabled === undefined) return <span className="admin-auth__row-value admin-auth__row-value--muted">…</span>
@@ -11,9 +15,8 @@ function AuthEnabledValue({ enabled }: { enabled: boolean | undefined }) {
 
 /** AUTH-Karte (spec admin/001 §4): auth.enabled per anonymer Probe abgeleitet, scheme statisch, Erklärtext. */
 export function AuthCard() {
-  const session = useSession()
-  const connection = session.status === 'connected' ? session.connection : undefined
-  const probe = useQuery(authEnabledProbeQueryOptions(connection))
+  const connected = useConnectedSession()
+  const probe = useQuery(authEnabledProbeQueryOptions(connected?.apiClient))
 
   return (
     <div className="admin-card">
@@ -29,6 +32,7 @@ export function AuthCard() {
       {probe.data === false && (
         <div className="admin-auth__warning">⚠ no key required — this server accepts requests without an API key</div>
       )}
+      {probe.isError && <div className="admin-auth__error">auth state unavailable — {messageOf(probe.error)}</div>}
       <div className="admin-card__footnote">admins live in luradb.toml (restart to apply) — users &amp; keys below are managed live via /store-api/auth</div>
     </div>
   )

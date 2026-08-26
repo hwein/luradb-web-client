@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import type { ApiClient } from '../../api'
-import { useSession } from '../../app/session'
+import { useConnectedSession } from '../../app/session'
 import { formatBytes } from '../../lib'
 import {
   backupDetailQueryOptions,
@@ -92,8 +92,7 @@ interface RestoreFormProps {
 /** Optionen + Status eines Restores (spec §7) — ohne `<dialog>`-Hülle, damit Tests ihn ohne `showModal()` mounten können. */
 export function RestoreForm({ apiClient, backupId, onClose }: RestoreFormProps) {
   const queryClient = useQueryClient()
-  const session = useSession()
-  const connectionId = session.status === 'connected' ? session.connection.id : undefined
+  const connectionId = useConnectedSession()?.connectionId
   const storedEntry = useRestoreEntry()
   const entry = storedEntry !== undefined && storedEntry.connectionId === connectionId ? storedEntry : undefined
   const detailQuery = useQuery(backupDetailQueryOptions(apiClient, backupId))

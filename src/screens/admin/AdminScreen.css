@@ -23,6 +23,11 @@
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--mut);
+  overflow-wrap: anywhere;
+}
+
+.admin-index__gate-text--err {
+  color: var(--err);
 }
 
 .admin-index__grid {
@@ -38,9 +43,12 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
 }
 
-.admin-index__column--right {
+/* Grid-Härtung (spec admin/005 §5): ohne dies können lange Domain-/User-Namen und Fehlertexte die Spalte
+   über ihre Track-Breite hinaustreiben und das Grid über die 920px-Untergrenze sprengen. */
+.admin-index__column > * {
   min-width: 0;
 }
 
@@ -110,6 +118,23 @@
 
 .admin-domains__row--muted {
   color: var(--mut);
+}
+
+.admin-domains__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-domains__query-error {
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--err);
+  overflow-wrap: anywhere;
 }
 
 .admin-domains__dots {
@@ -190,6 +215,7 @@
   margin-top: 4px;
   color: var(--err);
   font-size: 11px;
+  overflow-wrap: anywhere;
 }
 
 /* --- Create-Zeile (Prototyp Z. 200–202) --- */
@@ -276,6 +302,16 @@
   color: var(--err);
 }
 
+.admin-auth__error {
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--err);
+  overflow-wrap: anywhere;
+}
+
 /* --- USERS & PER-DOMAIN PERMISSIONS matrix (Prototyp Z. 215–222) --------- */
 
 .admin-users__row {
@@ -313,6 +349,14 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
+}
+
+/* Kopfzeile zeigt nur den Domain-Namen (kein Zellen-Inhalt) — hier greift Ellipsis statt Zeilenumbruch (spec admin/005 §5). */
+.admin-users__col-domain--head {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .admin-users__col-actions {
@@ -439,6 +483,17 @@
   margin-top: 4px;
   color: var(--err);
   font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.admin-users__query-error {
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--err);
+  overflow-wrap: anywhere;
 }
 
 .admin-users__reveal {

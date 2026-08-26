@@ -20,8 +20,13 @@ function makeConnection(): Connection {
 }
 
 function CapabilitiesProbe() {
-  const { admin } = useCapabilities()
-  return <p data-testid="capabilities">admin: {String(admin)}</p>
+  const { admin, adminError } = useCapabilities()
+  return (
+    <p data-testid="capabilities">
+      admin: {admin}
+      {adminError !== undefined && <span data-testid="admin-error">{adminError}</span>}
+    </p>
+  )
 }
 
 async function connectSuccessfully(): Promise<void> {
@@ -30,7 +35,7 @@ async function connectSuccessfully(): Promise<void> {
 }
 
 describe('useCapabilities', () => {
-  it('derives admin from a 200 on /auth/users', async () => {
+  it('derives admin: yes from a 200 on /auth/users', async () => {
     await connectSuccessfully()
     server.use(http.get(`${ORIGIN}/store-api/auth/users`, () => HttpResponse.json([])))
 
@@ -41,11 +46,11 @@ describe('useCapabilities', () => {
       </QueryClientProvider>,
     )
 
-    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: true'))
+    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: yes'))
     act(() => disconnect())
   })
 
-  it('derives non-admin from a non-200 on /auth/users', async () => {
+  it('derives admin: no from a 401/403 on /auth/users — a regular gate, not an error', async () => {
     await connectSuccessfully()
     server.use(http.get(`${ORIGIN}/store-api/auth/users`, () => new HttpResponse(null, { status: 403 })))
 
@@ -56,11 +61,28 @@ describe('useCapabilities', () => {
       </QueryClientProvider>,
     )
 
-    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: false'))
+    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: no'))
+    expect(screen.queryByTestId('admin-error')).not.toBeInTheDocument()
     act(() => disconnect())
   })
 
-  it('is false while not connected', () => {
+  it('derives admin: error (with the response detail) from a 500 on /auth/users', async () => {
+    await connectSuccessfully()
+    server.use(http.get(`${ORIGIN}/store-api/auth/users`, () => new HttpResponse(null, { status: 500 })))
+
+    const queryClient = createAppQueryClient()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CapabilitiesProbe />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: error'))
+    expect(screen.getByTestId('admin-error')).toHaveTextContent('unexpected response (HTTP 500)')
+    act(() => disconnect())
+  })
+
+  it('is pending while not connected (the probe never runs, no false "no")', () => {
     disconnect()
     const queryClient = createAppQueryClient()
     render(
@@ -69,6 +91,6 @@ describe('useCapabilities', () => {
       </QueryClientProvider>,
     )
 
-    expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: false')
+    expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: pending')
   })
 })

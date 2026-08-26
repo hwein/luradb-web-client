@@ -246,4 +246,35 @@ describe('UsersCard', () => {
     const cell2 = row2.querySelector('.admin-users__cell') as HTMLButtonElement
     expect(cell2.textContent).toBe('?')
   })
+
+  it('shows a red inline error on a 500 while the previously loaded matrix stays visible (spec admin/005 §2)', async () => {
+    let call = 0
+    server.use(
+      versionHandler(),
+      ...domainHandlers(),
+      http.get(`${ORIGIN}/store-api/auth/users`, () => {
+        call += 1
+        if (call === 1) return HttpResponse.json([{ name: 'shop-svc', role: 'User', created_at: 1 }])
+        return new HttpResponse(null, { status: 500 })
+      }),
+    )
+    await act(() => connect(makeConnection()))
+    const queryClient = createAppQueryClient()
+    const { unmount } = render(
+      <QueryClientProvider client={queryClient}>
+        <ConnectedUsersCard />
+      </QueryClientProvider>,
+    )
+    await screen.findByText('shop-svc')
+    unmount()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConnectedUsersCard />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText('shop-svc')).toBeInTheDocument()
+    expect(await screen.findByText('users unavailable — 500 user list failed')).toBeInTheDocument()
+  })
 })

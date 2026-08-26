@@ -213,4 +213,19 @@ describe('DomainsCard', () => {
     expect(jsonCreateCalls).toBe(1)
     expect(relCreateCalls).toBe(1)
   })
+
+  it('shows a collective error line for the engines whose list query failed, while domains from a working engine still render (spec admin/005 §2)', async () => {
+    server.use(
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+      http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1 }])),
+      http.get(`${ORIGIN}/store-api/json/domains`, () => new HttpResponse(null, { status: 500 })),
+      http.get(`${ORIGIN}/store-api/rel/domains`, () => new HttpResponse(null, { status: 500 })),
+      http.get(`${ORIGIN}/store-api/kv/shop/keys`, () => HttpResponse.json([])),
+    )
+    await act(() => connect(makeConnection()))
+    renderConnected()
+
+    expect(await screen.findByText('shop')).toBeInTheDocument()
+    expect(await screen.findByText('domains unavailable — json: 500 engine unreachable · rel: 500 engine unreachable')).toBeInTheDocument()
+  })
 })

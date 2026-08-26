@@ -2,16 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ApiError, type ApiClient } from '../../api'
 import { useDomainSummaries, type DomainSummary } from '../../shell/domains'
+import { requireApiClient } from './DomainsCard'
 import { cellActionFor, primaryEngineFor, type CellValue } from './permissions'
 import { createUser, deleteUser, rotateUserKey, USERS_KEY, usersQueryOptions, type CreateUserResponse, type RotateKeyResponse, type UserListItem } from './users'
 
 const NAME_PATTERN = /^[a-zA-Z0-9_-]+$/
 const CELL_LABEL: Record<CellValue, string> = { unknown: '?', none: '—', read: 'read', write: 'read+write' }
-
-function requireApiClient(apiClient: ApiClient | undefined): ApiClient {
-  if (!apiClient) throw new Error('user admin action requires an active connection')
-  return apiClient
-}
 
 function messageOf(error: unknown): string {
   if (error instanceof ApiError) return `${error.status} ${error.message}`
@@ -135,7 +131,7 @@ function UserRow({ apiClient, user, domains, cells, onCellChange }: UserRowProps
   return (
     <div className="admin-users__item">
       <div className="admin-users__row">
-        <span className="admin-users__col-user">
+        <span className="admin-users__col-user" title={user.name}>
           <span className="admin-users__avatar">{initials(user.name)}</span>
           {user.name}
           {isAdmin && <span className="admin-users__badge-admin">admin</span>}
@@ -267,12 +263,13 @@ export function UsersCard({ apiClient }: { apiClient: ApiClient | undefined }) {
       <div className="admin-users__row admin-users__row--head">
         <span className="admin-users__col-user">user</span>
         {domains.map((domain) => (
-          <span key={domain.name} className="admin-users__col-domain">
+          <span key={domain.name} className="admin-users__col-domain admin-users__col-domain--head" title={domain.name}>
             {domain.name}
           </span>
         ))}
         <span className="admin-users__col-actions" />
       </div>
+      {usersQuery.isError && <div className="admin-users__query-error">users unavailable — {messageOf(usersQuery.error)}</div>}
       {users.map((user) => (
         <UserRow key={user.name} apiClient={apiClient} user={user} domains={domains} cells={cells} onCellChange={handleCellChange} />
       ))}

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, type ApiClient } from '../../api'
-import { useSession } from '../../app/session'
+import { useConnectedSession } from '../../app/session'
 import { formatBytes } from '../../lib'
 import { describeTail, serverLogFilesQueryOptions, serverLogTailQueryOptions, SERVER_LOG_FILES_KEY } from './serverLog'
 
@@ -25,8 +25,8 @@ function isNoLogFileYet(error: unknown): boolean {
 
 /** SERVER-LOG-Karte (spec admin/004, Prototyp Z. 232–235): Tail + Files-Listing über `fetchSilent`, Kopf bleibt Design-Copy. */
 export function ServerLogCard({ apiClient }: { apiClient: ApiClient | undefined }) {
-  const session = useSession()
-  const serverVersion = session.status === 'connected' ? session.serverVersion : 'unknown'
+  const connected = useConnectedSession()
+  const serverVersion = connected?.serverVersion ?? 'unknown'
   const queryClient = useQueryClient()
 
   const [lines, setLines] = useState<LinesOption>(100)

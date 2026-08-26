@@ -75,4 +75,16 @@ describe('AuthCard', () => {
     expect(screen.getByText('bearer api-key')).toBeInTheDocument()
     expect(await screen.findByText(/admins live in luradb\.toml/)).toBeInTheDocument()
   })
+
+  it('shows a red inline error when the headerless probe itself fails (not 401/200), and stays at "…" (spec admin/005 §2/§4)', async () => {
+    server.use(
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+      http.get(`${ORIGIN}/store-api/domains`, () => new HttpResponse(null, { status: 500 })),
+    )
+    await act(() => connect(makeConnection()))
+    renderAuthCard()
+
+    expect(await screen.findByText('auth state unavailable — unexpected auth probe response (HTTP 500)')).toBeInTheDocument()
+    expect(document.querySelector('.admin-auth__row-value--muted')).toHaveTextContent('…')
+  })
 })

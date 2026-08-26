@@ -40,7 +40,9 @@ export function useConnection(): ConnectionInfo {
 
   const env = getEnvironment()
   const hostLabel = `${connectionHostLabel(session.connection.type, env)}${BASE_PATH}`
-  const authLabel = authStatusLabel(session.connection.auth, capabilities.admin ? 'admin' : 'user')
+  // pending/error: Rolle noch nicht bekannt — leeres Label statt eines geratenen "user" (spec admin/005 §Entscheidungen).
+  const roleLabel = capabilities.admin === 'yes' ? 'admin' : capabilities.admin === 'no' ? 'user' : undefined
+  const authLabel = roleLabel === undefined ? '' : authStatusLabel(session.connection.auth, roleLabel)
 
   return {
     state: 'connected',

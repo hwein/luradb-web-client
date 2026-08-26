@@ -42,6 +42,19 @@ export function useSession(): SessionState {
   return useSyncExternalStore(subscribe, getSnapshot)
 }
 
+export interface ConnectedSession {
+  apiClient: ApiClient
+  serverVersion: string
+  connectionId: string
+}
+
+/** Kondensierte Sicht für Verbraucher, die nur im verbundenen Zustand aktiv sind (spec admin/005 §1) — spart das `status === 'connected'`-Narrowing an jeder Aufrufstelle. */
+export function useConnectedSession(): ConnectedSession | undefined {
+  const session = useSession()
+  if (session.status !== 'connected') return undefined
+  return { apiClient: session.apiClient, serverVersion: session.serverVersion, connectionId: session.connection.id }
+}
+
 /** Version-Handshake gemäß api/COMPATIBILITY.md: 401 ⇒ ungültiger Key, Netzwerkfehler ⇒ unreachable, sonst Compat-Check. */
 export async function connect(connection: Connection): Promise<void> {
   setState({ status: 'connecting', connection })

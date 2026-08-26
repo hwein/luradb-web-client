@@ -56,6 +56,13 @@ export interface ApiClient {
    * RECENT REQUESTS sonst fluten würden (data/008 §5); wirft nie auf Nicht-2xx, nur bei Netzfehlern.
    */
   fetchSilent: (path: string, init?: RequestInit) => Promise<Response>
+  /**
+   * Wie `fetchSilent`, aber ganz ohne Authorization-Header — für Proben, deren Semantik nur anonym
+   * funktioniert (admin/005: `auth.enabled`-Ableitung). Nutzt denselben `fetchImpl`/`baseUrl` wie der
+   * übrige Client, baut also keinen eigenen Transport auf. Bewusst stiller Pfad, ob er je im Recorder
+   * erscheint, entscheidet general/012.
+   */
+  fetchAnonymous: (path: string, init?: RequestInit) => Promise<Response>
 }
 
 function pathnameOf(url: string): string {
@@ -167,6 +174,15 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
     }
   }
 
+  async function fetchAnonymous(path: string, init?: RequestInit): Promise<Response> {
+    const request = new Request(`${baseUrl}${path}`, init)
+    try {
+      return await fetchImpl(request)
+    } catch (error) {
+      throw networkApiError(error)
+    }
+  }
+
   function fetchNdjson(path: string, options?: { silentRecord?: boolean }): Promise<Response> {
     return rawCall(path, { headers: { Accept: 'application/x-ndjson' }, silentRecord: options?.silentRecord })
   }
@@ -226,5 +242,5 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
     return response
   }
 
-  return { api, onCall, fetchRaw, fetchNdjson, postNdjson, openStream, fetchSilent }
+  return { api, onCall, fetchRaw, fetchNdjson, postNdjson, openStream, fetchSilent, fetchAnonymous }
 }

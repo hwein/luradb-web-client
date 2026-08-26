@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { ApiError, type ApiClient } from '../../api'
-import { useSession } from '../../app/session'
+import { ADMIN_PROBE_KEY } from '../../app/capabilities'
+import { useConnectedSession } from '../../app/session'
 import { formatBytes } from '../../lib'
 import { jsonDomainsQueryOptions, kvDomainsQueryOptions } from '../../shell/domains'
 import {
@@ -21,7 +22,7 @@ import {
   type RestoreStatusResult,
   type RunningBackupInfo,
 } from './backups'
-import { invalidateDomainLists } from './DomainsCard'
+import { invalidateDomainLists, requireApiClient } from './DomainsCard'
 import { RestoreModal } from './RestoreModal'
 import { USERS_KEY } from './users'
 
@@ -32,11 +33,6 @@ const POLL_MS = 2000
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'request failed'
-}
-
-function requireApiClient(apiClient: ApiClient | undefined): ApiClient {
-  if (!apiClient) throw new Error('backup action requires an active connection')
-  return apiClient
 }
 
 function statusOf(error: unknown): number | undefined {
@@ -87,7 +83,7 @@ function RestoreRow({ entry, result, statusError, onView }: RestoreRowProps) {
     invalidateDomainLists(queryClient)
     if (entry.include_auth) {
       void queryClient.invalidateQueries({ queryKey: USERS_KEY })
-      void queryClient.invalidateQueries({ queryKey: ['capabilities', 'admin-probe'] })
+      void queryClient.invalidateQueries({ queryKey: ADMIN_PROBE_KEY })
     }
   }, [terminal, entry.restore_id, entry.include_auth, queryClient])
 
@@ -321,9 +317,9 @@ function UploadAction({ apiClient }: { apiClient: ApiClient | undefined }) {
 
 /** BACKUPS-Karte (spec admin/003, Prototyp Z. 225–231): Liste, laufende Jobs, Run/Upload, Restore-Einstieg. */
 export function BackupsCard({ apiClient }: { apiClient: ApiClient | undefined }) {
-  const session = useSession()
-  const serverVersion = session.status === 'connected' ? session.serverVersion : 'unknown'
-  const connectionId = session.status === 'connected' ? session.connection.id : undefined
+  const connected = useConnectedSession()
+  const serverVersion = connected?.serverVersion ?? 'unknown'
+  const connectionId = connected?.connectionId
   const storedEntry = useRestoreEntry()
   // Einträge fremder Verbindungen ignorieren (nicht löschen — bei Rückkehr zur Ursprungsverbindung wieder gültig).
   const entry = storedEntry !== undefined && storedEntry.connectionId === connectionId ? storedEntry : undefined

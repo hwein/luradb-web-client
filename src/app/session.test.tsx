@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../test/msw'
 import type { Connection } from './connections'
-import { connect, disconnect, useSession } from './session'
+import { connect, disconnect, useConnectedSession, useSession } from './session'
 
 vi.mock('@tauri-apps/plugin-http', () => ({ fetch: vi.fn() }))
 
@@ -155,6 +155,35 @@ describe('self-signed certificate hint (desktop, unreachable https://)', () => {
 
     expect(screen.getByTestId('session')).toHaveTextContent(`server unreachable at ${ORIGIN}`)
     expect(screen.getByTestId('session')).not.toHaveTextContent(/self-signed certificate/)
+  })
+})
+
+function ConnectedSessionProbe() {
+  const connected = useConnectedSession()
+  if (connected === undefined) return <p data-testid="connected-session">undefined</p>
+  return (
+    <p data-testid="connected-session">
+      {connected.serverVersion} {connected.connectionId}
+    </p>
+  )
+}
+
+describe('useConnectedSession', () => {
+  it('is undefined while not connected', () => {
+    disconnect()
+    render(<ConnectedSessionProbe />)
+
+    expect(screen.getByTestId('connected-session')).toHaveTextContent('undefined')
+  })
+
+  it('exposes apiClient, serverVersion and connectionId once connected', async () => {
+    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.3' })))
+    render(<ConnectedSessionProbe />)
+
+    await act(() => connect(makeConnection()))
+
+    expect(screen.getByTestId('connected-session')).toHaveTextContent('0.2.3 conn-1')
+    act(() => disconnect())
   })
 })
 

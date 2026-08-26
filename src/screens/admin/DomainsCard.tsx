@@ -1,6 +1,6 @@
-import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
-import type { ApiClient } from '../../api'
+import { ApiError, type ApiClient } from '../../api'
 import {
   createJsonDomain,
   createKvDomain,
@@ -8,8 +8,11 @@ import {
   deleteJsonDomain,
   deleteKvDomain,
   deleteRelDomain,
+  jsonDomainsQueryOptions,
   JSON_DOMAINS_KEY,
+  kvDomainsQueryOptions,
   KV_DOMAINS_KEY,
+  relDomainsQueryOptions,
   REL_DOMAINS_KEY,
   useDomainSummaries,
   type DomainSummary,
@@ -31,9 +34,15 @@ const DELETERS: Record<Engine, (apiClient: ApiClient, name: string) => Promise<v
   rel: deleteRelDomain,
 }
 
-function requireApiClient(apiClient: ApiClient | undefined): ApiClient {
-  if (!apiClient) throw new Error('domain admin action requires an active connection')
+/** Geteilt mit UsersCard/BackupsCard (spec admin/005 §1) — eine Guard-Funktion statt dreifacher Kopie. */
+export function requireApiClient(apiClient: ApiClient | undefined): ApiClient {
+  if (!apiClient) throw new Error('admin action requires an active connection')
   return apiClient
+}
+
+function messageOf(error: unknown): string {
+  if (error instanceof ApiError) return `${error.status} ${error.message}`
+  return error instanceof Error ? error.message : 'request failed'
 }
 
 function formatCount(value: number): string {
@@ -81,7 +90,9 @@ function DomainRow({ apiClient, domain }: DomainRowProps) {
   return (
     <div className="admin-domains__item">
       <div className={`admin-domains__row${isDeleting ? ' admin-domains__row--muted' : ''}`}>
-        <span className="admin-domains__name">{domain.name}</span>
+        <span className="admin-domains__name" title={domain.name}>
+          {domain.name}
+        </span>
         <EngineDots activity={activity} />
         <span className="admin-domains__spacer" />
         {activity.objectCount !== undefined && <span className="admin-domains__count">{formatCount(activity.objectCount)} objects</span>}
@@ -156,12 +167,25 @@ function CreateDomainRow({ apiClient }: { apiClient: ApiClient | undefined }) {
 /** DOMAINS-Karte (spec admin/001 §3): Liste aus der Explorer-Union (shell/002), Anlage, Löschkaskade, Fußnote. */
 export function DomainsCard({ apiClient }: { apiClient: ApiClient | undefined }) {
   const domains = useDomainSummaries(apiClient)
+  // Dieselben Query-Options wie useDomainSummaries (cache-geteilt, kein Zusatz-Request) — nur um die
+  // Fehler je Engine für die Sammelzeile sichtbar zu machen (spec admin/005 §2).
+  const kvQuery = useQuery(kvDomainsQueryOptions(apiClient))
+  const jsonQuery = useQuery(jsonDomainsQueryOptions(apiClient))
+  const relQuery = useQuery(relDomainsQueryOptions(apiClient))
+  const engineErrors = ([
+    ['kv', kvQuery.error] as [Engine, unknown],
+    ['json', jsonQuery.error] as [Engine, unknown],
+    ['rel', relQuery.error] as [Engine, unknown],
+  ])
+    .filter((entry) => entry[1] !== null)
+    .map(([engine, error]) => `${engine}: ${messageOf(error)}`)
 
   return (
     <div className="admin-card">
       <div className="admin-card__head">
         DOMAINS<span className="admin-card__head-note">isolated · no cross-domain</span>
       </div>
+      {engineErrors.length > 0 && <div className="admin-domains__query-error">domains unavailable — {engineErrors.join(' · ')}</div>}
       {domains.map((domain) => (
         <DomainRow key={domain.name} apiClient={apiClient} domain={domain} />
       ))}

@@ -201,6 +201,56 @@ describe('createApi', () => {
     expect(calls).toHaveLength(0)
   })
 
+  describe('fetchAnonymous (admin/005)', () => {
+    it('never sets an Authorization header, even when getAuthHeader is configured', async () => {
+      let receivedAuth: string | null = 'unset'
+      server.use(
+        http.get(`${BASE_URL}/store-api/domains`, ({ request }) => {
+          receivedAuth = request.headers.get('Authorization')
+          return new HttpResponse(null, { status: 401 })
+        }),
+      )
+
+      const { fetchAnonymous } = makeApi(() => 'Bearer test-key')
+      const response = await fetchAnonymous('/store-api/domains')
+
+      expect(receivedAuth).toBeNull()
+      expect(response.status).toBe(401)
+    })
+
+    it('does not notify onCall listeners — a deliberate silent path pending general/012', async () => {
+      server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([])))
+
+      const { fetchAnonymous, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+      await fetchAnonymous('/store-api/domains')
+
+      expect(calls).toHaveLength(0)
+    })
+
+    it('resolves with the raw Response even when not ok', async () => {
+      server.use(http.get(`${BASE_URL}/store-api/domains`, () => new HttpResponse('nope', { status: 500 })))
+
+      const { fetchAnonymous } = makeApi()
+      const response = await fetchAnonymous('/store-api/domains')
+
+      expect(response.ok).toBe(false)
+      await expect(response.text()).resolves.toBe('nope')
+    })
+
+    it('wraps a network failure as a status-0 ApiError without notifying', async () => {
+      server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.error()))
+
+      const { fetchAnonymous, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+
+      await expect(fetchAnonymous('/store-api/domains')).rejects.toBeInstanceOf(ApiError)
+      expect(calls).toHaveLength(0)
+    })
+  })
+
   it('fetchNdjson sends an ndjson Accept header', async () => {
     let acceptHeader: string | null = null
     server.use(

@@ -18,6 +18,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Creating a domain no longer logs a console error about an invalid pattern attribute.
 - The About dialog no longer lists an unused third-party library.
 - RECENT REQUESTS no longer mixes calls from a previous connection after switching servers.
+- Admin cards surface server errors instead of silently showing an empty list or matrix.
+- Admin no longer flashes a false "admin role required" gate while the admin check is still loading, and shows a distinct message when the check itself fails.
 
 ### Changed
 
