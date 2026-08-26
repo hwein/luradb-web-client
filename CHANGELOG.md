@@ -11,7 +11,13 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
-- Configuration: the loaded `luradb.toml` (including masked keys) is no longer stored in the browser; an existing stored copy is removed on first visit.
+- Configuration: the loaded `luradb.toml` (including masked keys) is no longer stored in the browser; an existing stored copy is removed on app start.
+
+### Fixed
+
+- Creating a domain no longer logs a console error about an invalid pattern attribute.
+- The About dialog no longer lists an unused third-party library.
+- RECENT REQUESTS no longer mixes calls from a previous connection after switching servers.
 
 ### Added
 

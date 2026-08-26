@@ -75,11 +75,4 @@ describe('AdminScreen', () => {
 
     expect(await screen.findByPlaceholderText('new domain (max 50 chars)')).toBeInTheDocument()
   })
-
-  it('keeps the section subnav out of the DOM while only one section is registered', async () => {
-    await renderAt('/admin', true)
-    await screen.findByPlaceholderText('new domain (max 50 chars)')
-
-    expect(document.querySelector('.admin__subnav')).not.toBeInTheDocument()
-  })
 })

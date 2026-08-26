@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { checkCompatibility, createApi, record, type ApiClient } from '../api'
+import { checkCompatibility, clearRecordedCalls, createApi, record, type ApiClient } from '../api'
 import { buildAuthHeader, buildTransport } from './connectionRegistry'
 import type { Connection } from './connections'
 import { touchLastUsed } from './connections'
@@ -116,5 +116,6 @@ export async function connect(connection: Connection): Promise<void> {
 export function disconnect(): void {
   unsubscribeRecorder?.()
   unsubscribeRecorder = undefined
+  clearRecordedCalls()
   setState({ status: 'unauthenticated' })
 }

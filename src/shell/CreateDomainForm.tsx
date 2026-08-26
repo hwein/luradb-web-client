@@ -53,7 +53,7 @@ export function CreateDomainForm({ apiClient, onClose }: CreateDomainFormProps) 
         onChange={(event) => setName(event.target.value)}
         placeholder="domain name"
         maxLength={50}
-        pattern="[a-zA-Z0-9_-]+"
+        pattern="[a-zA-Z0-9_\-]+"
         aria-label="domain name"
       />
       <span className="explorer__create-hint mono-path">&quot;domains&quot; is reserved</span>

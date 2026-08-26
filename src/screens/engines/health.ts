@@ -2,9 +2,7 @@ import { queryOptions } from '@tanstack/react-query'
 import type { ApiClient } from '../../api'
 
 export interface HealthSnapshot {
-  status: string
   uptimeSecs: number
-  version: string
   domainCount: number
   estimatedMemtableKeys: number
   l0SstableCount: number
@@ -23,9 +21,7 @@ function numberField(record: Record<string, unknown>, key: string): number {
 function parseHealth(body: unknown): HealthSnapshot {
   if (!isRecord(body)) throw new Error('unexpected /health response shape')
   return {
-    status: typeof body.status === 'string' ? body.status : 'unknown',
     uptimeSecs: numberField(body, 'uptime_secs'),
-    version: typeof body.version === 'string' ? body.version : '',
     domainCount: numberField(body, 'domain_count'),
     estimatedMemtableKeys: numberField(body, 'estimated_memtable_keys'),
     l0SstableCount: numberField(body, 'l0_sstable_count'),

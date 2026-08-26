@@ -7,7 +7,6 @@ export function isTauri(): boolean {
 
 export interface EnvTransport {
   fetchImpl: typeof fetch
-  defaultBaseUrl: string
 }
 
 /**
@@ -16,9 +15,9 @@ export interface EnvTransport {
  * siehe rustls-Verhalten in spec 009); sonst (auch im Browser) bleibt die Option wirkungslos.
  */
 export function getTransport(options?: { acceptInvalidCerts?: boolean }): EnvTransport {
-  if (!isTauri()) return { fetchImpl: fetch, defaultBaseUrl: '' }
-  if (options?.acceptInvalidCerts !== true) return { fetchImpl: pluginFetch, defaultBaseUrl: '' }
+  if (!isTauri()) return { fetchImpl: fetch }
+  if (options?.acceptInvalidCerts !== true) return { fetchImpl: pluginFetch }
   const danger = { acceptInvalidCerts: true, acceptInvalidHostnames: true }
   // Frisches init pro Aufruf: das Plugin mutiert das übergebene init-Objekt per `delete`.
-  return { fetchImpl: (input, init) => pluginFetch(input, { ...init, danger }), defaultBaseUrl: '' }
+  return { fetchImpl: (input, init) => pluginFetch(input, { ...init, danger }) }
 }

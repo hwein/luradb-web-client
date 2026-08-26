@@ -3,7 +3,7 @@ export type { ApiClient, CallInfo, CreateApiOptions, OnCallListener } from './cl
 export { ApiError, apiErrorFromResponse, messageFromBody } from './errors'
 export { BASE_PATH, CONTRACT_VERSION, MIN_SERVER_VERSION, checkCompatibility } from './contract'
 export type { CompatibilityResult, SemVer } from './contract'
-export { record, useRecordedCalls } from './recorder'
+export { clearRecordedCalls, record, useRecordedCalls } from './recorder'
 export type { RecordedCall } from './recorder'
 export { withCall } from './withCall'
 export type { CallMeta, CallResult } from './withCall'
