@@ -132,6 +132,115 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/store-api/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lists every backup archive in `backup.dir`, plus the currently running
+         *     backup job (if any) separately in `running`.
+         */
+        get: operations["list_backups"];
+        put?: never;
+        /** Starts an on-demand backup job (spec general/006 scope syntax for `scope`). */
+        post: operations["create_backup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/backups/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Streams the request body to `backup.dir`, verifies its checksum and
+         *     manifest, then assigns it a fresh server-side id (`bk_..._upload[_N]`) —
+         *     the id in the manifest is never adopted. Invalid archives are discarded.
+         */
+        post: operations["upload_backup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/backups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Manifest fields + state + size for one backup. A backup whose job is
+         *     still running (no `.ndjson` file yet, only `.part`) reports `state:
+         *     "running"` from the in-RAM job slot instead of 404.
+         */
+        get: operations["get_backup"];
+        put?: never;
+        post?: never;
+        /**
+         * Deletes a backup archive file. Refuses while the id is the currently
+         *     running job (or a stale `.part` leftover still exists for it).
+         */
+        delete: operations["delete_backup"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/backups/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Streams the archive (`ServeFile`/tower-http `fs`) with HTTP Range support
+         *     for resumable downloads (spec general/006).
+         */
+        get: operations["download_backup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/backups/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Starts a restore job from an existing backup archive. The single-domain
+         *     remap and format-version checks happen synchronously here; a domain
+         *     already existing (`fail_if_exists`) only surfaces asynchronously via
+         *     `GET /restores/{id}`.
+         */
+        post: operations["restore_backup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/store-api/domains": {
         parameters: {
             query?: never;
@@ -484,6 +593,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/store-api/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reads the last N lines of a log file (spec general/005). */
+        get: operations["get_logs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/logs/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lists every `luradb.log*` file in the log directory (spec general/005).
+         *     `files[0]` is exactly the file `GET /logs` reads without a `file` param.
+         */
+        get: operations["list_files"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/store-api/metrics": {
         parameters: {
             query?: never;
@@ -694,6 +840,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/store-api/restores/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live status of a restore job. Lives in RAM only (spec general/006) — gone
+         *     after a restart; the outcome is also in the log.
+         */
+        get: operations["get_restore_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/version": {
         parameters: {
             query?: never;
@@ -715,6 +881,53 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        BackupAcceptedResponse: {
+            id: string;
+            state: string;
+        };
+        /**
+         * @description Manifest fields + state + size (spec general/006 GET /backups/{id} and
+         *     POST /backups/upload). Everything but `id`/`state`/`scope` is optional:
+         *     the currently-running-job shape (`running`) only fills `started_at`; the
+         *     complete/incomplete shape fills the rest instead.
+         */
+        BackupDetailResponse: {
+            /** Format: int64 */
+            created_at?: number | null;
+            encoding?: string | null;
+            /** Format: int32 */
+            format_version?: number | null;
+            id: string;
+            include_auth?: boolean | null;
+            /** Format: int64 */
+            json_snapshot_ts?: number | null;
+            /** Format: int64 */
+            kv_snapshot_ts?: number | null;
+            luradb_version?: string | null;
+            schedule?: string | null;
+            scope: string;
+            /** Format: int64 */
+            size_bytes?: number | null;
+            /** Format: int64 */
+            started_at?: number | null;
+            state: string;
+        };
+        BackupListResponse: {
+            backups: components["schemas"]["BackupSummaryResponse"][];
+            running?: null | components["schemas"]["RunningBackupInfo"];
+        };
+        BackupSummaryResponse: {
+            /** Format: int64 */
+            created_at: number;
+            /** Format: int32 */
+            format_version: number;
+            id: string;
+            schedule?: string | null;
+            scope: string;
+            /** Format: int64 */
+            size_bytes: number;
+            state: string;
+        };
         BulkErrorEntry: {
             error: string;
             /** @description Document key or "line N" for parse errors. */
@@ -740,6 +953,15 @@ export interface components {
         CountResponse: {
             /** Format: int64 */
             count: number;
+        };
+        CreateBackupRequest: {
+            /** @description Only effective for `all`/`kv` scopes (auth records live in the KV instance). */
+            include_auth?: boolean;
+            /**
+             * @description `all` | `kv` | `json` | `kv:<domain>` | `json:<domain>` | `domain:<name>`.
+             *     Covers the KV and JSON engines only — relational data is never included.
+             */
+            scope: string;
         };
         CreateDomainRequest: {
             /** @description User-visible domain name (max 50 chars, [a-zA-Z0-9_-]). */
@@ -823,6 +1045,34 @@ export interface components {
             /** Format: int32 */
             offset?: number | null;
         };
+        LogFileInfo: {
+            file: string;
+            /** Format: int64 */
+            modified: number;
+            /** Format: int64 */
+            size: number;
+        };
+        LogFilesResponse: {
+            files: components["schemas"]["LogFileInfo"][];
+        };
+        LogQuery: {
+            /** @description Name of a file listed by `GET /logs/files`. Defaults to the newest `luradb.log*` file. */
+            file?: string | null;
+            /** @description Tail line count from the file end (default 100, capped at 1000). `0` is rejected. */
+            lines?: number | null;
+            /** @description Case-sensitive substring filter; only matching lines count toward `lines`. */
+            q?: string | null;
+        };
+        LogResponse: {
+            /** @description Name of the file actually read, without a path. */
+            file: string;
+            /** @description Mirrors `log.format` ("json" | "text") — the client parses `lines` itself. */
+            format: string;
+            /** @description Chronologically ascending (oldest first), like `tail`. */
+            lines: string[];
+            /** @description `true` iff the scan budget was exhausted before `lines` matches and before file start. */
+            truncated: boolean;
+        };
         ReindexAcceptedResponse: {
             task_id: string;
         };
@@ -844,6 +1094,41 @@ export interface components {
              */
             state: string;
         };
+        RestoreAcceptedResponse: {
+            restore_id: string;
+            state: string;
+        };
+        RestoreErrorEntry: {
+            error: string;
+            key: string;
+        };
+        RestoreRequest: {
+            /** @description Apply auth-user/auth-perm lines from the archive (upsert). Default false. */
+            include_auth?: boolean;
+            /**
+             * @description Only legal when the archive contains exactly one domain name
+             *     (`kv:*`/`json:*`/`domain:*` scopes).
+             */
+            into_domain?: string | null;
+            /** @description `"fail_if_exists"` (default) or `"replace"`. */
+            mode?: string | null;
+        };
+        RestoreStatusResponse: {
+            backup_id: string;
+            errors: components["schemas"]["RestoreErrorEntry"][];
+            /** Format: int64 */
+            failed: number;
+            /** Format: int64 */
+            finished_at?: number | null;
+            /** Format: int64 */
+            imported: number;
+            restore_id: string;
+            /** Format: int64 */
+            skipped: number;
+            /** Format: int64 */
+            started_at: number;
+            state: string;
+        };
         RotateKeyResponse: {
             /** @description New API key (visible only once — cannot be retrieved afterward). */
             api_key: string;
@@ -862,6 +1147,12 @@ export interface components {
              *     with an optional `_expanded` block (spec §6).
              */
             rows: Record<string, never>[];
+        };
+        RunningBackupInfo: {
+            id: string;
+            scope: string;
+            /** Format: int64 */
+            started_at: number;
         };
         SearchRequest: {
             /** @description Field → value (Eq) or `{"$gt": …}` / `$gte` / `$lt` / `$lte` / `$eq`. */
@@ -1145,6 +1436,332 @@ export interface operations {
             };
             /** @description User not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_backups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backup list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupListResponse"];
+                };
+            };
+            /** @description Backup is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_backup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBackupRequest"];
+            };
+        };
+        responses: {
+            /** @description Backup job started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupAcceptedResponse"];
+                };
+            };
+            /** @description Invalid scope */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Scope targets a missing domain */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A backup or restore job is already running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Backup is disabled, or scope requires the JSON engine, which is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    upload_backup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description NDJSON backup archive, raw bytes streamed to disk (no multipart) */
+        requestBody: {
+            content: {
+                "text/plain": string;
+            };
+        };
+        responses: {
+            /** @description Archive accepted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupDetailResponse"];
+                };
+            };
+            /** @description Invalid backup file — checksum/manifest verification failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Backup is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_backup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Backup id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backup details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupDetailResponse"];
+                };
+            };
+            /** @description Invalid backup id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Backup not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Backup is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_backup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Backup id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backup deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid backup id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Backup not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The backup job for this id is still running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Backup is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    download_backup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Backup id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full NDJSON archive */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": unknown;
+                };
+            };
+            /** @description Partial content (Range request) */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": unknown;
+                };
+            };
+            /** @description Invalid backup id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Backup not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The backup job for this id is still running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Backup is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    restore_backup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Backup id to restore from */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Restore job started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreAcceptedResponse"];
+                };
+            };
+            /** @description Invalid id/mode, remap requires a single domain, unsupported format version, or invalid backup file */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Backup not found, or scope targets a missing domain */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A backup or restore job is already running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Backup is disabled */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2315,6 +2932,95 @@ export interface operations {
             };
         };
     };
+    get_logs: {
+        parameters: {
+            query?: {
+                /** @description Tail line count from file end (default 100, capped at 1000). 0 is rejected. */
+                lines?: number;
+                /** @description Case-sensitive substring filter; only matching lines count toward `lines`. */
+                q?: string;
+                /** @description Name of a file listed by GET /logs/files. Defaults to the newest luradb.log* file. */
+                file?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tail of the selected log file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogResponse"];
+                };
+            };
+            /** @description lines = 0, or invalid file name */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description file does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description log directory unreadable, no luradb.log* file found, or read failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Log HTTP access is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_files: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All luradb.log* files, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogFilesResponse"];
+                };
+            };
+            /** @description log directory unreadable */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Log HTTP access is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_metrics: {
         parameters: {
             query?: never;
@@ -3129,6 +3835,43 @@ export interface operations {
                 content?: never;
             };
             /** @description Relational engine disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_restore_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Restore id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restore status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreStatusResponse"];
+                };
+            };
+            /** @description Restore not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Backup is disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
