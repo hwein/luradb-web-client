@@ -60,14 +60,6 @@ describe('ConfigScreen', () => {
     expect(screen.queryByText('bind_address')).not.toBeInTheDocument()
   })
 
-  it('removes a stale localStorage entry left by the old edit-and-persist behavior on mount', () => {
-    localStorage.setItem('luradb.toml', REFERENCE_TOML)
-
-    render(<ConfigScreen />)
-
-    expect(localStorage.getItem('luradb.toml')).toBeNull()
-  })
-
   it('does not open an input when a value is clicked (no edit entry point)', () => {
     renderLoaded()
     const textboxesBefore = screen.getAllByRole('textbox').length

@@ -37,6 +37,14 @@ describe('App', () => {
     expect(screen.getByLabelText('Name')).toBeInTheDocument()
   })
 
+  it('purges the legacy plaintext-toml localStorage entry on app start, before any /config visit', () => {
+    localStorage.setItem('luradb.toml', '[auth]\napi_key = "lura_secret"\n')
+
+    render(<App />)
+
+    expect(localStorage.getItem('luradb.toml')).toBeNull()
+  })
+
   it('starts in the gate even with a remembered connection (no autoconnect — app start means a new session)', () => {
     storeRememberedConnection()
 

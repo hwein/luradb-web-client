@@ -1,6 +1,6 @@
 export { createApi } from './client'
 export type { ApiClient, CallInfo, CreateApiOptions, OnCallListener } from './client'
-export { ApiError, apiErrorFromResponse } from './errors'
+export { ApiError, apiErrorFromResponse, messageFromBody } from './errors'
 export { BASE_PATH, CONTRACT_VERSION, MIN_SERVER_VERSION, checkCompatibility } from './contract'
 export type { CompatibilityResult, SemVer } from './contract'
 export { record, useRecordedCalls } from './recorder'

@@ -1,5 +1,5 @@
 import { keepPreviousData, queryOptions } from '@tanstack/react-query'
-import { ApiError, BASE_PATH, type ApiClient } from '../../api'
+import { ApiError, apiErrorFromResponse, BASE_PATH, type ApiClient } from '../../api'
 import type { components } from '../../api/schema'
 
 const LOGS_PATH = `${BASE_PATH}/logs`
@@ -66,13 +66,13 @@ function tailPath(lines: number, q: string, file: string | undefined): string {
  */
 export async function fetchServerLogTail(apiClient: ApiClient, lines: number, q: string, file: string | undefined): Promise<LogTail> {
   const response = await apiClient.fetchSilent(tailPath(lines, q, file))
-  if (!response.ok) throw new ApiError(response.status, await response.text())
+  if (!response.ok) throw await apiErrorFromResponse(response)
   return parseLogResponse(await response.json(), response.status)
 }
 
 export async function fetchServerLogFiles(apiClient: ApiClient): Promise<LogFileInfo[]> {
   const response = await apiClient.fetchSilent(LOGS_FILES_PATH)
-  if (!response.ok) throw new ApiError(response.status, await response.text())
+  if (!response.ok) throw await apiErrorFromResponse(response)
   return parseFilesResponse(await response.json(), response.status)
 }
 

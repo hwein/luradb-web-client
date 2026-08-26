@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
-import { ApiError, apiErrorFromResponse, BASE_PATH, type ApiClient } from '../../api'
+import { ApiError, apiErrorFromResponse, BASE_PATH, messageFromBody, type ApiClient } from '../../api'
 import type { components } from '../../api/schema'
 
 export type BackupSummary = components['schemas']['BackupSummaryResponse']
@@ -25,12 +25,7 @@ export const BACKUPS_KEY = ['backups', 'list'] as const
 /** openapi-fetch liest den Fehler-Body selbst: Plaintext ⇒ String, JSON ⇒ Objekt (Body danach verbraucht). */
 function errorText(error: unknown): string | undefined {
   if (typeof error === 'string') return error.trim() === '' ? undefined : error.trim()
-  if (error !== null && typeof error === 'object') {
-    const record = error as Record<string, unknown>
-    if (typeof record.error === 'string') return record.error
-    if (typeof record.message === 'string') return record.message
-  }
-  return undefined
+  return messageFromBody(error)
 }
 
 function apiError(status: number, error: unknown, fallback: string): ApiError {
@@ -86,8 +81,11 @@ export function restoreStatusQueryOptions(apiClient: ApiClient | undefined, rest
       return { kind: 'status', status: data }
     },
     enabled: apiClient !== undefined && restoreId !== undefined,
-    // Ohne Ergebnis (auch nach transientem 5xx/Netzfehler) weiter versuchen; Endzustände beenden den Poll.
+    // Ohne Ergebnis (auch nach transientem 5xx/Netzfehler) weiter versuchen; Endzustände und
+    // 503 (Feature abgeschaltet — heilt nur durch den Operator, Fokus-Refetch reicht) beenden den Poll.
     refetchInterval: (query) => {
+      const error = query.state.error
+      if (error instanceof ApiError && error.status === 503) return false
       const data = query.state.data
       if (data === undefined) return 2000
       return data.kind === 'status' && data.status.state === 'running' ? 2000 : false
@@ -140,6 +138,8 @@ export interface RestoreEntry {
   backup_id: string
   startedAt: number
   include_auth: boolean
+  /** Verbindung, auf der der Restore gestartet wurde — Einträge fremder Verbindungen werden ignoriert (restore_ids sind server-lokal). */
+  connectionId: string
 }
 
 const RESTORE_STORAGE_KEY = 'luradb.restore'
@@ -151,7 +151,9 @@ function readStored(): RestoreEntry | undefined {
     const parsed: unknown = JSON.parse(raw)
     if (parsed === null || typeof parsed !== 'object') return undefined
     const entry = parsed as RestoreEntry
-    return typeof entry.restore_id === 'string' && typeof entry.backup_id === 'string' ? entry : undefined
+    return typeof entry.restore_id === 'string' && typeof entry.backup_id === 'string' && typeof entry.connectionId === 'string'
+      ? entry
+      : undefined
   } catch {
     return undefined
   }

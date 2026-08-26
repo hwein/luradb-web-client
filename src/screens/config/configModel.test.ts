@@ -68,4 +68,13 @@ describe('buildConfig', () => {
     expect(row(model, 'svc.token_secret').masked).toBe(true)
     expect(row(model, 'svc.name').masked).toBe(false)
   })
+
+  it('masks array values of secret-style keys instead of rendering them verbatim', () => {
+    const model = ok('[svc]\nsecret_keys = ["s3cr3t", "other"]\nports = [1, 2]\n')
+    const secret = row(model, 'svc.secret_keys')
+    expect(secret.masked).toBe(true)
+    expect(secret.display).toBe(MASKED_DISPLAY)
+    expect(secret.display).not.toContain('s3cr3t')
+    expect(row(model, 'svc.ports')).toMatchObject({ masked: false, display: '[1, 2]' })
+  })
 })

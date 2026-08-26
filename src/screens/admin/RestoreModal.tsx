@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import type { ApiClient } from '../../api'
+import { useSession } from '../../app/session'
 import { formatBytes } from '../../lib'
 import {
   backupDetailQueryOptions,
@@ -52,6 +53,9 @@ function RestoreStatusView({ apiClient, restoreId }: { apiClient: ApiClient | un
   const statusQuery = useQuery(restoreStatusQueryOptions(apiClient, restoreId))
   const result = statusQuery.data
 
+  if (result === undefined && statusQuery.isError) {
+    return <div className="rsm__status rsm__status--lost">restore status unavailable — {messageOf(statusQuery.error)}</div>
+  }
   if (result === undefined) return <div className="rsm__status">restore · running</div>
   if (result.kind === 'lost') {
     return <div className="rsm__status rsm__status--lost">restore status lost (server restarted) — check the domain list</div>
@@ -88,7 +92,10 @@ interface RestoreFormProps {
 /** Optionen + Status eines Restores (spec §7) — ohne `<dialog>`-Hülle, damit Tests ihn ohne `showModal()` mounten können. */
 export function RestoreForm({ apiClient, backupId, onClose }: RestoreFormProps) {
   const queryClient = useQueryClient()
-  const entry = useRestoreEntry()
+  const session = useSession()
+  const connectionId = session.status === 'connected' ? session.connection.id : undefined
+  const storedEntry = useRestoreEntry()
+  const entry = storedEntry !== undefined && storedEntry.connectionId === connectionId ? storedEntry : undefined
   const detailQuery = useQuery(backupDetailQueryOptions(apiClient, backupId))
   const [mode, setMode] = useState<'fail_if_exists' | 'replace'>('fail_if_exists')
   const [intoDomain, setIntoDomain] = useState('')
@@ -114,13 +121,20 @@ export function RestoreForm({ apiClient, backupId, onClose }: RestoreFormProps) 
       return startRestore(apiClient, backupId, body)
     },
     onSuccess: (restoreId) => {
-      noteRestoreStarted({ restore_id: restoreId, backup_id: backupId, startedAt: Date.now(), include_auth: applyAuth })
+      noteRestoreStarted({
+        restore_id: restoreId,
+        backup_id: backupId,
+        startedAt: Date.now(),
+        include_auth: applyAuth,
+        connectionId: connectionId ?? '',
+      })
     },
   })
 
   const scope = detail?.scope ?? ''
   const singleDomain = SINGLE_DOMAIN_SCOPE.test(scope)
-  const wholeEngine = scope === 'all' || scope === 'kv'
+  // Auch die JSON-Engine legt eine default-Domäne automatisch an (live verifiziert) — der Hinweis gilt für alle Ganz-Engine-Scopes.
+  const wholeEngine = scope === 'all' || scope === 'kv' || scope === 'json'
   const intoDomainValid = intoDomain === '' || (intoDomain.length <= 50 && NAME_PATTERN.test(intoDomain))
   const activeRestoreId = entry !== undefined && entry.backup_id === backupId ? entry.restore_id : undefined
 

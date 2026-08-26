@@ -10,7 +10,8 @@ export class ApiError extends Error {
   }
 }
 
-function messageFromBody(body: unknown): string | undefined {
+/** Zieht die Message aus einem Fehler-Body-Objekt (`{error}`/`{message}`) — auch für openapi-fetch-`error`-Werte. */
+export function messageFromBody(body: unknown): string | undefined {
   if (body !== null && typeof body === 'object') {
     const record = body as Record<string, unknown>
     if (typeof record.error === 'string') return record.error
@@ -18,6 +19,9 @@ function messageFromBody(body: unknown): string | undefined {
   }
   return undefined
 }
+
+// LuraDB-Plaintext ist einzeilig kurz; der Deckel hält Fremd-Bodies (Proxy-HTML-Fehlerseiten) aus den Inline-Meldungen.
+const MAX_PLAINTEXT_MESSAGE = 300
 
 /** Baut einen ApiError aus einer Nicht-2xx-Response; konsumiert den Body. LuraDB antwortet auf Fehler mit Plaintext `NNN Reason: Detail`. */
 export async function apiErrorFromResponse(response: Response): Promise<ApiError> {
@@ -32,7 +36,8 @@ export async function apiErrorFromResponse(response: Response): Promise<ApiError
     body = undefined
   }
   const statusText = response.statusText.length > 0 ? response.statusText : `HTTP ${response.status}`
-  const plaintext = isJson || trimmed === '' ? undefined : trimmed
+  const firstLine = (trimmed.split('\n', 1)[0] ?? '').slice(0, MAX_PLAINTEXT_MESSAGE)
+  const plaintext = isJson || firstLine === '' ? undefined : firstLine
   return new ApiError(response.status, messageFromBody(body) ?? plaintext ?? statusText, body)
 }
 

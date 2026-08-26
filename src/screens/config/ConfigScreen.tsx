@@ -1,25 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import './ConfigScreen.css'
 import { ConfigCard } from './ConfigCard'
 import { buildConfig } from './configModel'
 
-// Alt-Key aus der entfernten Edit-Persistenz (spec config/003 §5) — enthielt den Klartext samt api_key.
-const LEGACY_STORAGE_KEY = 'luradb.toml'
-
-/** Configuration-Screen (spec config/003): luradb.toml laden und als Karten anzeigen — read-only. */
+/** Configuration-Screen (spec config/003): luradb.toml laden und als Karten anzeigen — read-only. Der Legacy-Storage-Purge läuft im App-Bootstrap (App.tsx). */
 export function ConfigScreen() {
   const [text, setText] = useState('')
   const [filter, setFilter] = useState('')
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteDraft, setPasteDraft] = useState('')
-
-  useEffect(() => {
-    try {
-      localStorage.removeItem(LEGACY_STORAGE_KEY)
-    } catch {
-      // best-effort (Storage deaktiviert) — Cleanup ist optional.
-    }
-  }, [])
 
   const model = useMemo(() => (text.trim() === '' ? null : buildConfig(text)), [text])
 

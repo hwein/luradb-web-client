@@ -445,7 +445,7 @@ describe('BackupsCard upload', () => {
 
 describe('BackupsCard restore row', () => {
   function seedRestore(includeAuth = false): void {
-    noteRestoreStarted({ restore_id: 'rst_1', backup_id: 'bk_a', startedAt: Date.now(), include_auth: includeAuth })
+    noteRestoreStarted({ restore_id: 'rst_1', backup_id: 'bk_a', startedAt: Date.now(), include_auth: includeAuth, connectionId: 'conn-1' })
   }
 
   function restoreHandlers(state: string) {
@@ -476,6 +476,35 @@ describe('BackupsCard restore row', () => {
     expect(await screen.findByRole('button', { name: 'restore' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '▶ run backup now' })).toBeDisabled()
     expect(screen.queryByRole('button', { name: '×' })).not.toBeInTheDocument()
+  })
+
+  it('treats a failing status query as unavailable, keeps actions usable and offers dismiss', async () => {
+    seedRestore()
+    server.use(
+      ...baseHandlers(),
+      http.get(BACKUPS_URL, () => HttpResponse.json({ backups: [backup({ id: 'bk_a', created_at: atToday(2, 0) })], running: null })),
+      http.get(`${ORIGIN}/store-api/restores/rst_1`, () => HttpResponse.text('500 Internal Server Error: boom', { status: 500 })),
+    )
+    await renderConnected()
+
+    expect(await screen.findByText('restore · status unavailable')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'restore' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '▶ run backup now' })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: '×' }))
+    await waitFor(() => expect(screen.queryByText('restore · status unavailable')).not.toBeInTheDocument())
+  })
+
+  it('ignores a registry entry that belongs to another connection', async () => {
+    noteRestoreStarted({ restore_id: 'rst_9', backup_id: 'bk_a', startedAt: Date.now(), include_auth: false, connectionId: 'other-conn' })
+    server.use(
+      ...baseHandlers(),
+      http.get(BACKUPS_URL, () => HttpResponse.json({ backups: [], running: null })),
+    )
+    await renderConnected()
+
+    expect(await screen.findByText('no backups yet')).toBeInTheDocument()
+    expect(screen.queryByText(/restore ·/)).not.toBeInTheDocument()
   })
 
   it('offers view + dismiss on a finished restore and invalidates the domain lists once', async () => {

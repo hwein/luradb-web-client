@@ -68,13 +68,16 @@ function RunningBackupRow({ running }: { running: RunningBackupInfo }) {
 interface RestoreRowProps {
   entry: RestoreEntry
   result: RestoreStatusResult | undefined
+  /** Status-Query im Fehlerzustand (kein 404) — nicht als "running" ausgeben, Dismiss anbieten. */
+  statusError: boolean
   onView: () => void
 }
 
 /** Der laufende/zuletzt gelaufene Restore ist server-seitig nicht auflistbar — die Karte hält ihn (spec §3b/§6). */
-function RestoreRow({ entry, result, onView }: RestoreRowProps) {
+function RestoreRow({ entry, result, statusError, onView }: RestoreRowProps) {
   const queryClient = useQueryClient()
-  const label = result === undefined ? 'running' : result.kind === 'lost' ? 'status lost' : result.status.state
+  const label =
+    result !== undefined ? (result.kind === 'lost' ? 'status lost' : result.status.state) : statusError ? 'status unavailable' : 'running'
   const terminal = label === 'complete' || label === 'failed' || label === 'status lost'
 
   const invalidatedRef = useRef<string | undefined>(undefined)
@@ -90,13 +93,13 @@ function RestoreRow({ entry, result, onView }: RestoreRowProps) {
 
   return (
     <div className="admin-backups__row">
-      <span className={`admin-backups__dot admin-backups__dot--${label === 'failed' || label === 'status lost' ? 'err' : 'running'}`} />
+      <span className={`admin-backups__dot admin-backups__dot--${label === 'running' ? 'running' : label === 'complete' ? 'ok' : 'err'}`} />
       <span className="admin-backups__label">restore · {label}</span>
       <span className="admin-backups__actions">
         <button type="button" className="admin-backups__action" onClick={onView}>
           view
         </button>
-        {terminal && (
+        {(terminal || statusError) && (
           <button type="button" className="admin-backups__dismiss" title="dismiss" onClick={() => clearRestoreEntry()}>
             ×
           </button>
@@ -320,10 +323,18 @@ function UploadAction({ apiClient }: { apiClient: ApiClient | undefined }) {
 export function BackupsCard({ apiClient }: { apiClient: ApiClient | undefined }) {
   const session = useSession()
   const serverVersion = session.status === 'connected' ? session.serverVersion : 'unknown'
-  const entry = useRestoreEntry()
+  const connectionId = session.status === 'connected' ? session.connection.id : undefined
+  const storedEntry = useRestoreEntry()
+  // Einträge fremder Verbindungen ignorieren (nicht löschen — bei Rückkehr zur Ursprungsverbindung wieder gültig).
+  const entry = storedEntry !== undefined && storedEntry.connectionId === connectionId ? storedEntry : undefined
   const restoreStatus = useQuery(restoreStatusQueryOptions(apiClient, entry?.restore_id))
   const restoreResult = entry === undefined ? undefined : restoreStatus.data
-  const restoreRunning = entry !== undefined && (restoreResult === undefined || (restoreResult.kind === 'status' && restoreResult.status.state === 'running'))
+  // Fehlerzustand des Status-Querys (5xx/Netz/503) gilt NICHT als laufend — sonst sperrt ein toter Status die Karte dauerhaft.
+  const restoreStatusError = entry !== undefined && restoreResult === undefined && restoreStatus.isError
+  const restoreRunning =
+    entry !== undefined &&
+    !restoreStatusError &&
+    (restoreResult === undefined || (restoreResult.kind === 'status' && restoreResult.status.state === 'running'))
   const listQuery = useQuery(backupsQueryOptions(apiClient, restoreRunning))
   const [runOpen, setRunOpen] = useState(false)
   const [restoreTarget, setRestoreTarget] = useState<string | undefined>(undefined)
@@ -344,11 +355,19 @@ export function BackupsCard({ apiClient }: { apiClient: ApiClient | undefined })
     <div className="admin-card admin-backups">
       <div className="admin-card__head">BACKUPS</div>
       {notice !== undefined ? (
-        <div className="admin-backups__notice">{notice}</div>
+        <>
+          <div className="admin-backups__notice">{notice}</div>
+          {/* Auch im Disabled-Zustand erreichbar lassen — sonst gäbe es keinen Weg, einen liegengebliebenen Restore-Eintrag zu dismissen. */}
+          {entry !== undefined && (
+            <RestoreRow entry={entry} result={restoreResult} statusError={restoreStatusError} onView={() => setRestoreTarget(entry.backup_id)} />
+          )}
+        </>
       ) : (
         <>
           {running !== null && <RunningBackupRow running={running} />}
-          {entry !== undefined && <RestoreRow entry={entry} result={restoreResult} onView={() => setRestoreTarget(entry.backup_id)} />}
+          {entry !== undefined && (
+            <RestoreRow entry={entry} result={restoreResult} statusError={restoreStatusError} onView={() => setRestoreTarget(entry.backup_id)} />
+          )}
           {list?.kind === 'ok' && backups.length === 0 && <div className="admin-backups__empty">no backups yet</div>}
           {backups.map((backup) => (
             <BackupRow key={backup.id} apiClient={apiClient} backup={backup} jobBusy={jobBusy} onRestore={() => setRestoreTarget(backup.id)} />

@@ -41,6 +41,14 @@ describe('apiErrorFromResponse', () => {
     const err = await apiErrorFromResponse(response)
     expect(err.message).toBe('Bad Request')
   })
+
+  it('caps a foreign plaintext body to its first line and 300 chars', async () => {
+    const html = `<html>${'x'.repeat(400)}\n<body>more</body></html>`
+    const err = await apiErrorFromResponse(new Response(html, { status: 502, statusText: 'Bad Gateway' }))
+    expect(err.message.length).toBeLessThanOrEqual(300)
+    expect(err.message).not.toContain('\n')
+    expect(err.message.startsWith('<html>')).toBe(true)
+  })
 })
 
 describe('networkApiError', () => {

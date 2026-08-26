@@ -97,6 +97,7 @@ function flatten(path: string, value: unknown, lead: string, rows: ConfigRow[], 
       value.forEach((item, index) => flatten(`${path}[${index}]`, item, lead, rows, byPath))
       return
     }
+    const arrayMasked = isMasked(key, value)
     pushRow(rows, byPath, {
       path,
       section,
@@ -104,8 +105,8 @@ function flatten(path: string, value: unknown, lead: string, rows: ConfigRow[], 
       label,
       kind: 'array',
       value,
-      display: formatArray(value),
-      masked: isMasked(key, value),
+      display: arrayMasked ? MASKED_DISPLAY : formatArray(value),
+      masked: arrayMasked,
     })
     return
   }
