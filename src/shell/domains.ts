@@ -2,6 +2,7 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { ApiError, type ApiClient } from '../api'
 import type { components } from '../api/schema'
+import { pollSilentRecord } from './pollSilentRecord'
 
 type KvDomain = components['schemas']['DomainResponse']
 type JsonDomain = components['schemas']['JsonDomainResponse']
@@ -24,9 +25,9 @@ export const REL_DOMAINS_KEY = ['domains', 'rel'] as const
 export function kvDomainsQueryOptions(apiClient: ApiClient | undefined) {
   return queryOptions({
     queryKey: KV_DOMAINS_KEY,
-    queryFn: async (): Promise<KvDomain[]> => {
+    queryFn: async (context): Promise<KvDomain[]> => {
       if (!apiClient) throw new Error('domain list query requires an active connection')
-      const { data, response } = await apiClient.api.GET('/store-api/domains')
+      const { data, response } = await apiClient.api.GET('/store-api/domains', { silentRecord: pollSilentRecord(context) })
       if (response.status === 401) throw new ApiError(401, 'invalid api key')
       if (!response.ok || !data) throw new ApiError(response.status, 'engine unreachable')
       return data
@@ -39,9 +40,9 @@ export function kvDomainsQueryOptions(apiClient: ApiClient | undefined) {
 export function jsonDomainsQueryOptions(apiClient: ApiClient | undefined) {
   return queryOptions({
     queryKey: JSON_DOMAINS_KEY,
-    queryFn: async (): Promise<JsonDomain[]> => {
+    queryFn: async (context): Promise<JsonDomain[]> => {
       if (!apiClient) throw new Error('domain list query requires an active connection')
-      const { data, response } = await apiClient.api.GET('/store-api/json/domains')
+      const { data, response } = await apiClient.api.GET('/store-api/json/domains', { silentRecord: pollSilentRecord(context) })
       if (response.status === 401) throw new ApiError(401, 'invalid api key')
       if (!response.ok || !data) throw new ApiError(response.status, 'engine unreachable')
       return data
@@ -54,9 +55,9 @@ export function jsonDomainsQueryOptions(apiClient: ApiClient | undefined) {
 export function relDomainsQueryOptions(apiClient: ApiClient | undefined) {
   return queryOptions({
     queryKey: REL_DOMAINS_KEY,
-    queryFn: async (): Promise<RelDomain[]> => {
+    queryFn: async (context): Promise<RelDomain[]> => {
       if (!apiClient) throw new Error('domain list query requires an active connection')
-      const { data, response } = await apiClient.api.GET('/store-api/rel/domains')
+      const { data, response } = await apiClient.api.GET('/store-api/rel/domains', { silentRecord: pollSilentRecord(context) })
       if (response.status === 401) throw new ApiError(401, 'invalid api key')
       if (!response.ok || !data) throw new ApiError(response.status, 'engine unreachable')
       return data

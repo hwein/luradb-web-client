@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import { BASE_PATH, type ApiClient } from '../../api'
+import { pollSilentRecord } from '../../shell/pollSilentRecord'
 
 export interface SystemMetrics {
   totalReads: number
@@ -41,9 +42,9 @@ function parseMetrics(body: unknown): MetricsSnapshot {
 export function metricsQueryOptions(apiClient: ApiClient | undefined) {
   return queryOptions({
     queryKey: ['metrics'] as const,
-    queryFn: async (): Promise<MetricsSnapshot> => {
+    queryFn: async (context): Promise<MetricsSnapshot> => {
       if (!apiClient) throw new Error('metrics query requires an active connection')
-      const response = await apiClient.fetchRaw(`${BASE_PATH}/metrics`)
+      const response = await apiClient.fetchRaw(`${BASE_PATH}/metrics`, { silentRecord: pollSilentRecord(context) })
       return parseMetrics(await response.json())
     },
     enabled: apiClient !== undefined,

@@ -19,6 +19,10 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The About dialog no longer lists an unused third-party library.
 - RECENT REQUESTS no longer mixes calls from a previous connection after switching servers.
 
+### Changed
+
+- RECENT REQUESTS no longer floods with background polling — only the first load of a screen/card and calls the user actually triggered (navigation, mutations, manual refreshes) are recorded; interval ticks and focus-refetches of background queries stay silent.
+
 ### Added
 
 - Admin: BACKUPS card — list, run, download, upload, restore and delete backup archives (requires LuraDB ≥ 0.3.0 with `backup.enabled`).

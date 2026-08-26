@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import type { ApiClient } from '../../api'
+import { pollSilentRecord } from '../../shell/pollSilentRecord'
 
 export interface HealthSnapshot {
   uptimeSecs: number
@@ -37,9 +38,9 @@ function parseHealth(body: unknown): HealthSnapshot {
 export function healthQueryOptions(apiClient: ApiClient | undefined) {
   return queryOptions({
     queryKey: ['health'] as const,
-    queryFn: async (): Promise<HealthSnapshot> => {
+    queryFn: async (context): Promise<HealthSnapshot> => {
       if (!apiClient) throw new Error('health query requires an active connection')
-      const response = await apiClient.fetchRaw('/health')
+      const response = await apiClient.fetchRaw('/health', { silentRecord: pollSilentRecord(context) })
       return parseHealth(await response.json())
     },
     enabled: apiClient !== undefined,

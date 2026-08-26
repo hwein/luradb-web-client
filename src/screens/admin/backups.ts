@@ -1,7 +1,8 @@
-import { queryOptions } from '@tanstack/react-query'
+import { queryOptions, type QueryFunctionContext } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
 import { ApiError, apiErrorFromResponse, BASE_PATH, messageFromBody, type ApiClient } from '../../api'
 import type { components } from '../../api/schema'
+import { pollSilentRecord } from '../../shell/pollSilentRecord'
 
 export type BackupSummary = components['schemas']['BackupSummaryResponse']
 export type BackupDetail = components['schemas']['BackupDetailResponse']
@@ -33,11 +34,19 @@ function apiError(status: number, error: unknown, fallback: string): ApiError {
 }
 
 export function backupsQueryOptions(apiClient: ApiClient | undefined, restoreRunning: boolean) {
+  // Deckt sich mit der refetchInterval-Bedingung unten: still nur, wenn schon VOR diesem Fetch ein Job lief —
+  // Erst-Load und ein im Leerlauf durch Mutation/Fokus ausgelöster Refetch bleiben sichtbar
+  // (general/012 §3: "nur die Intervall-Ticks").
+  function wasPolling(context: Pick<QueryFunctionContext, 'client' | 'queryKey'>): boolean {
+    const data = context.client.getQueryState<BackupsResult>(context.queryKey)?.data
+    return (data?.kind === 'ok' && data.running !== null) || restoreRunning
+  }
+
   return queryOptions({
     queryKey: BACKUPS_KEY,
-    queryFn: async (): Promise<BackupsResult> => {
+    queryFn: async (context): Promise<BackupsResult> => {
       if (!apiClient) throw new Error('backup list query requires an active connection')
-      const { data, error, response } = await apiClient.api.GET('/store-api/backups')
+      const { data, error, response } = await apiClient.api.GET('/store-api/backups', { silentRecord: wasPolling(context) })
       if (response.status === 401) throw new ApiError(401, 'invalid api key')
       if (response.status === 503) return { kind: 'disabled' }
       if (response.status === 404) return { kind: 'unsupported' }
@@ -72,9 +81,12 @@ export function backupDetailQueryOptions(apiClient: ApiClient | undefined, id: s
 export function restoreStatusQueryOptions(apiClient: ApiClient | undefined, restoreId: string | undefined) {
   return queryOptions({
     queryKey: ['restores', restoreId ?? ''] as const,
-    queryFn: async (): Promise<RestoreStatusResult> => {
+    queryFn: async (context): Promise<RestoreStatusResult> => {
       if (!apiClient || restoreId === undefined) throw new Error('restore status query requires an active connection')
-      const { data, error, response } = await apiClient.api.GET('/store-api/restores/{id}', { params: { path: { id: restoreId } } })
+      const { data, error, response } = await apiClient.api.GET('/store-api/restores/{id}', {
+        params: { path: { id: restoreId } },
+        silentRecord: pollSilentRecord(context),
+      })
       if (response.status === 401) throw new ApiError(401, 'invalid api key')
       if (response.status === 404) return { kind: 'lost' }
       if (!response.ok || !data) throw apiError(response.status, error, 'restore status failed')

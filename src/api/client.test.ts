@@ -57,6 +57,77 @@ describe('createApi', () => {
     expect(calls[0]?.ms).toBeGreaterThanOrEqual(0)
   })
 
+  describe('silentRecord (general/012)', () => {
+    it('a typed call with silentRecord: true does not notify onCall listeners', async () => {
+      server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([])))
+
+      const { api, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+      await api.GET('/store-api/domains', { silentRecord: true })
+
+      expect(calls).toHaveLength(0)
+    })
+
+    it('a typed call without the marker still notifies (default stays recorded)', async () => {
+      server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([])))
+
+      const { api, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+      await api.GET('/store-api/domains')
+
+      expect(calls).toHaveLength(1)
+    })
+
+    it('a typed call with silentRecord: true stays silent even when it fails as a network error', async () => {
+      server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.error()))
+
+      const { api, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+      await expect(api.GET('/store-api/domains', { silentRecord: true })).rejects.toBeInstanceOf(ApiError)
+
+      expect(calls).toHaveLength(0)
+    })
+
+    it('fetchRaw with silentRecord: true does not notify, but still resolves normally', async () => {
+      server.use(http.get(`${BASE_URL}/store-api/kv/shop/keys/present`, () => new Response('raw-bytes')))
+
+      const { fetchRaw, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+      const response = await fetchRaw('/store-api/kv/shop/keys/present', { silentRecord: true })
+
+      expect(calls).toHaveLength(0)
+      await expect(response.text()).resolves.toBe('raw-bytes')
+    })
+
+    it('postNdjson with silentRecord: true does not notify', async () => {
+      server.use(http.post(`${BASE_URL}/store-api/json/shop/bulk`, () => HttpResponse.json({ imported: 1, failed: 0, errors: [] })))
+
+      const { postNdjson, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+      await postNdjson('/store-api/json/shop/bulk', '{"_key":"a"}\n', { silentRecord: true })
+
+      expect(calls).toHaveLength(0)
+    })
+
+    it('openStream with silentRecord: true does not notify', async () => {
+      server.use(
+        http.get(`${BASE_URL}/store-api/kv/shop/watch`, () => new HttpResponse('event: set\ndata: k\n\n', { headers: { 'Content-Type': 'text/event-stream' } })),
+      )
+
+      const { openStream, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+      await openStream('/store-api/kv/shop/watch', { silentRecord: true })
+
+      expect(calls).toHaveLength(0)
+    })
+  })
+
   it('does not leak query strings into the recorded path', async () => {
     server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([])))
 

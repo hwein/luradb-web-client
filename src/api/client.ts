@@ -2,6 +2,15 @@ import createClient, { type Client, type Middleware } from 'openapi-fetch'
 import type { paths } from './schema'
 import { apiErrorFromResponse, networkApiError } from './errors'
 
+// FetchOptions (openapi-fetch) erweitert RequestInit — die Augmentation macht `silentRecord` überall typisiert,
+// von `api.GET(path, { silentRecord: true })` bis zu den init-Parametern von fetchRaw (general/012).
+declare global {
+  interface RequestInit {
+    /** Opt-out je Call: unterdrückt den onCall-Recorder-Eintrag (general/012). Default: aufgezeichnet. */
+    silentRecord?: boolean
+  }
+}
+
 export interface CallInfo {
   method: string
   path: string
@@ -24,23 +33,23 @@ export interface ApiClient {
   /** Typisierter openapi-fetch-Client, z. B. `api.GET('/store-api/domains')`. */
   api: Client<paths>
   onCall: (listener: OnCallListener) => () => void
-  /** Für Nicht-JSON-Endpunkte (z. B. KV-Values); wirft ApiError bei Nicht-2xx. Pfad inkl. BASE_PATH. */
+  /** Für Nicht-JSON-Endpunkte (z. B. KV-Values); wirft ApiError bei Nicht-2xx. Pfad inkl. BASE_PATH. `init.silentRecord` unterdrückt den Recorder-Eintrag. */
   fetchRaw: (path: string, init?: RequestInit) => Promise<Response>
   /** GET mit Accept: application/x-ndjson, z. B. `/store-api/json/{domain}/export`. */
-  fetchNdjson: (path: string) => Promise<Response>
+  fetchNdjson: (path: string, options?: { silentRecord?: boolean }) => Promise<Response>
   /**
    * POST mit `Content-Type: text/plain` — Gegenrichtung zu `fetchNdjson` (Bulk-Import). Liefert die Response
    * immer zurück, auch bei Nicht-2xx (wie `openStream`): der Bulk-Endpunkt trägt Teilerfolge im 200-Body,
    * 404/503 kommen als Klartext-Body (live geprüft) — der Aufrufer entscheidet über die Interpretation.
    */
-  postNdjson: (path: string, body: string) => Promise<Response>
+  postNdjson: (path: string, body: string, options?: { silentRecord?: boolean }) => Promise<Response>
   /**
    * Öffnet einen SSE-Stream (`Accept: text/event-stream`) und liefert die Response mit intaktem
    * Body-Stream zurück — auch bei Nicht-2xx (der Aufrufer entscheidet über 401/410). Der Recorder
    * sieht den Stream-Start als Call mit Status 'stream' (general/006). Abbruch läuft über das
    * Canceln des Body-Readers, nicht über ein fetch-Signal.
    */
-  openStream: (path: string) => Promise<Response>
+  openStream: (path: string, options?: { silentRecord?: boolean }) => Promise<Response>
   /**
    * Wie `fetchRaw`, aber ohne `notify()` — der einzige Weg an `apiClient.onCall(record)` vorbei
    * (jeder andere Pfad, typisiert oder roh, meldet sich beim Recorder). Für Fanout-Läufe, die
@@ -74,6 +83,12 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
     return start === undefined ? 0 : performance.now() - start
   }
 
+  // openapi-fetch kopiert unbekannte init-Felder auf das Request-Objekt (dasselbe Objekt in allen drei Hooks) —
+  // `silentRecord` landet so als Custom-Property auf `request`, kein eigenes RequestInit-Feld der Fetch-API.
+  function isSilentRequest(request: Request): boolean {
+    return (request as Request & { silentRecord?: boolean }).silentRecord === true
+  }
+
   const authMiddleware: Middleware = {
     onRequest({ request, id }) {
       startedAt.set(id, performance.now())
@@ -81,22 +96,27 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
       if (authHeader !== undefined) request.headers.set('Authorization', authHeader)
     },
     onResponse({ request, response, id }) {
+      const ms = elapsedSince(id)
+      if (isSilentRequest(request)) return
       notify({
         method: request.method,
         path: pathnameOf(request.url),
         status: response.status,
-        ms: elapsedSince(id),
+        ms,
         ok: response.ok,
       })
     },
     onError({ request, id, error }) {
-      notify({
-        method: request.method,
-        path: pathnameOf(request.url),
-        status: 0,
-        ms: elapsedSince(id),
-        ok: false,
-      })
+      const ms = elapsedSince(id)
+      if (!isSilentRequest(request)) {
+        notify({
+          method: request.method,
+          path: pathnameOf(request.url),
+          status: 0,
+          ms,
+          ok: false,
+        })
+      }
       return networkApiError(error)
     },
   }
@@ -105,6 +125,7 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
   api.use(authMiddleware)
 
   async function rawCall(path: string, init: RequestInit): Promise<Response> {
+    const silent = init.silentRecord === true
     const request = new Request(`${baseUrl}${path}`, init)
     const authHeader = getAuthHeader()
     if (authHeader !== undefined) request.headers.set('Authorization', authHeader)
@@ -114,17 +135,19 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
     try {
       response = await fetchImpl(request)
     } catch (error) {
-      notify({ method: request.method, path: pathnameOf(request.url), status: 0, ms: performance.now() - start, ok: false })
+      if (!silent) notify({ method: request.method, path: pathnameOf(request.url), status: 0, ms: performance.now() - start, ok: false })
       throw networkApiError(error)
     }
 
-    notify({
-      method: request.method,
-      path: pathnameOf(request.url),
-      status: response.status,
-      ms: performance.now() - start,
-      ok: response.ok,
-    })
+    if (!silent) {
+      notify({
+        method: request.method,
+        path: pathnameOf(request.url),
+        status: response.status,
+        ms: performance.now() - start,
+        ok: response.ok,
+      })
+    }
     if (!response.ok) throw await apiErrorFromResponse(response)
     return response
   }
@@ -144,11 +167,12 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
     }
   }
 
-  function fetchNdjson(path: string): Promise<Response> {
-    return rawCall(path, { headers: { Accept: 'application/x-ndjson' } })
+  function fetchNdjson(path: string, options?: { silentRecord?: boolean }): Promise<Response> {
+    return rawCall(path, { headers: { Accept: 'application/x-ndjson' }, silentRecord: options?.silentRecord })
   }
 
-  async function postNdjson(path: string, body: string): Promise<Response> {
+  async function postNdjson(path: string, body: string, options?: { silentRecord?: boolean }): Promise<Response> {
+    const silent = options?.silentRecord === true
     const request = new Request(`${baseUrl}${path}`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body })
     const authHeader = getAuthHeader()
     if (authHeader !== undefined) request.headers.set('Authorization', authHeader)
@@ -158,21 +182,24 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
     try {
       response = await fetchImpl(request)
     } catch (error) {
-      notify({ method: request.method, path: pathnameOf(request.url), status: 0, ms: performance.now() - start, ok: false })
+      if (!silent) notify({ method: request.method, path: pathnameOf(request.url), status: 0, ms: performance.now() - start, ok: false })
       throw networkApiError(error)
     }
 
-    notify({
-      method: request.method,
-      path: pathnameOf(request.url),
-      status: response.status,
-      ms: performance.now() - start,
-      ok: response.ok,
-    })
+    if (!silent) {
+      notify({
+        method: request.method,
+        path: pathnameOf(request.url),
+        status: response.status,
+        ms: performance.now() - start,
+        ok: response.ok,
+      })
+    }
     return response
   }
 
-  async function openStream(path: string): Promise<Response> {
+  async function openStream(path: string, options?: { silentRecord?: boolean }): Promise<Response> {
+    const silent = options?.silentRecord === true
     const request = new Request(`${baseUrl}${path}`)
     request.headers.set('Accept', 'text/event-stream')
     const authHeader = getAuthHeader()
@@ -183,17 +210,19 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
     try {
       response = await fetchImpl(request)
     } catch (error) {
-      notify({ method: request.method, path: pathnameOf(request.url), status: 0, ms: performance.now() - start, ok: false })
+      if (!silent) notify({ method: request.method, path: pathnameOf(request.url), status: 0, ms: performance.now() - start, ok: false })
       throw networkApiError(error)
     }
 
-    notify({
-      method: request.method,
-      path: pathnameOf(request.url),
-      status: response.ok ? 'stream' : response.status,
-      ms: performance.now() - start,
-      ok: response.ok,
-    })
+    if (!silent) {
+      notify({
+        method: request.method,
+        path: pathnameOf(request.url),
+        status: response.ok ? 'stream' : response.status,
+        ms: performance.now() - start,
+        ok: response.ok,
+      })
+    }
     return response
   }
 
