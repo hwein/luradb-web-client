@@ -3,6 +3,7 @@ import { useSession } from '../../app/session'
 import { AuthCard } from './AuthCard'
 import { BackupsCard } from './BackupsCard'
 import { DomainsCard } from './DomainsCard'
+import { ServerLogCard } from './ServerLogCard'
 import { UsersCard } from './UsersCard'
 
 /** Designte Admin-Startseite (spec admin/001 §2–§4, admin/002 §1). */
@@ -28,9 +29,9 @@ export function IndexSection() {
         </div>
         <div className="admin-index__column admin-index__column--right">
           <UsersCard apiClient={apiClient} />
-          {/* Rechte Zelle bleibt bis admin/004 (SERVER LOG) leer. */}
           <div className="admin-index__lower">
             <BackupsCard apiClient={apiClient} />
+            <ServerLogCard apiClient={apiClient} />
           </div>
         </div>
       </div>

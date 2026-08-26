@@ -77,9 +77,9 @@ export function jsonIndexesQueryOptions(apiClient: ApiClient | undefined, domain
 }
 
 /**
- * Stiller Key-Scan für die Aktivitäts-Ableitung (spec shell/004 §1) — kein `withCall`, da Explorer-Detail-Queries
- * nicht durch den Recorder laufen; der KV-Browser (data/002) nutzt für seine Anzeige einen eigenen recorded Scan
- * (kvEntries.ts). Kein `limit`/`count` im Contract (Backlog server-repo) — voller Scan ist die Zwischenlösung.
+ * Key-Scan für die Aktivitäts-Ableitung (spec shell/004 §1) — läuft über den typisierten Client und wird
+ * aufgezeichnet; der KV-Browser (data/002) nutzt für seine Anzeige einen eigenen recorded Scan (kvEntries.ts).
+ * Kein `limit`/`count` im Contract (Backlog server-repo) — voller Scan ist die Zwischenlösung.
  */
 export function kvKeysProbeQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({

@@ -28,6 +28,10 @@ function baseHandlers(adminOk: boolean) {
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/backups`, () => HttpResponse.json({ backups: [], running: null })),
+    http.get(`${ORIGIN}/store-api/logs`, () => HttpResponse.text('503 Service Unavailable: log access is disabled (log.http_access = false)', { status: 503 })),
+    http.get(`${ORIGIN}/store-api/logs/files`, () =>
+      HttpResponse.text('503 Service Unavailable: log access is disabled (log.http_access = false)', { status: 503 }),
+    ),
   ]
 }
 

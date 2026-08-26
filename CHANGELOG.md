@@ -8,6 +8,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Admin: BACKUPS card — list, run, download, upload, restore and delete backup archives (requires LuraDB ≥ 0.3.0 with `backup.enabled`).
+- Admin: SERVER LOG card — tail the server log with line count, substring filter and rotated-file selection (requires LuraDB ≥ 0.3.0 with `log.http_access`).
 
 ## [0.1.0] - 2026-08-12
 
