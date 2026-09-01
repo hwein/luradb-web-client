@@ -7,7 +7,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Removed
 
-- Configuration: editing values and downloading a patched `luradb.toml` — the screen is a read-only viewer; edit the file on the server and restart.
+- Configuration: the screen is gone — LuraDB is configured in `luradb.toml` on the server.
 
 ### Security
 

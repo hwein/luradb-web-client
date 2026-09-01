@@ -66,21 +66,6 @@ export const ROUTES: RailRoute[] = [
     ),
   },
   {
-    path: '/config',
-    title: 'Configuration',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <circle cx="8" cy="8" r="2.4" stroke="currentColor" strokeWidth="1.6" />
-        <path
-          d="M8 1.8v2.2M8 12v2.2M1.8 8H4M12 8h2.2M3.6 3.6l1.6 1.6M10.8 10.8l1.6 1.6M12.4 3.6l-1.6 1.6M5.2 10.8l-1.6 1.6"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      </svg>
-    ),
-  },
-  {
     path: '/docs',
     title: 'Docs',
     icon: (

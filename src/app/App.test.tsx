@@ -37,7 +37,7 @@ describe('App', () => {
     expect(screen.getByLabelText('Name')).toBeInTheDocument()
   })
 
-  it('purges the legacy plaintext-toml localStorage entry on app start, before any /config visit', () => {
+  it('purges the legacy plaintext-toml localStorage entry on app start', () => {
     localStorage.setItem('luradb.toml', '[auth]\napi_key = "lura_secret"\n')
 
     render(<App />)

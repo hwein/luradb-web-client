@@ -25,7 +25,7 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'request failed'
 }
 
-/** Blob+Anchor-Download-Muster wie SqlScreen.tsx/ConfigScreen.tsx — lokal, kein Shared-Util (spec data/005). */
+/** Blob+Anchor-Download-Muster wie SqlScreen.tsx — lokal, kein Shared-Util (spec data/005). */
 function downloadNdjson(domain: string, text: string): void {
   const blob = new Blob([text], { type: 'application/x-ndjson' })
   const url = URL.createObjectURL(blob)

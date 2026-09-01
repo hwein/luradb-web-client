@@ -6,8 +6,8 @@ import { ConnectionGate } from './ConnectionGate'
 import { createAppQueryClient } from './queryClient'
 import { useSession } from './session'
 
-// Alt-Key der entfernten Config-Edit-Persistenz (spec config/003 §5) — enthielt den TOML-Klartext samt api_key.
-// Purge beim App-Start, nicht erst auf /config: der Bestand muss auch ohne Config-Besuch verschwinden.
+// Alt-Key der entfernten Configuration-Seite (spec config/003 §5, Seite selbst entfernt in config/005) —
+// enthielt den TOML-Klartext samt api_key. Purge beim App-Start, unabhängig vom Screen-Rückbau.
 const LEGACY_TOML_STORAGE_KEY = 'luradb.toml'
 
 // Kein Autoconnect (Autor-Vorgabe 2026-07-17): App-Neustart heißt neue Sitzung — Start immer im Gate,

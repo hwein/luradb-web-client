@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router'
 import { AdminScreen } from '../screens/admin'
-import { ConfigScreen } from '../screens/config'
 import { DataScreen } from '../screens/data'
 import { DocsScreen } from '../screens/docs'
 import { EnginesScreen } from '../screens/engines'
@@ -67,7 +66,6 @@ export function AppShell() {
               <Route path="/rest" element={<RestScreen />} />
               <Route path="/engines" element={<EnginesScreen />} />
               <Route path="/admin/*" element={<AdminScreen />} />
-              <Route path="/config" element={<ConfigScreen />} />
               <Route path="/docs" element={<DocsScreen />} />
             </Routes>
           </div>

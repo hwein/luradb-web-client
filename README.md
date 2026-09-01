@@ -16,7 +16,7 @@ reverse proxy.
 ## Workbench
 
 A single-page client in the shape of a development environment: an icon rail on
-the left, a persistent domain explorer, a status bar at the bottom — and seven
+the left, a persistent domain explorer, a status bar at the bottom — and six
 work areas between them.
 
 | Area | Purpose |
@@ -26,7 +26,6 @@ work areas between them.
 | **REST Explorer** | Request builder over the OpenAPI contract; every response in raw form |
 | **Engines & Jobs** | Status and metric cards, running tasks, recent requests |
 | **Admin** | Domains, users and domain permissions, key rotation |
-| **Configuration** | View `luradb.toml` (read-only; edit on the server & restart) |
 | **Docs** | Built-in documentation, contextually linked (F1, "why?" on errors) |
 
 ## Guiding principles
