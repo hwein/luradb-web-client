@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { ApiClient } from '../../api'
 import type { components } from '../../api/schema'
@@ -82,10 +82,10 @@ function RelRowForm({ domain, apiClient, columns, form, isInsert, onFieldText, o
     ...jsonDocumentsQueryOptions(apiClient, domain, undefined),
     enabled: hasJsonref && apiClient !== undefined,
   })
-  const kvrefQuery = useQuery({ ...kvKeysQueryOptions(apiClient, domain, ''), enabled: hasKvref && apiClient !== undefined })
+  const kvrefQuery = useInfiniteQuery({ ...kvKeysQueryOptions(apiClient, domain, '', ''), enabled: hasKvref && apiClient !== undefined })
 
   const jsonrefOptions = (jsonrefQuery.data?.pages ?? []).flatMap((page) => page.documents.map((doc) => doc.key))
-  const kvrefOptions = kvrefQuery.data?.keys ?? []
+  const kvrefOptions = (kvrefQuery.data?.pages ?? []).flatMap((page) => page.keys)
 
   return (
     <div className="rel-detail__fields">

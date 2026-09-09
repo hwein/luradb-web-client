@@ -587,8 +587,9 @@
   gap: 8px;
 }
 
-.kv__prefix-input {
-  width: 200px;
+.kv__prefix-input,
+.kv__contains-input {
+  width: 150px;
   background: var(--edbg);
   border: 1px solid var(--bord);
   border-radius: var(--rad);
@@ -677,6 +678,12 @@
   color: var(--mut);
 }
 
+.kv-bulk__filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .kv-bulk__contains-input {
   width: 200px;
   background: var(--edbg);
@@ -687,6 +694,24 @@
   font-size: 12px;
   padding: 6px 10px;
   outline: none;
+}
+
+.kv-bulk__apply {
+  background: none;
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+  padding: 5px 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.kv-bulk__apply:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .kv-bulk__count {
@@ -946,6 +971,11 @@
   font-family: var(--font-mono);
   font-size: 11px;
   cursor: pointer;
+}
+
+.kv-list__load-more:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .kv-detail {

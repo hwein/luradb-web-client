@@ -1,7 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import { ApiError, type ApiClient } from '../api'
 import type { components } from '../api/schema'
-import { KV_KEYS_SCAN_LIMIT } from '../screens/data/kvEntries'
 import { pollSilentRecord } from './pollSilentRecord'
 
 type TableSummary = components['schemas']['TableSummary']
@@ -91,22 +90,21 @@ export function jsonIndexesQueryOptions(apiClient: ApiClient | undefined, domain
 }
 
 /**
- * Key-Scan für die Aktivitäts-Ableitung (spec shell/004 §1) — läuft über den typisierten Client, Erst-Load
- * aufgezeichnet, Folge-Ticks still (general/012); der KV-Browser (data/002) nutzt für seine Anzeige einen
- * eigenen recorded Scan (kvEntries.ts). Die Länge trägt die Key-Zahl am Domänen-Eintrag, deshalb derselbe
- * `limit` wie dort — sonst kappte der Server-Default (1000) die Anzeige still.
+ * Zählabfrage für die Aktivitäts-Ableitung (spec shell/004 §1): `?limit=0` liefert `total` ohne einen einzigen Key
+ * (Contract 0.6.1, spec data/011 §9) — der 60s-Poll je KV-Domäne überträgt keine Key-Listen mehr. Erst-Load
+ * aufgezeichnet, Folge-Ticks still (general/012); der KV-Browser (data/002) nutzt einen eigenen recorded Scan (kvEntries.ts).
  */
 export function kvKeysProbeQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
     queryKey: ['kv-keys-probe', domain] as const,
-    queryFn: async (context): Promise<string[]> => {
+    queryFn: async (context): Promise<number> => {
       if (!apiClient) throw new Error('kv keys probe query requires an active connection')
       const { data, response } = await apiClient.api.GET('/store-api/kv/{domain}/keys', {
-        params: { path: { domain }, query: { limit: KV_KEYS_SCAN_LIMIT } },
+        params: { path: { domain }, query: { limit: 0 } },
         silentRecord: pollSilentRecord(context),
       })
       if (!response.ok || !data) throw new ApiError(response.status, 'failed to load keys')
-      return data.keys
+      return data.total
     },
     enabled: enabled && apiClient !== undefined,
   })

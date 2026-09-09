@@ -7,11 +7,6 @@ export type KvBulkAction = 'delete' | 'clear' | 'set-null'
 /** Feste Schranke, schont das Request-Budget je Domäne (spec §5) — kein UI zum Verstellen. */
 export const KV_BULK_CONCURRENCY = 8
 
-/** Zusatzfilter über dem committeten Scan-Ergebnis (spec §2): Substring, case-sensitiv wie Keys selbst. */
-export function filterByContains(keys: string[], contains: string): string[] {
-  return contains === '' ? keys : keys.filter((key) => key.includes(contains))
-}
-
 const METHOD_BY_ACTION: Record<KvBulkAction, string> = {
   delete: 'DELETE',
   clear: 'PUT',

@@ -1,5 +1,5 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import type { ApiClient } from '../../api'
 import { CallLine } from '../../lib'
 import { DataHeader } from './DataHeader'
@@ -7,7 +7,7 @@ import { KvBulkBar } from './KvBulkBar'
 import { KvDetail, type KvDetailMode } from './KvDetail'
 import { KvMasterList } from './KvMasterList'
 import { KvWatchFeed } from './KvWatchFeed'
-import { invalidateKvKeys, KV_KEYS_PAGE_SIZE, kvKeysQueryOptions } from './kvEntries'
+import { invalidateKvKeys, kvKeysQueryOptions } from './kvEntries'
 
 interface KvBrowserProps {
   domain: string
@@ -19,61 +19,53 @@ function formatNumber(value: number): string {
   return value.toLocaleString('en-US')
 }
 
-/** KV-Modus des Data Browsers (spec data/002): Kopf mit Prefix-Scan/Watch-Toggle, Master-Detail, optionales Feed-Panel, Footer-CallLine. */
+/** KV-Modus des Data Browsers (spec data/002): Kopf mit Prefix-/Contains-Scan und Watch-Toggle, Master-Detail, optionales Feed-Panel, Footer-CallLine. */
 export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
   const queryClient = useQueryClient()
   const [prefixText, setPrefixText] = useState('')
-  const [committedPrefix, setCommittedPrefix] = useState('')
+  const [containsText, setContainsText] = useState('')
+  const [committed, setCommitted] = useState({ prefix: '', contains: '' })
   const [watchOn, setWatchOn] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
-  const [visibleCount, setVisibleCount] = useState(KV_KEYS_PAGE_SIZE)
   // Ankunft mit ?key= (spec data/009 §5) als Initial-State: als nachgezogener Effekt verlor die Selektion
   // gegen den Auto-Select, sobald die Key-Liste bereits im Query-Cache lag (Nachtrag data/009).
   const [mode, setMode] = useState<KvDetailMode>(() => (initialKey === undefined ? { kind: 'empty' } : { kind: 'view', key: initialKey }))
 
-  const keysQuery = useQuery(kvKeysQueryOptions(apiClient, domain, committedPrefix))
-  const keys = keysQuery.data?.keys ?? []
-  const visibleKeys = keys.slice(0, visibleCount)
+  // Stabil, weil KvDetail ihn als Effekt-Abhängigkeit führt (404-Räumung).
+  const clearMode = useCallback(() => setMode({ kind: 'empty' }), [])
 
-  // Neuer Domänen-/Prefixkontext ⇒ Auswahl verwerfen und Anzeige-Stufe zurücksetzen, dann greift Auto-Select.
+  const keysQuery = useInfiniteQuery(kvKeysQueryOptions(apiClient, domain, committed.prefix, committed.contains))
+  const pages = keysQuery.data?.pages ?? []
+  const keys = pages.flatMap((page) => page.keys)
+  const lastPage = pages[pages.length - 1]
+
+  // Neuer Domänen-/Filterkontext ⇒ Auswahl verwerfen, dann greift Auto-Select.
   // Beim Mount übersprungen, sonst räumte er die Ankunfts-Selektion.
-  const contextRef = useRef({ domain, committedPrefix })
+  const contextRef = useRef({ domain, committed })
   useEffect(() => {
-    if (contextRef.current.domain === domain && contextRef.current.committedPrefix === committedPrefix) return
-    contextRef.current = { domain, committedPrefix }
+    if (contextRef.current.domain === domain && contextRef.current.committed === committed) return
+    contextRef.current = { domain, committed }
     setMode({ kind: 'empty' })
-    setVisibleCount(KV_KEYS_PAGE_SIZE)
-  }, [domain, committedPrefix])
+  }, [domain, committed])
 
+  // Nicht während eines Refetches: nach einem Value-404 räumt KvDetail die Auswahl und invalidiert die Liste —
+  // die noch alte Liste würde denselben Key sofort wieder wählen (Schleife bis zur frischen Seite).
   useEffect(() => {
-    const first = visibleKeys[0]
-    if (mode.kind === 'empty' && first !== undefined) setMode({ kind: 'view', key: first })
-  }, [mode, visibleKeys])
-
-  // Selektion außerhalb der Anzeige-Stufe (?key=-Ankunft tief in der Liste) ⇒ Stufe bis zur Key-Position erweitern,
-  // damit die Master-Liste die Auswahl zeigt (Nachtrag data/009); die Liste scrollt selbst zur Selektion.
-  useEffect(() => {
-    if (mode.kind !== 'view' || keysQuery.data === undefined) return
-    const index = keysQuery.data.keys.indexOf(mode.key)
-    if (index >= visibleCount) setVisibleCount(Math.ceil((index + 1) / KV_KEYS_PAGE_SIZE) * KV_KEYS_PAGE_SIZE)
-  }, [mode, keysQuery.data, visibleCount])
-
-  // Frische Liste ohne den selektierten Key (delete extern / TTL-Ablauf) ⇒ Auswahl räumen — gelöscht ist gelöscht (Autor-Entscheid 2026-07-18).
-  // isFetching-Guard: während eines Refetches (z. B. direkt nach create-Invalidierung) ist data noch der alte Stand — nicht darauf räumen.
-  useEffect(() => {
-    if (mode.kind === 'view' && !keysQuery.isFetching && keysQuery.data !== undefined && !keysQuery.data.keys.includes(mode.key))
-      setMode({ kind: 'empty' })
-  }, [mode, keysQuery.data, keysQuery.isFetching])
+    const first = keys[0]
+    if (mode.kind === 'empty' && first !== undefined && !keysQuery.isFetching) setMode({ kind: 'view', key: first })
+  }, [mode, keys, keysQuery.isFetching])
 
   function submitScan(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault()
-    const next = prefixText.trim()
-    // Unveränderter Prefix wäre ein State-No-Op ohne Request — Scan soll aber immer den frischen Stand holen (z. B. nach TTL-Ablauf).
-    if (next === committedPrefix) {
+    const next = { prefix: prefixText.trim(), contains: containsText.trim() }
+    // Unveränderte Filter wären ein State-No-Op ohne Request — Scan soll aber immer den frischen Stand holen (z. B. nach TTL-Ablauf).
+    // Das offene Detail zieht mit: erst dessen 404 räumt die Auswahl, die Liste beweist mit Paginierung nichts mehr (spec data/011 §6).
+    if (next.prefix === committed.prefix && next.contains === committed.contains) {
       invalidateKvKeys(queryClient, domain)
+      void queryClient.invalidateQueries({ queryKey: ['kv-value', domain] })
       return
     }
-    setCommittedPrefix(next)
+    setCommitted(next)
   }
 
   return (
@@ -86,6 +78,15 @@ export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
             onChange={(event) => setPrefixText(event.target.value)}
             placeholder="prefix…"
             aria-label="key prefix"
+            spellCheck={false}
+          />
+          <input
+            className="kv__contains-input"
+            value={containsText}
+            onChange={(event) => setContainsText(event.target.value)}
+            placeholder="contains…"
+            aria-label="key contains"
+            title="case-sensitive substring"
             spellCheck={false}
           />
           <button type="submit" className="kv__scan-button">
@@ -109,31 +110,39 @@ export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
           ● live
         </button>
       </DataHeader>
-      {bulkOpen && <KvBulkBar domain={domain} apiClient={apiClient} keys={keys} prefix={committedPrefix} />}
+      {bulkOpen && (
+        <KvBulkBar
+          key={JSON.stringify([committed.prefix, committed.contains])}
+          domain={domain}
+          apiClient={apiClient}
+          prefix={committed.prefix}
+          initialContains={committed.contains}
+        />
+      )}
       <div className={`data__body${watchOn ? ' data__body--watch' : ''}`}>
         <KvMasterList
-          keys={visibleKeys}
+          keys={keys}
           selectedKey={mode.kind === 'view' ? mode.key : undefined}
           onSelect={(key) => setMode({ kind: 'view', key })}
           onNew={() => setMode({ kind: 'new' })}
           loading={keysQuery.isLoading}
-          hasMore={visibleKeys.length < keys.length}
-          onLoadMore={() => setVisibleCount((count) => count + KV_KEYS_PAGE_SIZE)}
+          hasMore={keysQuery.hasNextPage}
+          loadingMore={keysQuery.isFetchingNextPage}
+          onLoadMore={() => void keysQuery.fetchNextPage()}
         />
         <KvDetail
           domain={domain}
           apiClient={apiClient}
           mode={mode}
           onCreated={(key) => setMode({ kind: 'view', key })}
-          onClear={() => setMode({ kind: 'empty' })}
+          onClear={clearMode}
         />
-        {watchOn && <KvWatchFeed domain={domain} prefix={committedPrefix} />}
+        {watchOn && <KvWatchFeed domain={domain} prefix={committed.prefix} />}
       </div>
       <div className="data__footer mono-path">
-        {keysQuery.data !== undefined ? (
+        {lastPage !== undefined ? (
           <>
-            {formatNumber(keys.length)} keys ·{' '}
-            <CallLine method={keysQuery.data.call.method} path={keysQuery.data.call.path} note={`limit ${KV_KEYS_PAGE_SIZE}`} />
+            {formatNumber(keys.length)} of {formatNumber(lastPage.total)} keys · <CallLine method={lastPage.call.method} path={lastPage.call.path} />
           </>
         ) : keysQuery.isLoading ? (
           'loading…'

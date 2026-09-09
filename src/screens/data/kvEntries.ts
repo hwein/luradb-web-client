@@ -1,53 +1,102 @@
-import { queryOptions, type QueryClient } from '@tanstack/react-query'
+import { infiniteQueryOptions, queryOptions, type QueryClient } from '@tanstack/react-query'
 import { ApiError, BASE_PATH, withCall, type ApiClient, type CallMeta } from '../../api'
 import type { components } from '../../api/schema'
 
-/** "load more" ist eine rein client-seitige Anzeige-Stufe über dem Scan-Ergebnis, kein Nachladen vom Server
- *  (server-seitiges Paging über den Envelope ist data/011). */
+/** Echtes Request-`limit` der Browser-Seiten — der Server blättert über `offset`/`limit` (Contract 0.6.1, spec data/011). */
 export const KV_KEYS_PAGE_SIZE = 100
 
-/** Server-Default wäre 1000; das Maximum hält den Scan so vollständig wie vor dem Envelope (general/013 §4). */
-export const KV_KEYS_SCAN_LIMIT = 10000
+/** Server-Maximum (live bestätigt) — eine Seite für die Bulk-Leiste; `total` verrät, ob der Bestand darüber liegt. */
+export const KV_BULK_SCAN_LIMIT = 10_000
 
 export function kvKeyPath(domain: string, key: string): string {
   return `${BASE_PATH}/kv/${encodeURIComponent(domain)}/keys/${encodeURIComponent(key)}`
 }
 
-function withScanQuery(path: string, prefix: string): string {
-  const search = new URLSearchParams(prefix === '' ? { limit: String(KV_KEYS_SCAN_LIMIT) } : { prefix, limit: String(KV_KEYS_SCAN_LIMIT) })
+export interface KvKeysQuery {
+  prefix: string
+  contains: string
+  limit: number
+  offset: number
+}
+
+/** Anzeige-Query am `CallMeta`-Pfad (Muster `withQuery` in jsonDocuments.ts) — leere Filter ausgelassen, wie im echten Request. */
+function withKeysQuery(path: string, query: KvKeysQuery): string {
+  const search = new URLSearchParams()
+  if (query.prefix !== '') search.set('prefix', query.prefix)
+  if (query.contains !== '') search.set('contains', query.contains)
+  search.set('limit', String(query.limit))
+  search.set('offset', String(query.offset))
   return `${path}?${search.toString()}`
 }
 
-export interface KvKeysResult {
+export interface KvKeysPage {
   keys: string[]
+  total: number
+  offset: number
+  limit: number
   call: CallMeta
 }
 
-export function kvKeysQueryOptions(apiClient: ApiClient | undefined, domain: string, prefix: string) {
-  return queryOptions({
-    queryKey: ['kv-keys', domain, prefix] as const,
-    queryFn: async (): Promise<KvKeysResult> => {
+/**
+ * Eine Seite des Key-Scans. `total`/`offset`/`limit` kommen aus dem Envelope, nie aus der Anfrage — nur so wird die
+ * stille Kappung (`limit` > 10 000 ⇒ effektiv 10 000) sichtbar. Offset-Paging ohne Cursor: ein paralleler Write kann
+ * das Fenster verschieben (Dublette/Lücke zwischen zwei Seiten) — nicht kompensiert, die Liste muss Dubletten überstehen.
+ */
+export async function fetchKvKeysPage(apiClient: ApiClient, domain: string, query: KvKeysQuery): Promise<KvKeysPage> {
+  const { data, call } = await withCall<components['schemas']['KeyScanResponse']>('GET', async () => {
+    const result = await apiClient.api.GET('/store-api/kv/{domain}/keys', {
+      params: {
+        path: { domain },
+        query: {
+          ...(query.prefix !== '' ? { prefix: query.prefix } : {}),
+          ...(query.contains !== '' ? { contains: query.contains } : {}),
+          limit: query.limit,
+          offset: query.offset,
+        },
+      },
+    })
+    return { data: result.data, response: result.response }
+  })
+  if (data === undefined) throw new ApiError(0, 'failed to load keys')
+  return { keys: data.keys, total: data.total, offset: data.offset, limit: data.limit, call: { ...call, path: withKeysQuery(call.path, query) } }
+}
+
+/** Master-Liste: Seiten hängen sich an; `keys.length > 0` im Guard ist zwingend — eine leere Seite bei `offset < total`
+ *  (parallel gelöschte Keys) ergäbe sonst denselben `pageParam` erneut, also eine Endlosschleife. */
+export function kvKeysQueryOptions(apiClient: ApiClient | undefined, domain: string, prefix: string, contains: string) {
+  return infiniteQueryOptions({
+    queryKey: ['kv-keys', domain, prefix, contains] as const,
+    queryFn: async ({ pageParam }): Promise<KvKeysPage> => {
       if (!apiClient) throw new Error('kv keys query requires an active connection')
-      const { data, call } = await withCall<components['schemas']['KeyScanResponse']>('GET', async () => {
-        const result = await apiClient.api.GET('/store-api/kv/{domain}/keys', {
-          params: {
-            path: { domain },
-            query: prefix === '' ? { limit: KV_KEYS_SCAN_LIMIT } : { prefix, limit: KV_KEYS_SCAN_LIMIT },
-          },
-        })
-        return { data: result.data, response: result.response }
-      })
-      if (data === undefined) throw new ApiError(0, 'failed to load keys')
-      return { keys: data.keys, call: { ...call, path: withScanQuery(call.path, prefix) } }
+      return fetchKvKeysPage(apiClient, domain, { prefix, contains, limit: KV_KEYS_PAGE_SIZE, offset: pageParam })
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      const loaded = lastPage.offset + lastPage.keys.length
+      return lastPage.keys.length > 0 && loaded < lastPage.total ? loaded : undefined
     },
     enabled: apiClient !== undefined,
   })
 }
 
-/** Gemeinsamer Helfer für alle KV-Mutationsstellen — hält die Key-Liste und die stille Aktivitäts-Probe
- *  (`kvKeysProbeQueryOptions` in domainDetails.ts) synchron, damit Dots/Tags/Sektionen live nachziehen (spec shell/004 §1). */
+/** Selektionsgrundlage der Bulk-Leiste (spec data/008 §2: der volle Scan, nicht die Seiten der Master-Liste) — eine Seite am Server-Maximum. */
+export function kvBulkKeysQueryOptions(apiClient: ApiClient | undefined, domain: string, prefix: string, contains: string) {
+  return queryOptions({
+    queryKey: ['kv-keys-bulk', domain, prefix, contains] as const,
+    queryFn: async (): Promise<KvKeysPage> => {
+      if (!apiClient) throw new Error('kv bulk keys query requires an active connection')
+      return fetchKvKeysPage(apiClient, domain, { prefix, contains, limit: KV_BULK_SCAN_LIMIT, offset: 0 })
+    },
+    enabled: apiClient !== undefined,
+  })
+}
+
+/** Gemeinsamer Helfer für alle KV-Mutationsstellen — hält Master-Liste, Bulk-Scan und die stille Aktivitäts-Probe
+ *  (`kvKeysProbeQueryOptions` in domainDetails.ts) synchron, damit Dots/Tags/Sektionen live nachziehen (spec shell/004 §1).
+ *  `'kv-keys-bulk'` braucht die eigene Zeile: Array-Präfix-Matching von `['kv-keys', domain]` greift dort nicht. */
 export function invalidateKvKeys(queryClient: QueryClient, domain: string): void {
   void queryClient.invalidateQueries({ queryKey: ['kv-keys', domain] })
+  void queryClient.invalidateQueries({ queryKey: ['kv-keys-bulk', domain] })
   void queryClient.invalidateQueries({ queryKey: ['kv-keys-probe', domain] })
 }
 

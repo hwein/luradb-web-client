@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
 import { createApi } from '../../api/client'
 import { server } from '../../test/msw'
-import { filterByContains, kvBulkCallPattern, kvBulkConfirmText, runKvBulk, runKvBulkOp } from './kvBulk'
+import { kvBulkCallPattern, kvBulkConfirmText, runKvBulk, runKvBulkOp } from './kvBulk'
 
 const BASE_URL = 'http://127.0.0.1:3000'
 const DOMAIN = 'sessions'
@@ -10,16 +10,6 @@ const DOMAIN = 'sessions'
 function makeApi() {
   return createApi({ baseUrl: BASE_URL, fetchImpl: fetch, getAuthHeader: () => 'Bearer test-key' })
 }
-
-describe('filterByContains', () => {
-  it('returns all keys unchanged for an empty filter', () => {
-    expect(filterByContains(['a', 'b', 'c'], '')).toEqual(['a', 'b', 'c'])
-  })
-
-  it('keeps only keys containing the substring, case-sensitively (like the keys themselves)', () => {
-    expect(filterByContains(['session:1', 'Session:2', 'cart:1'], 'session')).toEqual(['session:1'])
-  })
-})
 
 describe('kvBulkCallPattern', () => {
   it('describes each action as method + templated path with a literal {key} placeholder', () => {

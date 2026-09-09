@@ -1,19 +1,10 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import type { ApiClient } from '../../api'
 import { openDocs } from '../docs/openDocs'
-import {
-  filterByContains,
-  kvBulkCallPattern,
-  kvBulkConfirmText,
-  runKvBulk,
-  runKvBulkOp,
-  KV_BULK_CONCURRENCY,
-  type KvBulkAction,
-  type KvBulkRunResult,
-} from './kvBulk'
-import { invalidateKvKeys } from './kvEntries'
+import { kvBulkCallPattern, kvBulkConfirmText, runKvBulk, runKvBulkOp, KV_BULK_CONCURRENCY, type KvBulkAction, type KvBulkRunResult } from './kvBulk'
+import { invalidateKvKeys, kvBulkKeysQueryOptions } from './kvEntries'
 
 const ACTIONS: KvBulkAction[] = ['delete', 'clear', 'set-null']
 
@@ -30,26 +21,36 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'request failed'
 }
 
+function formatNumber(value: number): string {
+  return value.toLocaleString('en-US')
+}
+
 interface KvBulkBarProps {
   domain: string
   apiClient: ApiClient | undefined
-  keys: string[]
   prefix: string
+  /** `contains` des committeten Kopf-Scans — Startwert des Leisten-Filters; der Server kennt nur einen `contains`-Parameter. */
+  initialContains: string
 }
 
 /**
- * Bulk-Leiste (spec data/008): Panel unter dem Header, Karten-Vokabular. Grundlage ist immer das
- * committete Scan-Ergebnis (`keys`-Prop aus `kvKeysQueryOptions`) — kein eigener Scan-Pfad.
+ * Bulk-Leiste (spec data/008): Panel unter dem Header, Karten-Vokabular. Grundlage ist der committete Kopf-Scan
+ * (Prefix + Contains), der Contains-Filter ist hier explizit neu committbar — serverseitig, eine Seite am
+ * Server-Maximum (spec data/011 §7). KvBrowser remountet die Leiste je committetem Scan (`key`), daher reicht der Initial-State.
  */
-export function KvBulkBar({ domain, apiClient, keys, prefix }: KvBulkBarProps) {
+export function KvBulkBar({ domain, apiClient, prefix, initialContains }: KvBulkBarProps) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [contains, setContains] = useState('')
+  const [containsText, setContainsText] = useState(initialContains)
+  const [contains, setContains] = useState(initialContains)
   const [action, setAction] = useState<KvBulkAction | undefined>(undefined)
   const [confirmArmed, setConfirmArmed] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | undefined>(undefined)
 
-  const selectedKeys = filterByContains(keys, contains)
+  const keysQuery = useQuery(kvBulkKeysQueryOptions(apiClient, domain, prefix, contains))
+  const selectedKeys = keysQuery.data?.keys ?? []
+  const total = keysQuery.data?.total ?? 0
+  const capped = total > selectedKeys.length
 
   const runMutation = useMutation<KvBulkRunResult, unknown, { keys: string[]; action: KvBulkAction }>({
     mutationFn: async ({ keys: opKeys, action: opAction }) => {
@@ -69,9 +70,21 @@ export function KvBulkBar({ domain, apiClient, keys, prefix }: KvBulkBarProps) {
     },
   })
 
-  function changeContains(value: string): void {
-    setContains(value)
+  function changeContainsText(value: string): void {
+    setContainsText(value)
     setConfirmArmed(false)
+  }
+
+  function applyContains(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault()
+    const next = containsText.trim()
+    setConfirmArmed(false)
+    // Unveränderter Filter wäre ein State-No-Op — apply holt trotzdem den frischen Stand (Muster Kopf-Scan).
+    if (next === contains) {
+      void queryClient.invalidateQueries({ queryKey: ['kv-keys-bulk', domain] })
+      return
+    }
+    setContains(next)
   }
 
   function changeAction(next: KvBulkAction): void {
@@ -100,19 +113,33 @@ export function KvBulkBar({ domain, apiClient, keys, prefix }: KvBulkBarProps) {
     <div className="kv-bulk">
       <div className="kv-bulk__row">
         <span className="kv-bulk__scope mono-path">
-          {keys.length} keys scanned (prefix "{prefix}")
+          {keysQuery.data !== undefined ? `${formatNumber(selectedKeys.length)} of ${formatNumber(total)} matching keys` : 'loading…'}
+          {prefix !== '' && ` · prefix "${prefix}"`}
+          {contains !== '' && ` · contains "${contains}"`}
         </span>
-        <input
-          className="kv-bulk__contains-input"
-          value={contains}
-          onChange={(event) => changeContains(event.target.value)}
-          placeholder="contains…"
-          aria-label="bulk key filter"
-          spellCheck={false}
-          disabled={runMutation.isPending}
-        />
-        <span className="kv-bulk__count mono-path">{selectedKeys.length} keys selected</span>
+        <form className="kv-bulk__filter" onSubmit={applyContains}>
+          <input
+            className="kv-bulk__contains-input"
+            value={containsText}
+            onChange={(event) => changeContainsText(event.target.value)}
+            placeholder="contains…"
+            aria-label="bulk key filter"
+            title="case-sensitive substring"
+            spellCheck={false}
+            disabled={runMutation.isPending}
+          />
+          <button type="submit" className="kv-bulk__apply" disabled={runMutation.isPending}>
+            apply
+          </button>
+        </form>
+        <span className="kv-bulk__count mono-path">{formatNumber(selectedKeys.length)} keys selected</span>
       </div>
+
+      {capped && (
+        <div className="kv-bulk__hint">
+          {formatNumber(selectedKeys.length)} of {formatNumber(total)} matching keys loaded — the run covers the loaded keys only
+        </div>
+      )}
 
       <div className="kv-bulk__preview">
         {selectedKeys.length === 0 ? (
@@ -186,6 +213,7 @@ export function KvBulkBar({ domain, apiClient, keys, prefix }: KvBulkBarProps) {
         </div>
       )}
 
+      {keysQuery.isError && <div className="kv-bulk__error">{messageOf(keysQuery.error)}</div>}
       {runMutation.isError && <div className="kv-bulk__error">{messageOf(runMutation.error)}</div>}
 
       {runMutation.data !== undefined && (

@@ -109,10 +109,13 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
     },
   })
 
-  // 404 ⇒ Key existiert nicht (gelöscht ist gelöscht, Autor-Entscheid 2026-07-18) — Liste invalidieren; KvBrowser räumt die Auswahl über die frische Liste.
+  // 404 ⇒ Key existiert nicht (gelöscht ist gelöscht, Autor-Entscheid 2026-07-18) — Liste invalidieren und die Auswahl räumen.
+  // Die Liste selbst beweist mit Paginierung nichts mehr: ein fehlender Key kann jenseits der geladenen Seiten liegen (spec data/011 §6).
   useEffect(() => {
-    if (valueQuery.data?.state === 'not-found') invalidateKvKeys(queryClient, domain)
-  }, [valueQuery.data, queryClient, domain])
+    if (valueQuery.data?.state !== 'not-found') return
+    invalidateKvKeys(queryClient, domain)
+    onClear()
+  }, [valueQuery.data, queryClient, domain, onClear])
 
   function handleEditStart(): void {
     if (valueQuery.data === undefined) return

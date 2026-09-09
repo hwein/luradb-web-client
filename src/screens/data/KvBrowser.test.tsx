@@ -93,18 +93,19 @@ describe('KvBrowser', () => {
     expect(screen.getByText('cart-contents')).toBeInTheDocument()
   })
 
-  it('reveals a deep ?key= arrival in the master list: the display slice grows to the key position and marks it selected (nachtrag data/009)', async () => {
-    const keys = Array.from({ length: 150 }, (_, i) => `k_${String(i).padStart(3, '0')}`)
+  it('keeps a ?key= arrival open in the detail even when the key is on no loaded page (spec data/011 §6: list membership proves nothing)', async () => {
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(keys))),
-      http.get(keyUrl('k_120'), () => rawValue('deep value')),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha'], { total: 5000 }))),
+      http.get(keyUrl('alpha'), () => rawValue('a')),
+      http.get(keyUrl('far-away'), () => rawValue('deep value')),
     )
-    await connectAndRender('/data?engine=kv&key=k_120')
+    await connectAndRender('/data?engine=kv&key=far-away')
 
-    expect(await screen.findByText('KEY k_120')).toBeInTheDocument()
-    // Index 120 liegt hinter der ersten Anzeige-Stufe (100) — die Liste muss bis zum Key erweitert sein.
-    const row = await screen.findByRole('button', { name: 'k_120' })
-    expect(row).toHaveClass('kv-list__row--selected')
+    expect(await screen.findByText('KEY far-away')).toBeInTheDocument()
+    expect(screen.getByText('deep value')).toBeInTheDocument()
+    await waitFor(() => expect(footerText()).toContain('1 of 5,000 keys'))
+    expect(screen.getByText('KEY far-away')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'far-away' })).not.toBeInTheDocument()
   })
 
   it('keeps the ?key= arrival selection when the key list is already in the query cache (nachtrag data/009: auto-select overwrote it)', async () => {
@@ -134,15 +135,17 @@ describe('KvBrowser', () => {
     expect(screen.getByText('cart-contents')).toBeInTheDocument()
   })
 
-  it('scans keys via GET and shows the call in the footer; Scan commits a new prefix', async () => {
-    let lastPrefix: string | null = null
-    let lastLimit: string | null = null
+  it('scans keys via GET with limit/offset and shows the call in the footer; Scan commits prefix and contains together, omitting empty filters', async () => {
+    const urls: URL[] = []
     server.use(
       http.get(KEYS_URL, ({ request }) => {
-        const params = new URL(request.url).searchParams
-        lastPrefix = params.get('prefix')
-        lastLimit = params.get('limit')
-        return HttpResponse.json(kvKeyScan(lastPrefix === 'cart:' ? ['cart:1', 'cart:2'] : ['alpha', 'beta']))
+        const url = new URL(request.url)
+        urls.push(url)
+        const prefix = url.searchParams.get('prefix')
+        const contains = url.searchParams.get('contains')
+        if (prefix === 'cart:' && contains === '1') return HttpResponse.json(kvKeyScan(['cart:1'], { total: 1, limit: 100 }))
+        if (prefix === 'cart:') return HttpResponse.json(kvKeyScan(['cart:1', 'cart:2'], { total: 2, limit: 100 }))
+        return HttpResponse.json(kvKeyScan(['alpha', 'beta'], { total: 1205, limit: 100 }))
       }),
       http.get(keyUrl('alpha'), () => rawValue('a')),
       http.get(keyUrl('cart:1'), () => rawValue('c')),
@@ -151,58 +154,82 @@ describe('KvBrowser', () => {
 
     expect(await screen.findByText('alpha')).toBeInTheDocument()
     expect(screen.getByText('beta')).toBeInTheDocument()
-    await waitFor(() => expect(footerText()).toContain('2 keys'))
-    expect(footerText()).toContain(`GET /store-api/kv/${DOMAIN}/keys?limit=10000`)
-    expect(footerText()).toContain('limit 100')
+    // `total` ist die gefilterte Trefferzahl aus dem Envelope, nicht die Zahl geladener Keys.
+    await waitFor(() => expect(footerText()).toContain('2 of 1,205 keys'))
+    expect(footerText()).toContain(`GET /store-api/kv/${DOMAIN}/keys?limit=100&offset=0`)
     expect(footerText()).not.toContain('prefix=')
-    // Server-Maximum statt Default 1000 — der Scan bleibt so vollständig wie vor dem Envelope (general/013 §4).
-    expect(lastLimit as string | null).toBe('10000')
+    expect(footerText()).not.toContain('contains=')
+    expect(urls[0]?.searchParams.has('prefix')).toBe(false)
+    expect(urls[0]?.searchParams.has('contains')).toBe(false)
 
     fireEvent.change(screen.getByLabelText('key prefix'), { target: { value: 'cart:' } })
     fireEvent.click(screen.getByRole('button', { name: 'Scan' }))
 
-    await waitFor(() => expect(lastPrefix as string | null).toBe('cart:'))
-    expect(await screen.findByText('cart:1')).toBeInTheDocument()
-    await waitFor(() => expect(footerText()).toContain(`GET /store-api/kv/${DOMAIN}/keys?prefix=cart%3A&limit=10000`))
+    expect(await screen.findByText('cart:2')).toBeInTheDocument()
+    await waitFor(() => expect(footerText()).toContain(`2 of 2 keys · GET /store-api/kv/${DOMAIN}/keys?prefix=cart%3A&limit=100&offset=0`))
+
+    fireEvent.change(screen.getByLabelText('key contains'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Scan' }))
+
+    await waitFor(() => expect(footerText()).toContain(`1 of 1 keys · GET /store-api/kv/${DOMAIN}/keys?prefix=cart%3A&contains=1&limit=100&offset=0`))
+    expect(screen.getByRole('button', { name: 'cart:1' })).toBeInTheDocument()
+    expect(screen.queryByText('cart:2')).not.toBeInTheDocument()
+    const last = urls[urls.length - 1]
+    expect(last?.searchParams.get('prefix')).toBe('cart:')
+    expect(last?.searchParams.get('contains')).toBe('1')
   })
 
-  it('reveals more of the already-fetched keys on "load more", without a second network request', async () => {
-    let scanCalls = 0
+  it('pages server-side: "load more" requests offset=100&limit=100, appends the page, and disappears once everything is loaded', async () => {
+    const offsets: string[] = []
     const allKeys = Array.from({ length: 150 }, (_, i) => `k${String(i).padStart(3, '0')}`)
     server.use(
-      http.get(KEYS_URL, () => {
-        scanCalls += 1
-        return HttpResponse.json(kvKeyScan(allKeys))
+      http.get(KEYS_URL, ({ request }) => {
+        const params = new URL(request.url).searchParams
+        offsets.push(params.get('offset') ?? '')
+        const offset = Number(params.get('offset'))
+        const limit = Number(params.get('limit'))
+        return HttpResponse.json(kvKeyScan(allKeys.slice(offset, offset + limit), { total: allKeys.length, offset, limit }))
       }),
       http.get(`${KEYS_URL}/:key`, () => rawValue('v')),
     )
     await connectAndRender()
 
     await screen.findByText('k000')
-    await waitFor(() => expect(footerText()).toContain('150 keys'))
+    await waitFor(() => expect(footerText()).toContain('100 of 150 keys'))
     expect(screen.getByText('k099')).toBeInTheDocument()
     expect(screen.queryByText('k100')).not.toBeInTheDocument()
+    expect(offsets).toEqual(['0'])
 
     fireEvent.click(screen.getByRole('button', { name: 'load more' }))
 
     expect(await screen.findByText('k149')).toBeInTheDocument()
+    expect(offsets).toEqual(['0', '100'])
+    await waitFor(() => expect(footerText()).toContain('150 of 150 keys'))
+    expect(footerText()).toContain(`GET /store-api/kv/${DOMAIN}/keys?limit=100&offset=100`)
     expect(screen.queryByRole('button', { name: 'load more' })).not.toBeInTheDocument()
-    expect(scanCalls).toBe(1)
   })
 
-  it('opens the bulk panel from "bulk…", based on the full scan result rather than the 100-key page cap (spec data/008 §2)', async () => {
+  it('opens the bulk panel from "bulk…" with its own limit=10000 scan rather than the 100-key pages (spec data/008 §2, data/011 §7)', async () => {
+    const limits: string[] = []
     const allKeys = Array.from({ length: 150 }, (_, i) => `k${String(i).padStart(3, '0')}`)
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(allKeys))),
+      http.get(KEYS_URL, ({ request }) => {
+        const params = new URL(request.url).searchParams
+        limits.push(params.get('limit') ?? '')
+        const limit = Number(params.get('limit'))
+        return HttpResponse.json(kvKeyScan(allKeys.slice(0, limit), { total: allKeys.length, limit }))
+      }),
       http.get(`${KEYS_URL}/:key`, () => rawValue('v')),
     )
     await connectAndRender()
     await screen.findByText('k000')
 
-    expect(screen.queryByText(/keys scanned/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/matching keys/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'bulk…' }))
 
-    expect(document.querySelector('.kv-bulk__scope')?.textContent).toContain('150 keys scanned (prefix "")')
+    await waitFor(() => expect(document.querySelector('.kv-bulk__scope')?.textContent).toContain('150 of 150 matching keys'))
+    expect(limits).toEqual(['100', '10000'])
+    expect(screen.getByText('150 keys selected')).toBeInTheDocument()
   })
 
   it('shows JSON pretty-print, plaintext, and an empty value as a plain 0-bytes value (no special state)', async () => {
@@ -274,11 +301,11 @@ describe('KvBrowser', () => {
     expect(screen.getByText('KEY null-key')).toBeInTheDocument()
   })
 
-  it('re-scanning with an unchanged prefix refetches: a key that expired server-side vanishes from list and detail', async () => {
+  it('re-scanning with unchanged filters refetches list and open value: a key that expired server-side vanishes from list and detail', async () => {
     let expired = false
     server.use(
       http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(expired ? [] : ['zombie']))),
-      http.get(keyUrl('zombie'), () => rawValue('z')),
+      http.get(keyUrl('zombie'), () => (expired ? new HttpResponse('not found', { status: 404 }) : rawValue('z'))),
     )
     await connectAndRender()
     await screen.findByText('KEY zombie')
@@ -331,7 +358,7 @@ describe('KvBrowser', () => {
     let deleted = false
     server.use(
       http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(deleted ? [] : ['tomb-key']))),
-      http.get(keyUrl('tomb-key'), () => rawValue('bye')),
+      http.get(keyUrl('tomb-key'), () => (deleted ? new HttpResponse('not found', { status: 404 }) : rawValue('bye'))),
       http.delete(keyUrl('tomb-key'), () => {
         deleted = true
         return new HttpResponse(null, { status: 204 })
@@ -341,6 +368,7 @@ describe('KvBrowser', () => {
     await screen.findByText('KEY tomb-key')
 
     fireEvent.click(screen.getByRole('button', { name: 'bulk…' }))
+    await screen.findByText('1 keys selected')
     fireEvent.click(screen.getByLabelText('delete'))
     fireEvent.click(screen.getByRole('button', { name: 'run…' }))
     fireEvent.click(await screen.findByRole('button', { name: 'run' }))
@@ -364,6 +392,7 @@ describe('KvBrowser', () => {
     expect(screen.getByText('old value')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'bulk…' }))
+    await screen.findByText('1 keys selected')
     fireEvent.click(screen.getByLabelText('set null'))
     fireEvent.click(screen.getByRole('button', { name: 'run…' }))
     fireEvent.click(await screen.findByRole('button', { name: 'run' }))
@@ -423,7 +452,7 @@ describe('KvBrowser', () => {
     await screen.findByText('KEY existing')
 
     const probeKey = ['kv-keys-probe', DOMAIN]
-    queryClient.setQueryData(probeKey, ['existing'])
+    queryClient.setQueryData(probeKey, 1)
     expect(queryClient.getQueryState(probeKey)?.isInvalidated).toBe(false)
 
     fireEvent.click(screen.getByRole('button', { name: '+ new' }))
@@ -433,7 +462,7 @@ describe('KvBrowser', () => {
     expect(await screen.findByText('KEY fresh:1')).toBeInTheDocument()
     await waitFor(() => expect(queryClient.getQueryState(probeKey)?.isInvalidated).toBe(true))
 
-    queryClient.setQueryData(probeKey, ['existing', 'fresh:1'])
+    queryClient.setQueryData(probeKey, 2)
     expect(queryClient.getQueryState(probeKey)?.isInvalidated).toBe(false)
 
     fireEvent.click(await screen.findByRole('button', { name: 'existing' }))

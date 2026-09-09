@@ -36,7 +36,7 @@ function levelFromCounts(queries: CountQuery[]): EngineActivityLevel {
  * Store-Aktivität je Registry-Engine der Domäne (spec shell/004 §1): "aktiv" heißt "enthält Objekte"
  * (rel: Tabellen/Views, json: Dokumente/Indexe, kv: Keys) — nicht Registry-Zugehörigkeit. Engine fehlt in
  * der Registry -> undefined. rel/json teilen die Query-Keys mit domainDetails.ts (ein Cache über Explorer,
- * ExpandedDomain und Admin-DomainsCard); für kv liefert dieser Hook zusätzlich den Key-Count aus dem Scan.
+ * ExpandedDomain und Admin-DomainsCard); für kv liefert dieser Hook zusätzlich den Key-Count aus der Zählabfrage.
  */
 export function useEngineActivity(apiClient: ApiClient | undefined, domain: DomainSummary): EngineActivity {
   const hasRel = domain.engines.rel !== undefined
@@ -57,7 +57,7 @@ export function useEngineActivity(apiClient: ApiClient | undefined, domain: Doma
     { isSuccess: jsonDetailQuery.isSuccess, count: jsonDetailQuery.data?.document_count ?? 0 },
     { isSuccess: indexesQuery.isSuccess, count: indexesQuery.data?.length ?? 0 },
   ]
-  const kvCounts: CountQuery[] = [{ isSuccess: keysQuery.isSuccess, count: keysQuery.data?.length ?? 0 }]
+  const kvCounts: CountQuery[] = [{ isSuccess: keysQuery.isSuccess, count: keysQuery.data ?? 0 }]
 
   const rel = hasRel ? levelFromCounts(relCounts) : undefined
   const json = hasJson ? levelFromCounts(jsonCounts) : undefined
@@ -68,5 +68,5 @@ export function useEngineActivity(apiClient: ApiClient | undefined, domain: Doma
     ? allCounts.reduce((sum, query) => sum + query.count, 0)
     : undefined
 
-  return { rel, json, kv, kvKeyCount: kv === 'active' ? keysQuery.data?.length : undefined, objectCount }
+  return { rel, json, kv, kvKeyCount: kv === 'active' ? keysQuery.data : undefined, objectCount }
 }

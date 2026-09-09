@@ -8,6 +8,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - REST Explorer lists the endpoints added in LuraDB 0.4.0.
+- KV browser pages keys server-side, shows loaded vs. total, and filters by a case-sensitive `contains` substring (also in the bulk panel).
 
 ### Changed
 
@@ -24,6 +25,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- KV key list works against the LuraDB 0.4.0 response format; the Explorer no longer downloads key lists to count keys.
 - Creating a domain no longer logs a console error about an invalid pattern attribute.
 - The About dialog no longer lists an unused third-party library.
 - RECENT REQUESTS no longer mixes calls from a previous connection after switching servers.
