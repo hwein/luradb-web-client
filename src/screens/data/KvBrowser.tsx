@@ -1,13 +1,13 @@
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import type { ApiClient } from '../../api'
-import { CallLine } from '../../lib'
+import { CallLine, formatNumber } from '../../lib'
 import { DataHeader } from './DataHeader'
 import { KvBulkBar } from './KvBulkBar'
 import { KvDetail, type KvDetailMode } from './KvDetail'
 import { KvMasterList } from './KvMasterList'
 import { KvWatchFeed } from './KvWatchFeed'
-import { invalidateKvKeys, kvKeysQueryOptions } from './kvEntries'
+import { EMPTY_KV_KEY_FILTER, invalidateKvKeys, kvKeysQueryOptions, type KvKeyFilter } from './kvEntries'
 
 interface KvBrowserProps {
   domain: string
@@ -15,16 +15,12 @@ interface KvBrowserProps {
   initialKey: string | undefined
 }
 
-function formatNumber(value: number): string {
-  return value.toLocaleString('en-US')
-}
-
 /** KV-Modus des Data Browsers (spec data/002): Kopf mit Prefix-/Contains-Scan und Watch-Toggle, Master-Detail, optionales Feed-Panel, Footer-CallLine. */
 export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
   const queryClient = useQueryClient()
   const [prefixText, setPrefixText] = useState('')
   const [containsText, setContainsText] = useState('')
-  const [committed, setCommitted] = useState({ prefix: '', contains: '' })
+  const [committed, setCommitted] = useState<KvKeyFilter>(EMPTY_KV_KEY_FILTER)
   const [watchOn, setWatchOn] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
   // Ankunft mit ?key= (spec data/009 §5) als Initial-State: als nachgezogener Effekt verlor die Selektion
@@ -34,7 +30,7 @@ export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
   // Stabil, weil KvDetail ihn als Effekt-Abhängigkeit führt (404-Räumung).
   const clearMode = useCallback(() => setMode({ kind: 'empty' }), [])
 
-  const keysQuery = useInfiniteQuery(kvKeysQueryOptions(apiClient, domain, committed.prefix, committed.contains))
+  const keysQuery = useInfiniteQuery(kvKeysQueryOptions(apiClient, domain, committed))
   const pages = keysQuery.data?.pages ?? []
   const keys = pages.flatMap((page) => page.keys)
   const lastPage = pages[pages.length - 1]
@@ -57,7 +53,7 @@ export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
 
   function submitScan(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault()
-    const next = { prefix: prefixText.trim(), contains: containsText.trim() }
+    const next: KvKeyFilter = { prefix: prefixText.trim(), contains: containsText.trim() }
     // Unveränderte Filter wären ein State-No-Op ohne Request — Scan soll aber immer den frischen Stand holen (z. B. nach TTL-Ablauf).
     // Das offene Detail zieht mit (Wert + Metadaten): erst dessen 404 räumt die Auswahl, die Liste beweist mit Paginierung nichts mehr (spec data/011 §6).
     if (next.prefix === committed.prefix && next.contains === committed.contains) {
@@ -112,13 +108,7 @@ export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
         </button>
       </DataHeader>
       {bulkOpen && (
-        <KvBulkBar
-          key={JSON.stringify([committed.prefix, committed.contains])}
-          domain={domain}
-          apiClient={apiClient}
-          prefix={committed.prefix}
-          initialContains={committed.contains}
-        />
+        <KvBulkBar key={JSON.stringify(committed)} domain={domain} apiClient={apiClient} scan={committed} />
       )}
       <div className={`data__body${watchOn ? ' data__body--watch' : ''}`}>
         <KvMasterList

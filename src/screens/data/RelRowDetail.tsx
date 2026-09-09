@@ -3,7 +3,7 @@ import { useState } from 'react'
 import type { ApiClient } from '../../api'
 import type { components } from '../../api/schema'
 import { jsonDocumentsQueryOptions } from './jsonDocuments'
-import { kvKeysQueryOptions } from './kvEntries'
+import { EMPTY_KV_KEY_FILTER, kvKeysQueryOptions } from './kvEntries'
 import {
   blankFormState,
   buildRowPayload,
@@ -82,7 +82,7 @@ function RelRowForm({ domain, apiClient, columns, form, isInsert, onFieldText, o
     ...jsonDocumentsQueryOptions(apiClient, domain, undefined),
     enabled: hasJsonref && apiClient !== undefined,
   })
-  const kvrefQuery = useInfiniteQuery({ ...kvKeysQueryOptions(apiClient, domain, '', ''), enabled: hasKvref && apiClient !== undefined })
+  const kvrefQuery = useInfiniteQuery({ ...kvKeysQueryOptions(apiClient, domain, EMPTY_KV_KEY_FILTER), enabled: hasKvref && apiClient !== undefined })
 
   const jsonrefOptions = (jsonrefQuery.data?.pages ?? []).flatMap((page) => page.documents.map((doc) => doc.key))
   const kvrefOptions = (kvrefQuery.data?.pages ?? []).flatMap((page) => page.keys)

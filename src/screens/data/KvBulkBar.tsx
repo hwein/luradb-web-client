@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import type { ApiClient } from '../../api'
+import { formatNumber } from '../../lib'
 import { openDocs } from '../docs/openDocs'
 import {
   kvBulkCallPattern,
@@ -16,7 +17,7 @@ import {
   type KvBulkAction,
   type KvBulkOutcome,
 } from './kvBulk'
-import { invalidateKvKeys, kvBulkKeysQueryOptions } from './kvEntries'
+import { invalidateKvKeys, kvBulkKeysQueryOptions, type KvKeyFilter } from './kvEntries'
 
 const ACTIONS: KvBulkAction[] = ['delete', 'clear', 'set-null']
 
@@ -33,23 +34,17 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'request failed'
 }
 
-function formatNumber(value: number): string {
-  return value.toLocaleString('en-US')
-}
-
 interface KvBulkBarProps {
   domain: string
   apiClient: ApiClient | undefined
-  prefix: string
-  /** `contains` des committeten Kopf-Scans — Startwert des Leisten-Filters; der Server kennt nur einen `contains`-Parameter. */
-  initialContains: string
+  /** Der committete Kopf-Scan: Prefix gilt fest, `contains` ist der Startwert des Leisten-Filters (der Server kennt nur einen `contains`-Parameter). */
+  scan: KvKeyFilter
 }
 
 interface RunVariables {
   keys: string[]
   action: KvBulkAction
-  prefix: string
-  contains: string
+  filter: KvKeyFilter
 }
 
 /**
@@ -58,26 +53,27 @@ interface RunVariables {
  * Server-Maximum (spec data/011 §7). KvBrowser remountet die Leiste je committetem Scan (`key`), daher reicht der Initial-State.
  * `delete` mit Prefix läuft als ein Server-Call (spec data/013), alle übrigen Wege als Fanout.
  */
-export function KvBulkBar({ domain, apiClient, prefix, initialContains }: KvBulkBarProps) {
+export function KvBulkBar({ domain, apiClient, scan }: KvBulkBarProps) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [containsText, setContainsText] = useState(initialContains)
-  const [contains, setContains] = useState(initialContains)
+  const [containsText, setContainsText] = useState(scan.contains)
+  const [contains, setContains] = useState(scan.contains)
   const [action, setAction] = useState<KvBulkAction | undefined>(undefined)
   const [confirmArmed, setConfirmArmed] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | undefined>(undefined)
 
-  const keysQuery = useQuery(kvBulkKeysQueryOptions(apiClient, domain, prefix, contains))
+  const filter: KvKeyFilter = { prefix: scan.prefix, contains }
+  const keysQuery = useQuery(kvBulkKeysQueryOptions(apiClient, domain, filter))
   const selectedKeys = keysQuery.data?.keys ?? []
   const total = keysQuery.data?.total ?? 0
   const capped = total > selectedKeys.length
-  const serverDelete = action !== undefined && usesServerDelete(action, prefix)
+  const serverDelete = action !== undefined && usesServerDelete(action, filter)
 
   const runMutation = useMutation<KvBulkOutcome, unknown, RunVariables>({
     mutationFn: async (variables) => {
       if (!apiClient) throw new Error('no active connection')
-      if (usesServerDelete(variables.action, variables.prefix)) {
-        return { kind: 'server', deleted: await runKvBulkDelete(apiClient, domain, variables.prefix, variables.contains) }
+      if (usesServerDelete(variables.action, variables.filter)) {
+        return { kind: 'server', deleted: await runKvBulkDelete(apiClient, domain, variables.filter) }
       }
       setProgress({ done: 0, total: variables.keys.length })
       const result = await runKvBulk(
@@ -125,7 +121,7 @@ export function KvBulkBar({ domain, apiClient, prefix, initialContains }: KvBulk
     }
     if (action === undefined) return
     setConfirmArmed(false)
-    runMutation.mutate({ keys: selectedKeys, action, prefix, contains })
+    runMutation.mutate({ keys: selectedKeys, action, filter })
   }
 
   function openNullDocs(): void {
@@ -140,8 +136,8 @@ export function KvBulkBar({ domain, apiClient, prefix, initialContains }: KvBulk
       <div className="kv-bulk__row">
         <span className="kv-bulk__scope mono-path">
           {keysQuery.data !== undefined ? `${formatNumber(selectedKeys.length)} of ${formatNumber(total)} matching keys` : 'loading…'}
-          {prefix !== '' && ` · prefix "${prefix}"`}
-          {contains !== '' && ` · contains "${contains}"`}
+          {filter.prefix !== '' && ` · prefix "${filter.prefix}"`}
+          {filter.contains !== '' && ` · contains "${filter.contains}"`}
         </span>
         <form className="kv-bulk__filter" onSubmit={applyContains}>
           <input
@@ -202,7 +198,7 @@ export function KvBulkBar({ domain, apiClient, prefix, initialContains }: KvBulk
           <span className="kv-bulk__confirm">
             <span className="kv-bulk__confirm-text">
               {action !== undefined &&
-                (serverDelete ? kvBulkServerDeleteConfirmText(prefix, contains, domain) : kvBulkConfirmText(action, selectedKeys.length, domain))}
+                (serverDelete ? kvBulkServerDeleteConfirmText(domain, filter) : kvBulkConfirmText(action, selectedKeys.length, domain))}
               {(action === 'delete' || action === 'set-null') && <span className="kv-bulk__confirm-irreversible"> this cannot be undone.</span>}
             </span>
             <button type="button" className="kv-bulk__confirm-run" disabled={runMutation.isPending} onClick={handleRunClick}>
@@ -230,7 +226,7 @@ export function KvBulkBar({ domain, apiClient, prefix, initialContains }: KvBulk
 
       {action !== undefined && (
         <div className="kv-bulk__call-pattern mono-path">
-          {serverDelete ? `DELETE ${kvBulkDeletePath(domain, prefix, contains)}` : `${selectedKeys.length} × ${kvBulkCallPattern(action, domain)} · not recorded`}
+          {serverDelete ? `DELETE ${kvBulkDeletePath(domain, filter)}` : `${selectedKeys.length} × ${kvBulkCallPattern(action, domain)} · not recorded`}
         </div>
       )}
 

@@ -12,9 +12,15 @@ export function kvKeyPath(domain: string, key: string): string {
   return `${BASE_PATH}/kv/${encodeURIComponent(domain)}/keys/${encodeURIComponent(key)}`
 }
 
-export interface KvKeysQuery {
+/** Die beiden Server-Filter des Key-Scans — wandern immer gemeinsam (Kopf-Scan, Bulk-Leiste, Bulk-Delete). */
+export interface KvKeyFilter {
   prefix: string
   contains: string
+}
+
+export const EMPTY_KV_KEY_FILTER: KvKeyFilter = { prefix: '', contains: '' }
+
+export interface KvKeysQuery extends KvKeyFilter {
   limit: number
   offset: number
 }
@@ -63,12 +69,12 @@ export async function fetchKvKeysPage(apiClient: ApiClient, domain: string, quer
 
 /** Master-Liste: Seiten hängen sich an; `keys.length > 0` im Guard ist zwingend — eine leere Seite bei `offset < total`
  *  (parallel gelöschte Keys) ergäbe sonst denselben `pageParam` erneut, also eine Endlosschleife. */
-export function kvKeysQueryOptions(apiClient: ApiClient | undefined, domain: string, prefix: string, contains: string) {
+export function kvKeysQueryOptions(apiClient: ApiClient | undefined, domain: string, filter: KvKeyFilter) {
   return infiniteQueryOptions({
-    queryKey: ['kv-keys', domain, prefix, contains] as const,
+    queryKey: ['kv-keys', domain, filter.prefix, filter.contains] as const,
     queryFn: async ({ pageParam }): Promise<KvKeysPage> => {
       if (!apiClient) throw new Error('kv keys query requires an active connection')
-      return fetchKvKeysPage(apiClient, domain, { prefix, contains, limit: KV_KEYS_PAGE_SIZE, offset: pageParam })
+      return fetchKvKeysPage(apiClient, domain, { ...filter, limit: KV_KEYS_PAGE_SIZE, offset: pageParam })
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage) => {
@@ -80,12 +86,12 @@ export function kvKeysQueryOptions(apiClient: ApiClient | undefined, domain: str
 }
 
 /** Selektionsgrundlage der Bulk-Leiste (spec data/008 §2: der volle Scan, nicht die Seiten der Master-Liste) — eine Seite am Server-Maximum. */
-export function kvBulkKeysQueryOptions(apiClient: ApiClient | undefined, domain: string, prefix: string, contains: string) {
+export function kvBulkKeysQueryOptions(apiClient: ApiClient | undefined, domain: string, filter: KvKeyFilter) {
   return queryOptions({
-    queryKey: ['kv-keys-bulk', domain, prefix, contains] as const,
+    queryKey: ['kv-keys-bulk', domain, filter.prefix, filter.contains] as const,
     queryFn: async (): Promise<KvKeysPage> => {
       if (!apiClient) throw new Error('kv bulk keys query requires an active connection')
-      return fetchKvKeysPage(apiClient, domain, { prefix, contains, limit: KV_BULK_SCAN_LIMIT, offset: 0 })
+      return fetchKvKeysPage(apiClient, domain, { ...filter, limit: KV_BULK_SCAN_LIMIT, offset: 0 })
     },
     enabled: apiClient !== undefined,
   })

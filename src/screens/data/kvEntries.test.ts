@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { createApi } from '../../api'
 import { kvKeyScan, server } from '../../test/msw'
 import {
+  EMPTY_KV_KEY_FILTER,
   fetchKvKeysPage,
   formatShortDuration,
   kvBulkKeysQueryOptions,
@@ -67,8 +68,8 @@ describe('fetchKvKeysPage', () => {
 
 describe('kvKeysQueryOptions', () => {
   it('keys the query by domain, prefix and contains', () => {
-    expect(kvKeysQueryOptions(undefined, 'shop', '', '').queryKey).toEqual(['kv-keys', 'shop', '', ''])
-    expect(kvKeysQueryOptions(undefined, 'shop', 'cart:', 'abc').queryKey).toEqual(['kv-keys', 'shop', 'cart:', 'abc'])
+    expect(kvKeysQueryOptions(undefined, 'shop', EMPTY_KV_KEY_FILTER).queryKey).toEqual(['kv-keys', 'shop', '', ''])
+    expect(kvKeysQueryOptions(undefined, 'shop', { prefix: 'cart:', contains: 'abc' }).queryKey).toEqual(['kv-keys', 'shop', 'cart:', 'abc'])
   })
 
   it('pages with limit 100 from offset 0 and continues at offset + keys.length while more remain', async () => {
@@ -82,7 +83,7 @@ describe('kvKeysQueryOptions', () => {
       }),
     )
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    const options = kvKeysQueryOptions(makeApi(), 'shop', '', '')
+    const options = kvKeysQueryOptions(makeApi(), 'shop', EMPTY_KV_KEY_FILTER)
 
     const first = await queryClient.fetchInfiniteQuery(options)
     expect(urls[0]?.searchParams.get('limit')).toBe('100')
@@ -97,13 +98,13 @@ describe('kvKeysQueryOptions', () => {
   })
 
   it('follows the envelope offset/limit rather than the requested values for the next page', () => {
-    const options = kvKeysQueryOptions(undefined, 'shop', '', '')
+    const options = kvKeysQueryOptions(undefined, 'shop', EMPTY_KV_KEY_FILTER)
     const page = { keys: ['a', 'b', 'c'], total: 10, offset: 5, limit: 3, call: { method: 'GET', path: '', status: 200, ms: 0 } }
     expect(options.getNextPageParam(page, [page], 0, [0])).toBe(8)
   })
 
   it('stops on an empty page even while offset < total (no endless loop on concurrent deletes)', () => {
-    const options = kvKeysQueryOptions(undefined, 'shop', '', '')
+    const options = kvKeysQueryOptions(undefined, 'shop', EMPTY_KV_KEY_FILTER)
     const page = { keys: [], total: 10, offset: 5, limit: 100, call: { method: 'GET', path: '', status: 200, ms: 0 } }
     expect(options.getNextPageParam(page, [page], 5, [0, 5])).toBeUndefined()
   })
@@ -119,7 +120,7 @@ describe('kvBulkKeysQueryOptions', () => {
       }),
     )
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    const options = kvBulkKeysQueryOptions(makeApi(), 'shop', 'p', 'c')
+    const options = kvBulkKeysQueryOptions(makeApi(), 'shop', { prefix: 'p', contains: 'c' })
     expect(options.queryKey).toEqual(['kv-keys-bulk', 'shop', 'p', 'c'])
 
     const page = await queryClient.fetchQuery(options)

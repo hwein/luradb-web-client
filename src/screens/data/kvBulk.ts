@@ -1,6 +1,6 @@
 import { BASE_PATH, type ApiClient } from '../../api'
 import { messageFromError } from '../sql/sqlRun'
-import { kvKeyPath } from './kvEntries'
+import { kvKeyPath, type KvKeyFilter } from './kvEntries'
 
 export type KvBulkAction = 'delete' | 'clear' | 'set-null'
 
@@ -31,26 +31,26 @@ export function kvBulkConfirmText(action: KvBulkAction, count: number, domain: s
 }
 
 /** Einzige Stelle, die den Weg entscheidet (spec data/013 §1): der Server-Endpunkt verlangt einen nicht-leeren Prefix. */
-export function usesServerDelete(action: KvBulkAction, prefix: string): boolean {
-  return action === 'delete' && prefix !== ''
+export function usesServerDelete(action: KvBulkAction, filter: KvKeyFilter): boolean {
+  return action === 'delete' && filter.prefix !== ''
 }
 
 /** `DELETE …/keys?prefix=…[&contains=…]` — Anzeige und Call nutzen denselben String (spec data/013 §2/§5). */
-export function kvBulkDeletePath(domain: string, prefix: string, contains: string): string {
-  const search = new URLSearchParams({ prefix })
-  if (contains !== '') search.set('contains', contains)
+export function kvBulkDeletePath(domain: string, filter: KvKeyFilter): string {
+  const search = new URLSearchParams({ prefix: filter.prefix })
+  if (filter.contains !== '') search.set('contains', filter.contains)
   return `${BASE_PATH}/kv/${encodeURIComponent(domain)}/keys?${search.toString()}`
 }
 
 /** Server-Weg nennt das Kriterium statt einer Zahl — der Endpunkt löscht auch Keys, die seit dem Scan dazukamen (spec data/013 §4). */
-export function kvBulkServerDeleteConfirmText(prefix: string, contains: string, domain: string): string {
-  const filter = contains === '' ? '' : ` containing "${contains}"`
-  return `delete all keys with prefix "${prefix}"${filter} in "${domain}"?`
+export function kvBulkServerDeleteConfirmText(domain: string, filter: KvKeyFilter): string {
+  const containing = filter.contains === '' ? '' : ` containing "${filter.contains}"`
+  return `delete all keys with prefix "${filter.prefix}"${containing} in "${domain}"?`
 }
 
 /** Ein Call über `fetchRaw` — aufgezeichnet (bewusste Mutation, general/012); Nicht-2xx (413/400/404) wirft dort bereits den ApiError mit dem Servertext. */
-export async function runKvBulkDelete(apiClient: ApiClient, domain: string, prefix: string, contains: string): Promise<number> {
-  const response = await apiClient.fetchRaw(kvBulkDeletePath(domain, prefix, contains), { method: 'DELETE' })
+export async function runKvBulkDelete(apiClient: ApiClient, domain: string, filter: KvKeyFilter): Promise<number> {
+  const response = await apiClient.fetchRaw(kvBulkDeletePath(domain, filter), { method: 'DELETE' })
   const body: unknown = await response.json()
   const deleted = typeof body === 'object' && body !== null ? (body as Record<string, unknown>).deleted : undefined
   if (typeof deleted !== 'number') throw new Error('unexpected bulk delete response')

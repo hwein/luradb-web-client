@@ -40,7 +40,7 @@ function DocsRouteProbe() {
 function Harness({ prefix, initialContains }: { prefix: string; initialContains: string }) {
   const session = useSession()
   const apiClient = session.status === 'connected' ? session.apiClient : undefined
-  return <KvBulkBar domain={DOMAIN} apiClient={apiClient} prefix={prefix} initialContains={initialContains} />
+  return <KvBulkBar domain={DOMAIN} apiClient={apiClient} scan={{ prefix, contains: initialContains }} />
 }
 
 /** Server-Scan der Leiste: filtert wie der echte Server nach `contains` (Substring, case-sensitiv), `total` = Treffer vor `limit`. */
