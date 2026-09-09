@@ -11,6 +11,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - KV browser pages keys server-side, shows loaded vs. total, and filters by a case-sensitive `contains` substring (also in the bulk panel).
 - Explorer shows the row count next to each table of the expanded domain.
 - KV key detail shows the remaining TTL and the last modification time.
+- KV watch feed shows key expiry as a `delete` event and refreshes the key list.
 
 ### Changed
 
@@ -33,6 +34,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - RECENT REQUESTS no longer mixes calls from a previous connection after switching servers.
 - Admin cards surface server errors instead of silently showing an empty list or matrix.
 - Admin no longer flashes a false "admin role required" gate while the admin check is still loading, and shows a distinct message when the check itself fails.
+- KV watch reconnects resume from the last received event instead of losing the events of the gap.
+- KV watch no longer retries endlessly when the key has no permission for the stream (403).
 
 ### Changed
 

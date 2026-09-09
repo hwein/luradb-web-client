@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { sseStream, type SseConnectionState, type SseEvent } from './sse'
+import { sseStream, type SseConnectionState, type SseEvent, type SseOpenContext, type SseResetReason } from './sse'
 
 const encoder = new TextEncoder()
 
@@ -84,6 +84,32 @@ describe('sseStream parsing', () => {
 
     expect(events).toEqual([{ event: 'set', data: 'k' }])
   })
+
+  it('reads `id:` in any field position and leaves it undefined for frames without one', async () => {
+    vi.useFakeTimers()
+    const events: SseEvent[] = []
+    const open = vi
+      .fn<(path: string) => Promise<Response>>()
+      .mockResolvedValueOnce(
+        closedStream(
+          'id: w-abc-1\nevent: set\ndata: k1\n\n',
+          'event: set\nid: w-abc-2\ndata: k2\n\n',
+          ':\n\n',
+          'event: set\ndata: k3\n\n',
+        ),
+      )
+      .mockResolvedValue(new Response(null, { status: 410 }))
+
+    const promise = sseStream('/watch', { open, signal: new AbortController().signal, onEvent: (e) => events.push(e) })
+    await vi.advanceTimersByTimeAsync(1000)
+    await promise
+
+    expect(events).toEqual([
+      { event: 'set', data: 'k1', id: 'w-abc-1' },
+      { event: 'set', data: 'k2', id: 'w-abc-2' },
+      { event: 'set', data: 'k3', id: undefined },
+    ])
+  })
 })
 
 describe('sseStream reconnect', () => {
@@ -158,6 +184,104 @@ describe('sseStream reconnect', () => {
   })
 })
 
+describe('sseStream resume', () => {
+  it('opens first without a resume id and reconnects with the last non-empty id seen', async () => {
+    vi.useFakeTimers()
+    const contexts: SseOpenContext[] = []
+    const open = vi.fn(async (_path: string, context: SseOpenContext) => {
+      contexts.push(context)
+      if (contexts.length === 1) return closedStream('id: w-abc-7\nevent: set\ndata: k1\n\n')
+      if (contexts.length === 2) return closedStream('event: set\ndata: k2\n\n') // Frame ohne id lässt den Punkt stehen
+      return new Response(null, { status: 410 })
+    })
+
+    const promise = sseStream('/watch', { open, signal: new AbortController().signal, onEvent: () => {} })
+    await vi.advanceTimersByTimeAsync(1000 + 2000)
+    await promise
+
+    expect(contexts).toEqual([
+      { lastEventId: undefined, reconnect: false },
+      { lastEventId: 'w-abc-7', reconnect: true },
+      { lastEventId: 'w-abc-7', reconnect: true },
+    ])
+  })
+
+  it('never sends a resume id when the server sends none', async () => {
+    vi.useFakeTimers()
+    const contexts: SseOpenContext[] = []
+    const open = vi.fn(async (_path: string, context: SseOpenContext) => {
+      contexts.push(context)
+      return contexts.length === 1
+        ? closedStream('event: set\ndata: k1\n\n')
+        : new Response(null, { status: 410 })
+    })
+
+    const promise = sseStream('/watch', { open, signal: new AbortController().signal, onEvent: () => {} })
+    await vi.advanceTimersByTimeAsync(1000)
+    await promise
+
+    expect(contexts).toEqual([
+      { lastEventId: undefined, reconnect: false },
+      { lastEventId: undefined, reconnect: true },
+    ])
+  })
+})
+
+describe('sseStream reset', () => {
+  it('reports the reason via onReset, keeps the frame out of onEvent, and resumes from the reset id', async () => {
+    vi.useFakeTimers()
+    const events: SseEvent[] = []
+    const reasons: SseResetReason[] = []
+    const contexts: SseOpenContext[] = []
+    const open = vi.fn(async (_path: string, context: SseOpenContext) => {
+      contexts.push(context)
+      return contexts.length === 1
+        ? closedStream('id: w-abc-1\nevent: set\ndata: k1\n\n', 'id: w-abc-9\nevent: reset\ndata: {"reason":"window_exceeded"}\n\n')
+        : new Response(null, { status: 410 })
+    })
+
+    const promise = sseStream('/watch', {
+      open,
+      signal: new AbortController().signal,
+      onEvent: (e) => events.push(e),
+      onReset: (reason) => reasons.push(reason),
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    await promise
+
+    expect(events).toEqual([{ event: 'set', data: 'k1', id: 'w-abc-1' }])
+    expect(reasons).toEqual(['window_exceeded'])
+    expect(contexts[1]).toEqual({ lastEventId: 'w-abc-9', reconnect: true })
+  })
+
+  it('maps a broken, missing or unknown reason to "unknown" without throwing', async () => {
+    vi.useFakeTimers()
+    const reasons: SseResetReason[] = []
+    const open = vi
+      .fn<(path: string) => Promise<Response>>()
+      .mockResolvedValueOnce(
+        closedStream(
+          'event: reset\ndata: not-json\n\n',
+          'event: reset\ndata: {}\n\n',
+          'event: reset\ndata: {"reason":"brand_new"}\n\n',
+          'event: reset\ndata: {"reason":42}\n\n',
+        ),
+      )
+      .mockResolvedValue(new Response(null, { status: 410 }))
+
+    const promise = sseStream('/watch', {
+      open,
+      signal: new AbortController().signal,
+      onEvent: () => {},
+      onReset: (reason) => reasons.push(reason),
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    await promise
+
+    expect(reasons).toEqual(['unknown', 'unknown', 'unknown', 'unknown'])
+  })
+})
+
 describe('sseStream terminal statuses', () => {
   it('closes permanently on 410 without reconnecting', async () => {
     vi.useFakeTimers()
@@ -175,6 +299,27 @@ describe('sseStream terminal statuses', () => {
 
     expect(open).toHaveBeenCalledTimes(1)
     expect(states).toEqual(['closed'])
+  })
+
+  it('closes permanently on 403 without reconnecting and without touching the session', async () => {
+    vi.useFakeTimers()
+    const onUnauthorized = vi.fn()
+    const states: SseConnectionState[] = []
+    const open = vi.fn(async () => new Response('Forbidden', { status: 403 }))
+
+    const promise = sseStream('/watch', {
+      open,
+      signal: new AbortController().signal,
+      onEvent: () => {},
+      onStateChange: (s) => states.push(s),
+      onUnauthorized,
+    })
+    await promise
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(states).toEqual(['closed'])
+    expect(onUnauthorized).not.toHaveBeenCalled()
   })
 
   it('closes and signals unauthorized on 401', async () => {

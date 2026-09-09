@@ -507,6 +507,43 @@ describe('KvBrowser', () => {
     await waitFor(() => expect(scanned).toBeGreaterThanOrEqual(2), { timeout: 2000 })
   })
 
+  it('re-reads the key list after a reset frame, without a new event in the feed', async () => {
+    let scanned = 0
+    server.use(
+      http.get(KEYS_URL, () => {
+        scanned += 1
+        return HttpResponse.json(kvKeyScan(['alpha']))
+      }),
+      http.get(keyUrl('alpha'), () => rawValue('a')),
+      watchStream(['id: w-abc-9\nevent: reset\ndata: {"reason":"restart"}\n\n']),
+    )
+    await connectAndRender()
+    await screen.findByText('alpha')
+    const scannedBefore = scanned
+
+    fireEvent.click(screen.getByRole('button', { name: '● live' }))
+
+    await waitFor(() => expect(scanned).toBeGreaterThan(scannedBefore), { timeout: 2000 })
+    expect(document.querySelector('.kv-feed__row')).toBeNull()
+    expect(screen.getByText('waiting for events…')).toBeInTheDocument()
+  })
+
+  it('shows a delete without a preceding set as a plain delete row (TTL expiry)', async () => {
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha']))),
+      http.get(keyUrl('alpha'), () => rawValue('a')),
+      watchStream(['id: w-abc-3\nevent: delete\ndata: ttl-a\n\n']),
+    )
+    await connectAndRender()
+    await screen.findByText('alpha')
+
+    fireEvent.click(screen.getByRole('button', { name: '● live' }))
+
+    expect(await screen.findByText('ttl-a')).toBeInTheDocument()
+    expect(document.querySelector('.kv-feed__type--delete')).toHaveTextContent('delete')
+    expect(document.querySelectorAll('.kv-feed__row')).toHaveLength(1)
+  })
+
   it(
     'ends the watch feed with a hint once the domain enters deleting (410) after being connected',
     async () => {

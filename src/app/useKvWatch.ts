@@ -17,6 +17,8 @@ export interface KvWatchEvent {
 export interface KvWatchResult {
   events: KvWatchEvent[]
   connectionState: SseConnectionState
+  /** Zählt die `reset`-Frames des Streams: der Server kann keine Lückenfreiheit garantieren, abhängiger Zustand ist neu zu lesen. */
+  resetCount: number
   /** Leert nur die Event-Liste, nicht die Verbindung. */
   clear: () => void
 }
@@ -26,7 +28,10 @@ function watchPath(domain: string, prefix?: string): string {
   return prefix ? `${base}?prefix=${encodeURIComponent(prefix)}` : base
 }
 
-/** Server-Format: `event: set|delete`, `data:` = Key. Andere Frames (z. B. Pings) liefern keinen Event. */
+/**
+ * Server-Format: `event: set|delete`, `data:` = Key. Andere Frames (z. B. Pings) liefern keinen Event.
+ * TTL-Expiries kommen als `delete` an und werden nicht gesondert markiert (der Frame trägt keinen Grund).
+ */
 function toKvEvent(frame: SseEvent): KvWatchEvent | undefined {
   if (frame.event !== 'set' && frame.event !== 'delete') return undefined
   return { ts: Date.now(), type: frame.event, key: frame.data, dataRaw: frame.data }
@@ -39,6 +44,7 @@ export function useKvWatch(domain: string, prefix?: string): KvWatchResult {
   const apiClient = session.status === 'connected' ? session.apiClient : undefined
 
   const [events, setEvents] = useState<KvWatchEvent[]>([])
+  const [resetCount, setResetCount] = useState(0)
   const [connectionState, setConnectionState] = useState<SseConnectionState>('closed')
 
   const clear = useCallback(() => setEvents([]), [])
@@ -47,14 +53,16 @@ export function useKvWatch(domain: string, prefix?: string): KvWatchResult {
     if (apiClient === undefined) return
     const controller = new AbortController()
     setEvents([])
+    setResetCount(0)
 
     void sseStream(watchPath(domain, prefix), {
-      open: (path) => apiClient.openStream(path),
+      open: (path, { lastEventId }) => apiClient.openStream(path, { lastEventId }),
       signal: controller.signal,
       onEvent: (frame) => {
         const event = toKvEvent(frame)
         if (event !== undefined) setEvents((prev) => [event, ...prev].slice(0, MAX_EVENTS))
       },
+      onReset: () => setResetCount((count) => count + 1),
       onStateChange: setConnectionState,
       onUnauthorized: () => {
         disconnect()
@@ -65,5 +73,5 @@ export function useKvWatch(domain: string, prefix?: string): KvWatchResult {
     return () => controller.abort()
   }, [apiClient, domain, prefix, queryClient])
 
-  return { events, connectionState, clear }
+  return { events, connectionState, resetCount, clear }
 }

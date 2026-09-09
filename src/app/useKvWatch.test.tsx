@@ -39,11 +39,12 @@ async function connectSession(): Promise<void> {
 
 function WatchProbe({ prefix }: { prefix?: string }) {
   const session = useSession()
-  const { events, connectionState, clear } = useKvWatch('default', prefix)
+  const { events, connectionState, resetCount, clear } = useKvWatch('default', prefix)
   return (
     <div>
       <span data-testid="session">{session.status}</span>
       <span data-testid="state">{connectionState}</span>
+      <span data-testid="resets">{resetCount}</span>
       <span data-testid="count">{events.length}</span>
       <span data-testid="events">{events.map((e) => `${e.type}:${e.key}:${e.dataRaw}`).join(',')}</span>
       <button type="button" onClick={clear}>
@@ -103,6 +104,38 @@ describe('useKvWatch', () => {
 
     expect(screen.getByTestId('count')).toHaveTextContent('0')
     expect(screen.getByTestId('state')).toHaveTextContent('connected')
+  })
+
+  it('counts reset frames without listing them as events and resumes the next open from the last id', async () => {
+    await connectSession()
+    const urls: string[] = []
+    let call = 0
+    server.use(
+      http.get(`${ORIGIN}/store-api/kv/default/watch`, ({ request }) => {
+        urls.push(request.url)
+        call += 1
+        const frames =
+          call === 1
+            ? ['id: w-abc-1\nevent: set\ndata: alpha\n\n', 'id: w-abc-9\nevent: reset\ndata: {"reason":"restart"}\n\n']
+            : []
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            for (const frame of frames) controller.enqueue(encoder.encode(frame))
+            if (call === 1) controller.close() // Abbruch ⇒ Reconnect mit Resume-Punkt
+          },
+        })
+        return new HttpResponse(body, { headers: { 'Content-Type': 'text/event-stream' } })
+      }),
+    )
+
+    renderProbe()
+
+    await waitFor(() => expect(screen.getByTestId('resets')).toHaveTextContent('1'), { timeout: 3000 })
+    expect(screen.getByTestId('count')).toHaveTextContent('1')
+    expect(screen.getByTestId('events')).toHaveTextContent('set:alpha:alpha')
+    await waitFor(() => expect(urls).toHaveLength(2), { timeout: 3000 })
+    expect(urls[0]).toBe(`${ORIGIN}/store-api/kv/default/watch`)
+    expect(urls[1]).toBe(`${ORIGIN}/store-api/kv/default/watch?last_event_id=w-abc-9`)
   })
 
   it('invalidates the session on 401 (disconnect + closed), like the client', async () => {

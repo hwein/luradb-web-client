@@ -47,9 +47,10 @@ export interface ApiClient {
    * Öffnet einen SSE-Stream (`Accept: text/event-stream`) und liefert die Response mit intaktem
    * Body-Stream zurück — auch bei Nicht-2xx (der Aufrufer entscheidet über 401/410). Der Recorder
    * sieht den Stream-Start als Call mit Status 'stream' (general/006). Abbruch läuft über das
-   * Canceln des Body-Readers, nicht über ein fetch-Signal.
+   * Canceln des Body-Readers, nicht über ein fetch-Signal. `lastEventId` hängt `last_event_id=` an
+   * (SSE-Resume, general/015) — im Recorder steht weiterhin nur der Pfad ohne Query.
    */
-  openStream: (path: string, options?: { silentRecord?: boolean }) => Promise<Response>
+  openStream: (path: string, options?: { silentRecord?: boolean; lastEventId?: string }) => Promise<Response>
   /**
    * Wie `fetchRaw`, aber ohne `notify()` — der einzige Weg an `apiClient.onCall(record)` vorbei
    * (jeder andere Pfad, typisiert oder roh, meldet sich beim Recorder). Für Fanout-Läufe, die
@@ -67,6 +68,12 @@ export interface ApiClient {
 
 function pathnameOf(url: string): string {
   return new URL(url).pathname
+}
+
+/** SSE-Resume als Query-Parameter (nicht als `Last-Event-ID`-Header: der ist nicht CORS-safelisted, general/015). */
+function withLastEventId(path: string, lastEventId: string | undefined): string {
+  if (lastEventId === undefined || lastEventId === '') return path
+  return `${path}${path.includes('?') ? '&' : '?'}last_event_id=${encodeURIComponent(lastEventId)}`
 }
 
 export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOptions): ApiClient {
@@ -214,9 +221,9 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
     return response
   }
 
-  async function openStream(path: string, options?: { silentRecord?: boolean }): Promise<Response> {
+  async function openStream(path: string, options?: { silentRecord?: boolean; lastEventId?: string }): Promise<Response> {
     const silent = options?.silentRecord === true
-    const request = new Request(`${baseUrl}${path}`)
+    const request = new Request(`${baseUrl}${withLastEventId(path, options?.lastEventId)}`)
     request.headers.set('Accept', 'text/event-stream')
     const authHeader = getAuthHeader()
     if (authHeader !== undefined) request.headers.set('Authorization', authHeader)

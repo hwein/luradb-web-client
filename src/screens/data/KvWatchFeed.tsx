@@ -22,7 +22,7 @@ function formatTime(ts: number): string {
  */
 export function KvWatchFeed({ domain, prefix }: KvWatchFeedProps) {
   const queryClient = useQueryClient()
-  const { events, connectionState } = useKvWatch(domain, prefix)
+  const { events, connectionState, resetCount } = useKvWatch(domain, prefix)
 
   // 410 (Domäne wird gelöscht) beendet den Stream endgültig mit `closed` — dieselbe `closed`-State ist aber auch der
   // initiale Default vor dem ersten Verbindungsversuch. Nur nach mindestens einem 'connected'/'reconnecting' zählt
@@ -33,14 +33,15 @@ export function KvWatchFeed({ domain, prefix }: KvWatchFeedProps) {
   }, [connectionState])
   const endedByServer = everConnected && connectionState === 'closed'
 
+  // Ein `reset` heißt "Lücke nicht garantierbar" — dieselbe Invalidierung wie nach einem Event, ohne eigene Anzeige.
   const latestTs = events[0]?.ts
   useEffect(() => {
-    if (latestTs === undefined) return
+    if (latestTs === undefined && resetCount === 0) return
     const timer = setTimeout(() => {
       invalidateKvKeys(queryClient, domain)
     }, INVALIDATE_DEBOUNCE_MS)
     return () => clearTimeout(timer)
-  }, [latestTs, domain, queryClient])
+  }, [latestTs, resetCount, domain, queryClient])
 
   return (
     <div className="kv-feed">

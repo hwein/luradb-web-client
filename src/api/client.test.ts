@@ -338,6 +338,32 @@ describe('createApi', () => {
     await expect(response.text()).resolves.toContain('event: set')
   })
 
+  it('openStream appends last_event_id with the right separator and encoding, and leaves the URL alone without one', async () => {
+    const urls: string[] = []
+    server.use(
+      http.get(`${BASE_URL}/store-api/kv/shop/watch`, ({ request }) => {
+        urls.push(request.url)
+        return new HttpResponse('', { headers: { 'Content-Type': 'text/event-stream' } })
+      }),
+    )
+
+    const { openStream, onCall } = makeApi()
+    const calls: CallInfo[] = []
+    onCall((info) => calls.push(info))
+    await openStream('/store-api/kv/shop/watch', { lastEventId: 'w-abc-1' })
+    await openStream('/store-api/kv/shop/watch?prefix=r', { lastEventId: 'w-abc-2' })
+    await openStream('/store-api/kv/shop/watch', { lastEventId: 'w abc/1&2' })
+    await openStream('/store-api/kv/shop/watch?prefix=r')
+
+    expect(urls).toEqual([
+      `${BASE_URL}/store-api/kv/shop/watch?last_event_id=w-abc-1`,
+      `${BASE_URL}/store-api/kv/shop/watch?prefix=r&last_event_id=w-abc-2`,
+      `${BASE_URL}/store-api/kv/shop/watch?last_event_id=w%20abc%2F1%262`,
+      `${BASE_URL}/store-api/kv/shop/watch?prefix=r`,
+    ])
+    expect(calls.map((call) => call.path)).toEqual(Array(4).fill('/store-api/kv/shop/watch'))
+  })
+
   it('openStream returns a non-2xx response without throwing and records the numeric status', async () => {
     server.use(http.get(`${BASE_URL}/store-api/kv/gone/watch`, () => new HttpResponse(null, { status: 410 })))
 
