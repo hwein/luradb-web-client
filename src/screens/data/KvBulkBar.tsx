@@ -20,7 +20,7 @@ import { invalidateKvKeys, kvBulkKeysQueryOptions } from './kvEntries'
 
 const ACTIONS: KvBulkAction[] = ['delete', 'clear', 'set-null']
 
-/** Nur die Vorschau ist gekappt (Tipp-Lag bei 10k+-Scans) — Selektion und Lauf nutzen die volle Liste; ungekappt bleibt laut Spec §5 allein die Fehlerliste. */
+/** Nur die Vorschau ist gekappt (DOM-Last bei 10k-Selektionen) — Selektion und Lauf nutzen die ganze geladene Seite; ungekappt bleibt laut Spec §5 allein die Fehlerliste. */
 const PREVIEW_LIMIT = 200
 
 const ACTION_LABEL: Record<KvBulkAction, string> = {

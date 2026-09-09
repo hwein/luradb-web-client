@@ -43,6 +43,7 @@ export function useEngineActivity(apiClient: ApiClient | undefined, domain: Doma
   const hasJson = domain.engines.json !== undefined
   const hasKv = domain.engines.kv !== undefined
 
+  // 60s für Proben und O(n)-Zähler (spec shell/010 §7); die Listen der expandierten Domäne pollen in ExpandedDomain mit 30s.
   const tablesQuery = useQuery({ ...relTablesQueryOptions(apiClient, domain.name, hasRel), refetchInterval: 60_000 })
   const viewsQuery = useQuery({ ...relViewsQueryOptions(apiClient, domain.name, hasRel), refetchInterval: 60_000 })
   const jsonDetailQuery = useQuery({ ...jsonDomainDetailQueryOptions(apiClient, domain.name, hasJson), refetchInterval: 60_000 })
