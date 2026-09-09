@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import type { ApiClient } from '../../api'
 import type { components } from '../../api/schema'
-import { CallLine } from '../../lib'
+import { CallLine, formatNumber } from '../../lib'
 import { relTableDetailQueryOptions } from '../../shell/domainDetails'
 import { useDomainSummaries } from '../../shell/domains'
 import { openDocs } from '../docs/openDocs'
@@ -22,10 +22,6 @@ interface RelBrowserProps {
   table: string
   filterCol: string | undefined
   filterVal: string | undefined
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString('en-US')
 }
 
 function refTone(column: ColumnInfo): 'json' | 'kv' | undefined {

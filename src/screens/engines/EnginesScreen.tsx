@@ -7,7 +7,7 @@ import { jsonDomainsQueryOptions, kvDomainsQueryOptions, relDomainsQueryOptions 
 import { useJsonEngineTotals, useRelEngineTotals } from './domainMetrics'
 import { EngineCard, type EngineCardRow, type EngineTone } from './EngineCard'
 import './EnginesScreen.css'
-import { formatNumber } from './format'
+import { formatNumber } from '../../lib'
 import { healthQueryOptions } from './health'
 import { metricsQueryOptions } from './metrics'
 import { RecentRequestsCard } from './RecentRequestsCard'

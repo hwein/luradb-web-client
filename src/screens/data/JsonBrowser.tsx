@@ -2,7 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { BASE_PATH, type ApiClient } from '../../api'
-import { CallLine } from '../../lib'
+import { CallLine, formatNumber } from '../../lib'
 import { jsonIndexesQueryOptions } from '../../shell/domainDetails'
 import { BulkImportModal } from './BulkImportModal'
 import { DataHeader } from './DataHeader'
@@ -15,10 +15,6 @@ interface JsonBrowserProps {
   domain: string
   apiClient: ApiClient | undefined
   initialKey: string | undefined
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString('en-US')
 }
 
 function messageOf(error: unknown): string {

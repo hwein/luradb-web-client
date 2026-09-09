@@ -11,3 +11,8 @@ export function formatBytes(bytes: number): string {
   }
   return `${value.toFixed(1)} ${BYTE_UNITS[unitIndex]}`
 }
+
+/** Ganzzahl mit Tausendertrennung wie im Prototyp (`8,102`); Nicht-Ganzzahlen werden gerundet (Engine-Metriken). */
+export function formatNumber(value: number): string {
+  return Math.round(value).toLocaleString('en-US')
+}

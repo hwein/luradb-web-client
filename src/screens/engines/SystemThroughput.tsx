@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { formatNumber } from './format'
+import { formatNumber } from '../../lib'
 import type { MetricsSnapshot } from './metrics'
 import { appendSample, sampleRate, type RateSample, type Totals } from './rate'
 import { Sparkline } from './Sparkline'
