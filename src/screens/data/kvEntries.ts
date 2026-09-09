@@ -125,6 +125,38 @@ export function kvValueQueryOptions(apiClient: ApiClient | undefined, domain: st
   })
 }
 
+/** Feldnamen tragen die Einheit, weil der Server sie in einem Body mischt: `expires_at` in Sekunden, `last_modified_at` in Millisekunden (Probe-Fakt data/012). */
+export interface KvMeta {
+  expiresAtSecs: number | undefined
+  lastModifiedMs: number
+}
+
+/** `…/keys/{key}/meta` (Contract 0.6.1) — aufgezeichnet, Antwort auf die Key-Auswahl. 404 (Key zwischen Value- und Meta-GET abgelaufen) ist
+ *  kein Query-Fehler, sondern `null` (TanStack lässt `undefined` als Query-Ergebnis nicht zu). */
+export function kvMetaQueryOptions(apiClient: ApiClient | undefined, domain: string, key: string | undefined) {
+  return queryOptions({
+    queryKey: ['kv-meta', domain, key ?? ''] as const,
+    queryFn: async (): Promise<KvMeta | null> => {
+      if (!apiClient || key === undefined) throw new Error('kv meta query requires an active connection and key')
+      const { data, response } = await apiClient.api.GET('/store-api/kv/{domain}/keys/{key}/meta', { params: { path: { domain, key } } })
+      if (response.status === 404) return null
+      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load key metadata')
+      return { expiresAtSecs: data.expires_at ?? undefined, lastModifiedMs: data.last_modified_at }
+    },
+    enabled: apiClient !== undefined && key !== undefined,
+  })
+}
+
+/** Kurze Wortform wie `formatUptime` (useConnection.ts): `42s` · `58m` · `5h 3m` · `12d 4h`; negativ ⇒ `0s` (Uhren-Versatz Host ↔ Container).
+ *  Rein — kennt weder `Date.now()` noch die Copy, damit Tests ohne Fake-Timer auskommen. */
+export function formatShortDuration(totalSecs: number): string {
+  const secs = Math.max(0, Math.floor(totalSecs))
+  if (secs < 60) return `${secs}s`
+  if (secs < 3600) return `${Math.floor(secs / 60)}m`
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ${Math.floor((secs % 3600) / 60)}m`
+  return `${Math.floor(secs / 86400)}d ${Math.floor((secs % 86400) / 3600)}h`
+}
+
 function withTtlQuery(path: string, ttlSeconds: number | undefined): string {
   return ttlSeconds === undefined ? path : `${path}?${new URLSearchParams({ ttl: String(ttlSeconds) }).toString()}`
 }

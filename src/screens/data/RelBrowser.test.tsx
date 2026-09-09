@@ -345,6 +345,8 @@ describe('RelBrowser', () => {
     await connectAndRender(`/data?engine=rel&table=${TABLE}`, [
       http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json(kvKeyScan(['cart_1', 'cart_2']))),
       http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys/cart_1`, () => new HttpResponse('cart-contents', { headers: { 'content-type': 'application/octet-stream' } })),
+      // Das KV-Detail liest seit data/012 auch /meta — unbehandelt ginge der Request an die echte Instanz (401 ⇒ globaler Disconnect).
+      http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys/cart_1/meta`, () => HttpResponse.text('404 Not Found', { status: 404 })),
     ])
     await screen.findByText('ROW 1')
 

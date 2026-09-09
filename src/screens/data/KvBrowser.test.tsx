@@ -2,7 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect } from '../../app/session'
@@ -42,6 +42,14 @@ function baseHandlers() {
   ]
 }
 
+function metaUrl(key: string): string {
+  return `${keyUrl(key)}/meta`
+}
+
+function metaLine(): string {
+  return document.querySelector('.kv-detail__meta')?.textContent ?? ''
+}
+
 /** MSW-Handler, der die Frames streamt und den Body offen hält (kein Reconnect während des Tests) — Muster aus useKvWatch.test.tsx. */
 function watchStream(frames: string[]) {
   return http.get(WATCH_URL, () => {
@@ -75,6 +83,11 @@ async function connectAndRender(initialPath = '/data?engine=kv') {
 function footerText(): string {
   return document.querySelector('.data__footer')?.textContent ?? ''
 }
+
+// Fallback vor den Test-Handlern registriert (MSW: zuletzt registriert gewinnt) — ohne Metadaten sieht die Meta-Zeile aus wie vor data/012.
+beforeEach(() => {
+  server.use(http.get(`${KEYS_URL}/:key/meta`, () => HttpResponse.text('404 Not Found: key not found', { status: 404 })))
+})
 
 afterEach(() => {
   act(() => disconnect())
@@ -622,4 +635,102 @@ describe('KvBrowser', () => {
     expect(putCalled).toBe(false)
     expect(await screen.findByLabelText('value editor')).toBeInTheDocument()
   })
+
+  describe('ttl and key metadata in the detail (spec data/012)', () => {
+    it('appends "expires in" and "modified … ago" from /meta (seconds vs. milliseconds) to the bytes line', async () => {
+      const nowSecs = Math.floor(Date.now() / 1000)
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['ttl-key']))),
+        http.get(keyUrl('ttl-key'), () => rawValue('payload')),
+        http.get(metaUrl('ttl-key'), () => HttpResponse.json({ expires_at: nowSecs + 601, last_modified_at: Date.now() - 120_500 })),
+      )
+      await connectAndRender()
+
+      await screen.findByText('KEY ttl-key')
+      await waitFor(() => expect(metaLine()).toBe('7 bytes · expires in 10m · modified 2m ago'))
+    })
+
+    it('shows no expiry segment for a key without ttl, but still the modification age', async () => {
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['plain']))),
+        http.get(keyUrl('plain'), () => rawValue('payload')),
+        http.get(metaUrl('plain'), () => HttpResponse.json({ expires_at: null, last_modified_at: Date.now() - 5 * 3600_000 - 3 * 60_000 - 500 })),
+      )
+      await connectAndRender()
+
+      await screen.findByText('KEY plain')
+      await waitFor(() => expect(metaLine()).toBe('7 bytes · modified 5h 3m ago'))
+      expect(metaLine()).not.toContain('expires')
+    })
+
+    it('says "expired" once expires_at lies in the past', async () => {
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['stale']))),
+        http.get(keyUrl('stale'), () => rawValue('payload')),
+        http.get(metaUrl('stale'), () => HttpResponse.json({ expires_at: Math.floor(Date.now() / 1000) - 5, last_modified_at: Date.now() - 1000 })),
+      )
+      await connectAndRender()
+
+      await screen.findByText('KEY stale')
+      await waitFor(() => expect(metaLine()).toBe('7 bytes · expired · modified 1s ago'))
+    })
+
+    it('leaves the line exactly as before when /meta answers 404 — no placeholder, no error', async () => {
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['raced']))),
+        http.get(keyUrl('raced'), () => rawValue('payload')),
+        http.get(metaUrl('raced'), () => HttpResponse.text("404 Not Found: key 'raced' not found", { status: 404 })),
+      )
+      const { queryClient } = await connectAndRender()
+
+      await screen.findByText('KEY raced')
+      await waitFor(() => expect(queryClient.getQueryState(['kv-meta', DOMAIN, 'raced'])?.status).toBe('success'))
+      expect(metaLine()).toBe('7 bytes')
+      expect(screen.queryByText(/not found/)).not.toBeInTheDocument()
+    })
+
+    it('appends only the modification age to the null-state line, never an expiry segment', async () => {
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['nulled']))),
+        http.get(keyUrl('nulled'), () => new HttpResponse(null, { status: 204 })),
+        http.get(metaUrl('nulled'), () => HttpResponse.json({ expires_at: Math.floor(Date.now() / 1000) + 600, last_modified_at: Date.now() - 42_500 })),
+      )
+      await connectAndRender()
+
+      await screen.findByText('NULL')
+      await waitFor(() => expect(metaLine()).toBe('explicit null state — GET answers 204 · modified 42s ago'))
+    })
+
+    it('refetches the metadata after save and after set null, and drops the cache entry after delete', async () => {
+      let metaReads = 0
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['meta-key']))),
+        http.get(keyUrl('meta-key'), () => rawValue('payload')),
+        http.get(metaUrl('meta-key'), () => {
+          metaReads += 1
+          return HttpResponse.json({ expires_at: null, last_modified_at: Date.now() })
+        }),
+        http.put(keyUrl('meta-key'), () => new HttpResponse(null, { status: 200 })),
+        http.patch(`${keyUrl('meta-key')}/null`, () => new HttpResponse(null, { status: 200 })),
+        http.delete(keyUrl('meta-key'), () => new HttpResponse(null, { status: 204 })),
+      )
+      const { queryClient } = await connectAndRender()
+      await screen.findByText('KEY meta-key')
+      await waitFor(() => expect(metaReads).toBe(1))
+
+      fireEvent.click(screen.getByRole('button', { name: 'edit' }))
+      await screen.findByLabelText('value editor')
+      fireEvent.click(screen.getByRole('button', { name: 'save' }))
+      await waitFor(() => expect(metaReads).toBe(2))
+
+      fireEvent.click(await screen.findByRole('button', { name: 'set null' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'set null — sure?' }))
+      await waitFor(() => expect(metaReads).toBe(3))
+
+      fireEvent.click(await screen.findByRole('button', { name: 'delete' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'delete — sure?' }))
+      await waitFor(() => expect(queryClient.getQueryState(['kv-meta', DOMAIN, 'meta-key'])).toBeUndefined())
+    })
+  })
 })
+

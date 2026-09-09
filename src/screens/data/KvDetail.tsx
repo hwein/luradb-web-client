@@ -2,7 +2,18 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { BASE_PATH, type ApiClient } from '../../api'
 import { CodeEditor } from '../../lib'
-import { deleteValue, invalidateKvKeys, kvValueQueryOptions, parseTtlSeconds, putValue, setNullValue, tryParseJson } from './kvEntries'
+import {
+  deleteValue,
+  formatShortDuration,
+  invalidateKvKeys,
+  kvMetaQueryOptions,
+  kvValueQueryOptions,
+  parseTtlSeconds,
+  putValue,
+  setNullValue,
+  tryParseJson,
+  type KvMeta,
+} from './kvEntries'
 
 export type KvDetailMode = { kind: 'empty' } | { kind: 'view'; key: string } | { kind: 'new' }
 
@@ -28,12 +39,27 @@ function renderValue(text: string): string {
   return parsed !== undefined ? JSON.stringify(parsed, null, 2) : text
 }
 
+/** Zusätze der Meta-Zeile (spec data/012 §3) als Momentaufnahme des Renders — kein Ticker; ohne Metadaten (lädt/404) bleibt die Zeile wie zuvor.
+ *  Expiry nur im Wert-Fall: ein Null-Write löscht die TTL (Probe-Fakt), das Null-Segment trägt daher nie eines. */
+function metaSuffix(meta: KvMeta | null | undefined, withExpiry: boolean): string {
+  if (meta === null || meta === undefined) return ''
+  const nowSecs = Date.now() / 1000
+  const parts: string[] = []
+  if (withExpiry && meta.expiresAtSecs !== undefined) {
+    const remaining = meta.expiresAtSecs - nowSecs
+    parts.push(remaining <= 0 ? 'expired' : `expires in ${formatShortDuration(remaining)}`)
+  }
+  parts.push(`modified ${formatShortDuration(nowSecs - meta.lastModifiedMs / 1000)} ago`)
+  return parts.map((part) => ` · ${part}`).join('')
+}
+
 /** Detail-Spalte (spec §3): Ansicht/Edit/Set-null/Delete eines Keys, "new key"-Formular, Raw-Pfad-Fuß. */
 export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDetailProps) {
   const queryClient = useQueryClient()
 
   const viewKey = mode.kind === 'view' ? mode.key : undefined
   const valueQuery = useQuery(kvValueQueryOptions(apiClient, domain, viewKey))
+  const metaQuery = useQuery(kvMetaQueryOptions(apiClient, domain, viewKey))
 
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState('')
@@ -54,8 +80,10 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
     setNullArmed(false)
   }, [mode])
 
+  // Jeder Write ändert `last_modified_at` und setzt/löscht die TTL — die Meta-Query zieht mit dem Value mit (spec data/012 §4).
   function invalidate(key: string): void {
     void queryClient.invalidateQueries({ queryKey: ['kv-value', domain, key] })
+    void queryClient.invalidateQueries({ queryKey: ['kv-meta', domain, key] })
     invalidateKvKeys(queryClient, domain)
   }
 
@@ -88,6 +116,7 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
     },
     onSuccess: (_data, key) => {
       queryClient.removeQueries({ queryKey: ['kv-value', domain, key] })
+      queryClient.removeQueries({ queryKey: ['kv-meta', domain, key] })
       invalidateKvKeys(queryClient, domain)
       setDeleteArmed(false)
       onClear()
@@ -296,12 +325,15 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
       ) : value.state === 'null' ? (
         <>
           <pre className="kv-detail__value kv-detail__value--null">NULL</pre>
-          <div className="kv-detail__meta">explicit null state — GET answers 204</div>
+          <div className="kv-detail__meta">explicit null state — GET answers 204{metaSuffix(metaQuery.data, false)}</div>
         </>
       ) : (
         <>
           <pre className="kv-detail__value">{renderValue(value.text)}</pre>
-          <div className="kv-detail__meta">{formatBytes(value.bytes)}</div>
+          <div className="kv-detail__meta">
+            {formatBytes(value.bytes)}
+            {metaSuffix(metaQuery.data, true)}
+          </div>
         </>
       )}
 

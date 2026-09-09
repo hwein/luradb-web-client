@@ -10,6 +10,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - REST Explorer lists the endpoints added in LuraDB 0.4.0.
 - KV browser pages keys server-side, shows loaded vs. total, and filters by a case-sensitive `contains` substring (also in the bulk panel).
 - Explorer shows the row count next to each table of the expanded domain.
+- KV key detail shows the remaining TTL and the last modification time.
 
 ### Changed
 

@@ -3,7 +3,16 @@ import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { createApi } from '../../api'
 import { kvKeyScan, server } from '../../test/msw'
-import { fetchKvKeysPage, kvBulkKeysQueryOptions, kvKeysQueryOptions, kvValueQueryOptions, parseTtlSeconds, tryParseJson } from './kvEntries'
+import {
+  fetchKvKeysPage,
+  formatShortDuration,
+  kvBulkKeysQueryOptions,
+  kvKeysQueryOptions,
+  kvMetaQueryOptions,
+  kvValueQueryOptions,
+  parseTtlSeconds,
+  tryParseJson,
+} from './kvEntries'
 
 const BASE_URL = 'http://127.0.0.1:3000'
 const KEYS_URL = `${BASE_URL}/store-api/kv/shop/keys`
@@ -142,6 +151,50 @@ describe('kvValueQueryOptions', () => {
     const value = await queryClient.fetchQuery(kvValueQueryOptions(apiClient, 'shop', 'nulled'))
 
     expect(value).toEqual({ state: 'null' })
+  })
+})
+
+describe('kvMetaQueryOptions (spec data/012 §1)', () => {
+  it('keys by domain and key and is disabled without a connection or key', () => {
+    expect(kvMetaQueryOptions(undefined, 'shop', 'cart:1').queryKey).toEqual(['kv-meta', 'shop', 'cart:1'])
+    expect(kvMetaQueryOptions(undefined, 'shop', 'cart:1').enabled).toBe(false)
+    expect(kvMetaQueryOptions(makeApi(), 'shop', undefined).enabled).toBe(false)
+  })
+
+  it('reads expires_at as seconds and last_modified_at as milliseconds; null expiry becomes undefined', async () => {
+    server.use(
+      http.get(`${BASE_URL}/store-api/kv/shop/keys/ttl/meta`, () => HttpResponse.json({ expires_at: 1788011027, last_modified_at: 1788007426476 })),
+      http.get(`${BASE_URL}/store-api/kv/shop/keys/plain/meta`, () => HttpResponse.json({ expires_at: null, last_modified_at: 1788007426431 })),
+    )
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+    await expect(queryClient.fetchQuery(kvMetaQueryOptions(makeApi(), 'shop', 'ttl'))).resolves.toEqual({ expiresAtSecs: 1788011027, lastModifiedMs: 1788007426476 })
+    await expect(queryClient.fetchQuery(kvMetaQueryOptions(makeApi(), 'shop', 'plain'))).resolves.toEqual({ expiresAtSecs: undefined, lastModifiedMs: 1788007426431 })
+  })
+
+  it('treats a 404 (key expired between value and meta read) as null, not as a query error', async () => {
+    server.use(http.get(`${BASE_URL}/store-api/kv/shop/keys/gone/meta`, () => HttpResponse.text("404 Not Found: key 'gone' not found", { status: 404 })))
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+    await expect(queryClient.fetchQuery(kvMetaQueryOptions(makeApi(), 'shop', 'gone'))).resolves.toBeNull()
+  })
+})
+
+describe('formatShortDuration (spec data/012 §2)', () => {
+  it('switches units at the 60 / 3600 / 86400 boundaries', () => {
+    expect(formatShortDuration(0)).toBe('0s')
+    expect(formatShortDuration(59)).toBe('59s')
+    expect(formatShortDuration(60)).toBe('1m')
+    expect(formatShortDuration(3599)).toBe('59m')
+    expect(formatShortDuration(3600)).toBe('1h 0m')
+    expect(formatShortDuration(86399)).toBe('23h 59m')
+    expect(formatShortDuration(86400)).toBe('1d 0h')
+    expect(formatShortDuration(12 * 86400 + 4 * 3600 + 30)).toBe('12d 4h')
+  })
+
+  it('treats negative input (clock skew) as zero', () => {
+    expect(formatShortDuration(-0.4)).toBe('0s')
+    expect(formatShortDuration(-90)).toBe('0s')
   })
 })
 

@@ -90,8 +90,9 @@ export function KvBulkBar({ domain, apiClient, prefix, initialContains }: KvBulk
     },
     onSuccess: () => {
       invalidateKvKeys(queryClient, domain)
-      // set null/clear ändern den Wert eines ggf. offenen Details, ohne dass der Key die Liste verlässt (0.2.0-Upsert).
+      // set null/clear ändern Wert und Metadaten eines ggf. offenen Details, ohne dass der Key die Liste verlässt (0.2.0-Upsert).
       void queryClient.invalidateQueries({ queryKey: ['kv-value', domain] })
+      void queryClient.invalidateQueries({ queryKey: ['kv-meta', domain] })
     },
   })
 
