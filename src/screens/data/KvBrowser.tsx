@@ -59,10 +59,11 @@ export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
     event.preventDefault()
     const next = { prefix: prefixText.trim(), contains: containsText.trim() }
     // Unveränderte Filter wären ein State-No-Op ohne Request — Scan soll aber immer den frischen Stand holen (z. B. nach TTL-Ablauf).
-    // Das offene Detail zieht mit: erst dessen 404 räumt die Auswahl, die Liste beweist mit Paginierung nichts mehr (spec data/011 §6).
+    // Das offene Detail zieht mit (Wert + Metadaten): erst dessen 404 räumt die Auswahl, die Liste beweist mit Paginierung nichts mehr (spec data/011 §6).
     if (next.prefix === committed.prefix && next.contains === committed.contains) {
       invalidateKvKeys(queryClient, domain)
       void queryClient.invalidateQueries({ queryKey: ['kv-value', domain] })
+      void queryClient.invalidateQueries({ queryKey: ['kv-meta', domain] })
       return
     }
     setCommitted(next)

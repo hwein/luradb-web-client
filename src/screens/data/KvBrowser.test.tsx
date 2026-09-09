@@ -701,6 +701,25 @@ describe('KvBrowser', () => {
       await waitFor(() => expect(metaLine()).toBe('explicit null state — GET answers 204 · modified 42s ago'))
     })
 
+    it('re-scanning with unchanged filters refetches the metadata of the open key as well (spec data/012 §4)', async () => {
+      let metaReads = 0
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['meta-key']))),
+        http.get(keyUrl('meta-key'), () => rawValue('payload')),
+        http.get(metaUrl('meta-key'), () => {
+          metaReads += 1
+          return HttpResponse.json({ expires_at: null, last_modified_at: Date.now() })
+        }),
+      )
+      await connectAndRender()
+      await screen.findByText('KEY meta-key')
+      await waitFor(() => expect(metaReads).toBe(1))
+
+      fireEvent.click(screen.getByRole('button', { name: 'Scan' }))
+
+      await waitFor(() => expect(metaReads).toBe(2))
+    })
+
     it('refetches the metadata after save and after set null, and drops the cache entry after delete', async () => {
       let metaReads = 0
       server.use(
