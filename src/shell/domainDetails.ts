@@ -110,8 +110,8 @@ export function kvKeyCountQueryOptions(apiClient: ApiClient | undefined, domain:
   })
 }
 
-/** Row-Count je Tabelle (spec shell/010 §4) — serverseitig ein O(n)-Key-Scan, daher nur für die expandierte Domäne und im 60s-Takt. */
-export function relTableRowCountQueryOptions(apiClient: ApiClient | undefined, domain: string, table: string, enabled: boolean) {
+/** Row-Count je Tabelle (spec shell/010 §4) — nur die Tabellenzeilen der expandierten Domäne halten diese Query. */
+export function relTableRowCountQueryOptions(apiClient: ApiClient | undefined, domain: string, table: string) {
   return queryOptions({
     queryKey: ['rel-table-count', domain, table] as const,
     queryFn: async (context): Promise<number> => {
@@ -123,6 +123,6 @@ export function relTableRowCountQueryOptions(apiClient: ApiClient | undefined, d
       if (!response.ok || !data) throw new ApiError(response.status, 'failed to count rows')
       return data.count
     },
-    enabled: enabled && apiClient !== undefined,
+    enabled: apiClient !== undefined,
   })
 }

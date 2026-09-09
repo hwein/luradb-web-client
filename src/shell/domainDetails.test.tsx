@@ -70,7 +70,7 @@ describe('kvKeyCountQueryOptions (spec shell/010 §1)', () => {
 describe('relTableRowCountQueryOptions (spec shell/010 §4)', () => {
   it('keys by domain and table and returns the count from GET …/tables/{table}/count', async () => {
     server.use(http.get(`${BASE_URL}/store-api/rel/shop/tables/orders/count`, () => HttpResponse.json({ count: 12400 })))
-    const options = relTableRowCountQueryOptions(makeApiClient(), 'shop', 'orders', true)
+    const options = relTableRowCountQueryOptions(makeApiClient(), 'shop', 'orders')
     expect(options.queryKey).toEqual(['rel-table-count', 'shop', 'orders'])
 
     await expect(createAppQueryClient().fetchQuery(options)).resolves.toBe(12400)
@@ -85,6 +85,6 @@ describe('relTableRowCountQueryOptions (spec shell/010 §4)', () => {
       }),
     )
     const apiClient = makeApiClient()
-    await expectFirstLoadRecordedThenSilent(apiClient, relTableRowCountQueryOptions(apiClient, 'shop', 'orders', true), () => requests)
+    await expectFirstLoadRecordedThenSilent(apiClient, relTableRowCountQueryOptions(apiClient, 'shop', 'orders'), () => requests)
   })
 })

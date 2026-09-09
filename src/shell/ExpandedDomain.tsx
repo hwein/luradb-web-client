@@ -51,10 +51,9 @@ function SectionLabel({ tone, text, addLabel, onAdd }: { tone: 'rel' | 'json' | 
   )
 }
 
-/** Tabellenzeile mit eigener Row-Count-Query (spec shell/010 §4): Zahl nur bei Erfolg — kein Platzhalter, keine `0` auf Verdacht.
- *  60s wie die Aktivitäts-Proben, nicht 30s wie die Listen: serverseitig je Count ein O(n)-Key-Scan (general/017). */
+/** Tabellenzeile mit eigener Row-Count-Query (spec shell/010 §4): Zahl nur bei Erfolg — kein Platzhalter, keine `0` auf Verdacht. */
 function TableObjectRow({ domain, table, apiClient, onOpen }: { domain: string; table: string; apiClient: ApiClient | undefined; onOpen: () => void }) {
-  const countQuery = useQuery({ ...relTableRowCountQueryOptions(apiClient, domain, table, true), refetchInterval: 60_000 })
+  const countQuery = useQuery({ ...relTableRowCountQueryOptions(apiClient, domain, table), refetchInterval: 60_000 })
   return (
     <button type="button" className="explorer__object-row" onClick={onOpen}>
       <EngineChip letter="T" tone="rel" /> {table}
