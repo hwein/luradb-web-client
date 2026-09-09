@@ -4,7 +4,13 @@ import { useNavigate } from 'react-router'
 import type { ApiClient } from '../api'
 import { CreateTableModal } from '../screens/sql/CreateTableModal'
 import { addTab } from '../screens/sql/sqlStore'
-import { jsonDomainDetailQueryOptions, jsonIndexesQueryOptions, relTablesQueryOptions, relViewsQueryOptions } from './domainDetails'
+import {
+  jsonDomainDetailQueryOptions,
+  jsonIndexesQueryOptions,
+  relTableRowCountQueryOptions,
+  relTablesQueryOptions,
+  relViewsQueryOptions,
+} from './domainDetails'
 import type { DomainSummary } from './domains'
 import { useEngineActivity } from './engineActivity'
 
@@ -42,6 +48,18 @@ function SectionLabel({ tone, text, addLabel, onAdd }: { tone: 'rel' | 'json' | 
         +
       </button>
     </div>
+  )
+}
+
+/** Tabellenzeile mit eigener Row-Count-Query (spec shell/010 §4): Zahl nur bei Erfolg — kein Platzhalter, keine `0` auf Verdacht.
+ *  60s wie die Aktivitäts-Proben, nicht 30s wie die Listen: serverseitig je Count ein O(n)-Key-Scan (general/017). */
+function TableObjectRow({ domain, table, apiClient, onOpen }: { domain: string; table: string; apiClient: ApiClient | undefined; onOpen: () => void }) {
+  const countQuery = useQuery({ ...relTableRowCountQueryOptions(apiClient, domain, table, true), refetchInterval: 60_000 })
+  return (
+    <button type="button" className="explorer__object-row" onClick={onOpen}>
+      <EngineChip letter="T" tone="rel" /> {table}
+      {countQuery.isSuccess && <span className="explorer__object-count">{formatCount(countQuery.data)}</span>}
+    </button>
   )
 }
 
@@ -89,9 +107,7 @@ export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
                 onAdd={() => setTableModalOpen(true)}
               />
               {(tablesQuery.data ?? []).map((table) => (
-                <button key={table.name} type="button" className="explorer__object-row" onClick={() => openInData('rel', table.name)}>
-                  <EngineChip letter="T" tone="rel" /> {table.name}
-                </button>
+                <TableObjectRow key={table.name} domain={domain.name} table={table.name} apiClient={apiClient} onOpen={() => openInData('rel', table.name)} />
               ))}
               {(viewsQuery.data ?? []).map((view) => (
                 <button

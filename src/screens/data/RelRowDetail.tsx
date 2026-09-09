@@ -239,6 +239,7 @@ export function RelRowDetail({ domain, apiClient, table, columns, mode, row, onC
   function invalidateRows(): void {
     void queryClient.invalidateQueries({ queryKey: ['rel-rows', domain, table] })
     void queryClient.invalidateQueries({ queryKey: ['rel-rows-filtered', domain, table] })
+    void queryClient.invalidateQueries({ queryKey: ['rel-table-count', domain, table] })
   }
 
   const insertMutation = useMutation<{ affected: number; lastPk: unknown }, unknown, Record<string, unknown>>({

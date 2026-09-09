@@ -65,7 +65,7 @@ async function connectAndRender(initialPath = `/data?engine=rel&table=${TABLE}`,
   if (extraHandlers.length > 0) server.use(...extraHandlers)
   await act(() => connect(makeConnection()))
   const queryClient = createAppQueryClient()
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialPath]}>
         <SelectedDomainProvider>
@@ -77,6 +77,7 @@ async function connectAndRender(initialPath = `/data?engine=rel&table=${TABLE}`,
       </MemoryRouter>
     </QueryClientProvider>,
   )
+  return { queryClient, ...view }
 }
 
 function footerText(): string {
@@ -366,8 +367,10 @@ describe('RelBrowser', () => {
         return HttpResponse.json({ affected: 1, last_pk: 3 }, { status: 201 })
       }),
     )
-    await connectAndRender()
+    const { queryClient } = await connectAndRender()
     await screen.findByText('no rows')
+    const countKey = ['rel-table-count', DOMAIN, TABLE]
+    queryClient.setQueryData(countKey, 0)
 
     fireEvent.click(screen.getByRole('button', { name: '+ new row' }))
     fireEvent.change(screen.getByLabelText('total'), { target: { value: '99.5' } })
@@ -375,6 +378,8 @@ describe('RelBrowser', () => {
 
     await waitFor(() => expect(postBody).toEqual({ total: 99.5 }))
     expect(await screen.findByText('ROW 3')).toBeInTheDocument()
+    // Der Explorer-Row-Count der Tabelle zieht mit (spec shell/010 §9).
+    await waitFor(() => expect(queryClient.getQueryState(countKey)?.isInvalidated).toBe(true))
   })
 
   it('edits a row via PUT (partial body, PK excluded) and supports the null-checkbox for a nullable column', async () => {

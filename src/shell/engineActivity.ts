@@ -3,7 +3,7 @@ import type { ApiClient } from '../api'
 import {
   jsonDomainDetailQueryOptions,
   jsonIndexesQueryOptions,
-  kvKeysProbeQueryOptions,
+  kvKeyCountQueryOptions,
   relTablesQueryOptions,
   relViewsQueryOptions,
 } from './domainDetails'
@@ -36,7 +36,7 @@ function levelFromCounts(queries: CountQuery[]): EngineActivityLevel {
  * Store-Aktivität je Registry-Engine der Domäne (spec shell/004 §1): "aktiv" heißt "enthält Objekte"
  * (rel: Tabellen/Views, json: Dokumente/Indexe, kv: Keys) — nicht Registry-Zugehörigkeit. Engine fehlt in
  * der Registry -> undefined. rel/json teilen die Query-Keys mit domainDetails.ts (ein Cache über Explorer,
- * ExpandedDomain und Admin-DomainsCard); für kv liefert dieser Hook zusätzlich den Key-Count aus der Zählabfrage.
+ * ExpandedDomain und Admin-DomainsCard); für kv liefert dieser Hook zusätzlich den Key-Count aus `GET …/kv/{domain}/count`.
  */
 export function useEngineActivity(apiClient: ApiClient | undefined, domain: DomainSummary): EngineActivity {
   const hasRel = domain.engines.rel !== undefined
@@ -47,7 +47,7 @@ export function useEngineActivity(apiClient: ApiClient | undefined, domain: Doma
   const viewsQuery = useQuery({ ...relViewsQueryOptions(apiClient, domain.name, hasRel), refetchInterval: 60_000 })
   const jsonDetailQuery = useQuery({ ...jsonDomainDetailQueryOptions(apiClient, domain.name, hasJson), refetchInterval: 60_000 })
   const indexesQuery = useQuery({ ...jsonIndexesQueryOptions(apiClient, domain.name, hasJson), refetchInterval: 60_000 })
-  const keysQuery = useQuery({ ...kvKeysProbeQueryOptions(apiClient, domain.name, hasKv), refetchInterval: 60_000 })
+  const kvCountQuery = useQuery({ ...kvKeyCountQueryOptions(apiClient, domain.name, hasKv), refetchInterval: 60_000 })
 
   const relCounts: CountQuery[] = [
     { isSuccess: tablesQuery.isSuccess, count: tablesQuery.data?.length ?? 0 },
@@ -57,7 +57,7 @@ export function useEngineActivity(apiClient: ApiClient | undefined, domain: Doma
     { isSuccess: jsonDetailQuery.isSuccess, count: jsonDetailQuery.data?.document_count ?? 0 },
     { isSuccess: indexesQuery.isSuccess, count: indexesQuery.data?.length ?? 0 },
   ]
-  const kvCounts: CountQuery[] = [{ isSuccess: keysQuery.isSuccess, count: keysQuery.data ?? 0 }]
+  const kvCounts: CountQuery[] = [{ isSuccess: kvCountQuery.isSuccess, count: kvCountQuery.data ?? 0 }]
 
   const rel = hasRel ? levelFromCounts(relCounts) : undefined
   const json = hasJson ? levelFromCounts(jsonCounts) : undefined
@@ -68,5 +68,5 @@ export function useEngineActivity(apiClient: ApiClient | undefined, domain: Doma
     ? allCounts.reduce((sum, query) => sum + query.count, 0)
     : undefined
 
-  return { rel, json, kv, kvKeyCount: kv === 'active' ? keysQuery.data : undefined, objectCount }
+  return { rel, json, kv, kvKeyCount: kv === 'active' ? kvCountQuery.data : undefined, objectCount }
 }

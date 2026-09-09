@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect, useSession } from '../../app/session'
-import { kvKeyScan, server } from '../../test/msw'
+import { server } from '../../test/msw'
 import { DomainsCard } from './DomainsCard'
 
 const ORIGIN = window.location.origin
@@ -57,8 +57,8 @@ describe('DomainsCard', () => {
       // shop steht per Anlage-Kaskade (shell/003) auch in der rel-Registry, hat aber noch keine Tabellen/Views -> kein rel-Dot.
       http.get(`${ORIGIN}/store-api/rel/shop/tables`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/rel/shop/views`, () => HttpResponse.json([])),
-      http.get(`${ORIGIN}/store-api/kv/shop/keys`, () => HttpResponse.json(kvKeyScan(['k1']))),
-      http.get(`${ORIGIN}/store-api/kv/sessions/keys`, () => HttpResponse.json(kvKeyScan(['s1']))),
+      http.get(`${ORIGIN}/store-api/kv/shop/count`, () => HttpResponse.json({ count: 1 })),
+      http.get(`${ORIGIN}/store-api/kv/sessions/count`, () => HttpResponse.json({ count: 1 })),
     )
     await act(() => connect(makeConnection()))
     renderConnected()
@@ -91,7 +91,7 @@ describe('DomainsCard', () => {
       http.get(`${ORIGIN}/store-api/json/fresh/indexes`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/rel/fresh/tables`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/rel/fresh/views`, () => HttpResponse.json([])),
-      http.get(`${ORIGIN}/store-api/kv/fresh/keys`, () => HttpResponse.json(kvKeyScan([]))),
+      http.get(`${ORIGIN}/store-api/kv/fresh/count`, () => HttpResponse.json({ count: 0 })),
     )
     await act(() => connect(makeConnection()))
     renderConnected()
@@ -135,7 +135,7 @@ describe('DomainsCard', () => {
       http.get(`${ORIGIN}/store-api/json/shop/indexes`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/rel/shop/tables`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/rel/shop/views`, () => HttpResponse.json([])),
-      http.get(`${ORIGIN}/store-api/kv/shop/keys`, () => HttpResponse.json(kvKeyScan([]))),
+      http.get(`${ORIGIN}/store-api/kv/shop/count`, () => HttpResponse.json({ count: 0 })),
       http.delete(`${ORIGIN}/store-api/domains/shop`, () => new HttpResponse(null, { status: 202 })),
       http.delete(`${ORIGIN}/store-api/json/domains/shop`, () => new HttpResponse(null, { status: 202 })),
       http.delete(`${ORIGIN}/store-api/rel/domains/shop`, () => new HttpResponse(null, { status: 500 })),
@@ -161,7 +161,7 @@ describe('DomainsCard', () => {
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1 }])),
       http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
-      http.get(`${ORIGIN}/store-api/kv/shop/keys`, () => HttpResponse.json(kvKeyScan([]))),
+      http.get(`${ORIGIN}/store-api/kv/shop/count`, () => HttpResponse.json({ count: 0 })),
       http.delete(`${ORIGIN}/store-api/domains/shop`, () => {
         deleteCalled = true
         return new HttpResponse(null, { status: 202 })
@@ -220,7 +220,7 @@ describe('DomainsCard', () => {
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1 }])),
       http.get(`${ORIGIN}/store-api/json/domains`, () => new HttpResponse(null, { status: 500 })),
       http.get(`${ORIGIN}/store-api/rel/domains`, () => new HttpResponse(null, { status: 500 })),
-      http.get(`${ORIGIN}/store-api/kv/shop/keys`, () => HttpResponse.json(kvKeyScan([]))),
+      http.get(`${ORIGIN}/store-api/kv/shop/count`, () => HttpResponse.json({ count: 0 })),
     )
     await act(() => connect(makeConnection()))
     renderConnected()

@@ -7,7 +7,7 @@ import type { Connection } from '../app/connections'
 import { createAppQueryClient } from '../app/queryClient'
 import { connect, disconnect } from '../app/session'
 import { resetSqlState, useSqlState } from '../screens/sql/sqlStore'
-import { kvKeyScan, server } from '../test/msw'
+import { server } from '../test/msw'
 import { Explorer } from './Explorer'
 import { SelectedDomainProvider } from './SelectedDomainContext'
 
@@ -88,8 +88,12 @@ function jsonIndexesHandler(domain: string, count: number) {
   )
 }
 
-function kvKeysHandler(domain: string, keys: string[]) {
-  return http.get(`${ORIGIN}/store-api/kv/${domain}/keys`, () => HttpResponse.json(kvKeyScan(keys)))
+function kvCountHandler(domain: string, count: number) {
+  return http.get(`${ORIGIN}/store-api/kv/${domain}/count`, () => HttpResponse.json({ count }))
+}
+
+function relTableCountHandler(domain: string, table: string, count: number) {
+  return http.get(`${ORIGIN}/store-api/rel/${domain}/tables/${table}/count`, () => HttpResponse.json({ count }))
 }
 
 /**
@@ -173,12 +177,12 @@ describe('Explorer', () => {
       relViewsHandler('alpha', []),
       jsonDetailHandler('alpha', 0),
       jsonIndexesHandler('alpha', 0),
-      kvKeysHandler('alpha', []),
+      kvCountHandler('alpha', 0),
       // beta/gamma sind collapsed -> ihr Tag hängt an echter Aktivität, nicht an bloßer Registry-Zugehörigkeit.
       jsonDetailHandler('beta', 1),
       jsonIndexesHandler('beta', 0),
-      kvKeysHandler('beta', ['b1']),
-      kvKeysHandler('gamma', ['g1']),
+      kvCountHandler('beta', 1),
+      kvCountHandler('gamma', 1),
     )
 
     await connectAndRender()
@@ -205,12 +209,13 @@ describe('Explorer', () => {
         [{ name: 'alpha', created_at: 1, state: 'active' }],
       ),
       relTablesHandler('alpha', ['orders']),
+      relTableCountHandler('alpha', 'orders', 3),
       relViewsHandler('alpha', ['v_paid']),
       relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER')]),
       jsonDetailHandler('alpha', 3),
       jsonIndexesHandler('alpha', 1),
-      kvKeysHandler('alpha', []),
-      kvKeysHandler('beta', []),
+      kvCountHandler('alpha', 0),
+      kvCountHandler('beta', 0),
     )
 
     await connectAndRender()
@@ -218,7 +223,7 @@ describe('Explorer', () => {
     expect(await screen.findByRole('button', { name: /T orders/ })).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: /V v_paid/ })).toBeInTheDocument()
     expect(await screen.findByText('3 · idx 1')).toBeInTheDocument()
-    // kv keys scan resolves empty -> only the label row's "+" action, no active row (spec shell/004 §4).
+    // kv count resolves 0 -> only the label row's "+" action, no active row (spec shell/004 §4).
     expect(await screen.findByRole('button', { name: 'new key' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^K keys/ })).not.toBeInTheDocument()
 
@@ -237,11 +242,12 @@ describe('Explorer', () => {
         [{ name: 'alpha', created_at: 1, state: 'active' }],
       ),
       relTablesHandler('alpha', ['orders']),
+      relTableCountHandler('alpha', 'orders', 3),
       relViewsHandler('alpha', []),
       relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER')]),
       jsonDetailHandler('alpha', 1),
       jsonIndexesHandler('alpha', 0),
-      kvKeysHandler('alpha', ['k1', 'k2']),
+      kvCountHandler('alpha', 2),
     )
 
     await connectAndRender()
@@ -252,7 +258,7 @@ describe('Explorer', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^J documents/ }))
     expect(screen.getByTestId('data-route-state')).toHaveTextContent('/data?engine=json')
 
-    // aktiver kv-Store zeigt den echten Count aus dem Scan (spec shell/004 §4).
+    // aktiver kv-Store zeigt den Zähler aus GET …/kv/{d}/count (spec shell/004 §4, shell/010 §2).
     const keysButton = await screen.findByRole('button', { name: /^K keys/ })
     expect(keysButton).toHaveTextContent('2')
     fireEvent.click(keysButton)
@@ -270,7 +276,7 @@ describe('Explorer', () => {
       relViewsHandler('alpha', ['v_paid']),
       jsonDetailHandler('alpha', 0),
       jsonIndexesHandler('alpha', 0),
-      kvKeysHandler('alpha', []),
+      kvCountHandler('alpha', 0),
     )
 
     await connectAndRender()
@@ -284,6 +290,7 @@ describe('Explorer', () => {
     server.use(
       ...domainListHandlers([], [], [{ name: 'alpha', created_at: 1, state: 'active' }]),
       relTablesHandler('alpha', ['orders']),
+      relTableCountHandler('alpha', 'orders', 3),
       relViewsHandler('alpha', []),
       relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER'), column('customer_ref', 'JSONREF'), column('cart_ref', 'KVREF')]),
     )
@@ -301,6 +308,7 @@ describe('Explorer', () => {
     server.use(
       ...domainListHandlers([], [], [{ name: 'alpha', created_at: 1, state: 'active' }]),
       relTablesHandler('alpha', ['orders']),
+      relTableCountHandler('alpha', 'orders', 3),
       relViewsHandler('alpha', []),
       relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER')]),
     )
@@ -317,7 +325,7 @@ describe('Explorer', () => {
     let relCalls = 0
     server.use(
       ...domainListHandlers([{ name: 'alpha', created_at: 1 }], [], []),
-      kvKeysHandler('alpha', []),
+      kvCountHandler('alpha', 0),
       http.post(`${ORIGIN}/store-api/domains`, () => {
         kvCalls += 1
         return HttpResponse.json({ name: 'shop2', created_at: 1 }, { status: 201 })
@@ -351,7 +359,7 @@ describe('Explorer', () => {
   it('a fully successful create across all three engines closes the form and invalidates the domain lists', async () => {
     server.use(
       ...domainListHandlers([{ name: 'alpha', created_at: 1 }], [], []),
-      kvKeysHandler('alpha', []),
+      kvCountHandler('alpha', 0),
       http.post(`${ORIGIN}/store-api/domains`, () => HttpResponse.json({ name: 'shop2', created_at: 1 }, { status: 201 })),
       http.post(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json({ name: 'shop2', created_at: 1, state: 'active' }, { status: 201 })),
       http.post(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json({ name: 'shop2', created_at: 1, state: 'active' }, { status: 201 })),
@@ -421,6 +429,7 @@ describe('Explorer', () => {
     server.use(
       ...domainListHandlers([], [], [{ name: 'alpha', created_at: 1, state: 'active' }]),
       relTablesHandler('alpha', ['orders']),
+      relTableCountHandler('alpha', 'orders', 3),
       relViewsHandler('alpha', []),
       relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER')]),
     )
@@ -436,7 +445,7 @@ describe('Explorer', () => {
       ...domainListHandlers([{ name: 'alpha', created_at: 1 }], [{ name: 'alpha', created_at: 1, state: 'active' }], []),
       jsonDetailHandler('alpha', 0),
       jsonIndexesHandler('alpha', 0),
-      kvKeysHandler('alpha', []),
+      kvCountHandler('alpha', 0),
     )
 
     await connectAndRender()
@@ -457,7 +466,7 @@ describe('Explorer', () => {
       ...domainListHandlers([{ name: 'alpha', created_at: 1 }], [{ name: 'alpha', created_at: 1, state: 'active' }], []),
       jsonDetailHandler('alpha', 2),
       jsonIndexesHandler('alpha', 0),
-      kvKeysHandler('alpha', ['k1']),
+      kvCountHandler('alpha', 1),
     )
 
     await connectAndRender()
@@ -501,8 +510,8 @@ describe('Explorer', () => {
         [],
         [],
       ),
-      kvKeysHandler('alpha', []),
-      kvKeysHandler('beta', []),
+      kvCountHandler('alpha', 0),
+      kvCountHandler('beta', 0),
     )
 
     const { unmount } = await connectAndRender()
@@ -516,6 +525,98 @@ describe('Explorer', () => {
     await connectAndRender()
     expect(await screen.findByText(expandedHeader('beta'))).toBeInTheDocument()
     expect(screen.queryByText(expandedHeader('alpha'))).not.toBeInTheDocument()
+  })
+})
+
+describe('object counts via the count endpoints (spec shell/010)', () => {
+  it('shows the row count on table rows, leaves views without a number and never requests a view count', async () => {
+    const countRequests: string[] = []
+    server.use(
+      ...domainListHandlers([], [], [{ name: 'alpha', created_at: 1, state: 'active' }]),
+      relTablesHandler('alpha', ['orders', 'order_items']),
+      relViewsHandler('alpha', ['v_paid_orders']),
+      relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER')]),
+      relTableDetailHandler('alpha', 'order_items', [column('id', 'INTEGER')]),
+      http.get(`${ORIGIN}/store-api/rel/alpha/tables/:table/count`, ({ params }) => {
+        countRequests.push(String(params.table))
+        return HttpResponse.json({ count: params.table === 'orders' ? 12400 : 40100 })
+      }),
+      http.get(`${ORIGIN}/store-api/rel/alpha/views/:view/count`, ({ params }) => {
+        countRequests.push(`view:${String(params.view)}`)
+        return new HttpResponse(null, { status: 404 })
+      }),
+    )
+
+    await connectAndRender()
+
+    const orders = await screen.findByRole('button', { name: /T orders/ })
+    await waitFor(() => expect(orders.querySelector('.explorer__object-count')).toHaveTextContent('12.4k'))
+    const orderItems = screen.getByRole('button', { name: /T order_items/ })
+    await waitFor(() => expect(orderItems.querySelector('.explorer__object-count')).toHaveTextContent('40.1k'))
+
+    const view = screen.getByRole('button', { name: /V v_paid_orders/ })
+    expect(view.querySelector('.explorer__object-count')).not.toBeInTheDocument()
+    expect(countRequests.sort()).toEqual(['order_items', 'orders'])
+  })
+
+  it('renders the table row without a number when the count endpoint fails (no 0 on suspicion, no error text)', async () => {
+    server.use(
+      ...domainListHandlers([], [], [{ name: 'alpha', created_at: 1, state: 'active' }]),
+      relTablesHandler('alpha', ['orders']),
+      relViewsHandler('alpha', []),
+      relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER')]),
+      http.get(`${ORIGIN}/store-api/rel/alpha/tables/orders/count`, () => HttpResponse.text('table not found', { status: 404 })),
+    )
+
+    await connectAndRender()
+
+    const orders = await screen.findByRole('button', { name: /T orders/ })
+    await waitFor(() => expect(screen.queryByText('RELATIONAL')).toBeInTheDocument())
+    expect(orders.querySelector('.explorer__object-count')).not.toBeInTheDocument()
+    expect(orders).toHaveTextContent(/^T\s*orders$/)
+    expect(screen.queryByText(/table not found/)).not.toBeInTheDocument()
+  })
+
+  it('derives the kv activity from GET …/count (0 => empty, N => active with the count) and never lists keys for it', async () => {
+    let keyScans = 0
+    server.use(
+      ...domainListHandlers(
+        [
+          { name: 'alpha', created_at: 1 },
+          { name: 'beta', created_at: 1 },
+        ],
+        [],
+        [],
+      ),
+      http.get(`${ORIGIN}/store-api/kv/:domain/keys`, () => {
+        keyScans += 1
+        return HttpResponse.json({ keys: ['leak'], total: 1, offset: 0, limit: 1000 })
+      }),
+      kvCountHandler('alpha', 7),
+      kvCountHandler('beta', 0),
+    )
+
+    await connectAndRender()
+
+    const keysButton = await screen.findByRole('button', { name: /^K keys/ })
+    expect(keysButton.querySelector('.explorer__object-count')).toHaveTextContent('7')
+    // beta is collapsed and empty: no "kv" activity tag
+    await waitFor(() => expect(screen.getByRole('button', { name: /▸ beta/ })).not.toHaveTextContent('kv'))
+    expect(keyScans).toBe(0)
+  })
+
+  it('treats a failing kv count as pending: no dot, no tag, no keys row', async () => {
+    server.use(
+      ...domainListHandlers([{ name: 'alpha', created_at: 1 }], [], []),
+      http.get(`${ORIGIN}/store-api/kv/alpha/count`, () => HttpResponse.text('Domain not found', { status: 404 })),
+    )
+
+    await connectAndRender()
+
+    expect(await screen.findByText('KEY-VALUE')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'new key' })).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /^K keys/ })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Domain not found/)).not.toBeInTheDocument()
   })
 })
 
@@ -537,21 +638,24 @@ describe('polling intervals (spec shell/007)', () => {
           { name: 'beta', created_at: 1, state: 'active' },
         ],
       ),
-      relTablesHandler('alpha', []),
+      relTablesHandler('alpha', ['orders']),
       relViewsHandler('alpha', []),
+      relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER')]),
+      relTableCountHandler('alpha', 'orders', 5),
       jsonDetailHandler('alpha', 0),
       jsonIndexesHandler('alpha', 0),
-      kvKeysHandler('alpha', []),
+      kvCountHandler('alpha', 0),
       relTablesHandler('beta', []),
       relViewsHandler('beta', []),
       jsonDetailHandler('beta', 0),
       jsonIndexesHandler('beta', 0),
-      kvKeysHandler('beta', []),
+      kvCountHandler('beta', 0),
     )
 
     await connectAndRender()
     await screen.findByText(expandedHeader('alpha'))
     await screen.findByRole('button', { name: /▸ beta/ })
+    await screen.findByRole('button', { name: /T orders/ })
 
     function refetchIntervalsFor(key: readonly unknown[]): (number | false | undefined)[] {
       return useQuerySpy.mock.calls
@@ -572,10 +676,15 @@ describe('polling intervals (spec shell/007)', () => {
       expect(intervals).toContain(60_000)
     }
 
-    // the kv probe is useEngineActivity-only, even for the expanded domain (ExpandedDomain never queries it directly).
-    const alphaKvProbe = refetchIntervalsFor(['kv-keys-probe', 'alpha'])
+    // the kv count is useEngineActivity-only, even for the expanded domain (ExpandedDomain never queries it directly).
+    const alphaKvProbe = refetchIntervalsFor(['kv-count', 'alpha'])
     expect(alphaKvProbe.length).toBeGreaterThan(0)
     expect(alphaKvProbe.every((value) => value === 60_000)).toBe(true)
+
+    // table row counts are O(n) server-side (spec shell/010 §7): 60s like the activity probes, never the 30s of the lists.
+    const alphaTableCount = refetchIntervalsFor(['rel-table-count', 'alpha', 'orders'])
+    expect(alphaTableCount.length).toBeGreaterThan(0)
+    expect(alphaTableCount.every((value) => value === 60_000)).toBe(true)
 
     // beta stays collapsed: only useEngineActivity (via CollapsedDomainRow) observes its keys -> 60s only, never 30s.
     for (const key of [
@@ -583,7 +692,7 @@ describe('polling intervals (spec shell/007)', () => {
       ['rel-views', 'beta'],
       ['json-domain-detail', 'beta'],
       ['json-indexes', 'beta'],
-      ['kv-keys-probe', 'beta'],
+      ['kv-count', 'beta'],
     ]) {
       const intervals = refetchIntervalsFor(key)
       expect(intervals.length).toBeGreaterThan(0)

@@ -91,13 +91,13 @@ export function kvBulkKeysQueryOptions(apiClient: ApiClient | undefined, domain:
   })
 }
 
-/** Gemeinsamer Helfer für alle KV-Mutationsstellen — hält Master-Liste, Bulk-Scan und die stille Aktivitäts-Probe
- *  (`kvKeysProbeQueryOptions` in domainDetails.ts) synchron, damit Dots/Tags/Sektionen live nachziehen (spec shell/004 §1).
+/** Gemeinsamer Helfer für alle KV-Mutationsstellen — hält Master-Liste, Bulk-Scan und den Domänen-Key-Zähler
+ *  (`kvKeyCountQueryOptions` in domainDetails.ts) synchron, damit Dots/Tags/Sektionen live nachziehen (spec shell/004 §1).
  *  `'kv-keys-bulk'` braucht die eigene Zeile: Array-Präfix-Matching von `['kv-keys', domain]` greift dort nicht. */
 export function invalidateKvKeys(queryClient: QueryClient, domain: string): void {
   void queryClient.invalidateQueries({ queryKey: ['kv-keys', domain] })
   void queryClient.invalidateQueries({ queryKey: ['kv-keys-bulk', domain] })
-  void queryClient.invalidateQueries({ queryKey: ['kv-keys-probe', domain] })
+  void queryClient.invalidateQueries({ queryKey: ['kv-count', domain] })
 }
 
 /** Ergebnis eines Value-Reads: `not-found` deckt "nie existiert", "gelöscht" und "abgelaufen" ab (404); `null` ist der explizite

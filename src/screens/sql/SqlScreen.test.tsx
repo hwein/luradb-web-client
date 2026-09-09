@@ -58,7 +58,7 @@ async function connectAndRender(state?: unknown) {
   server.use(...baseHandlers())
   await act(() => connect(makeConnection()))
   const queryClient = createAppQueryClient()
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[{ pathname: '/sql', state }]}>
         <SelectedDomainProvider>
@@ -67,6 +67,7 @@ async function connectAndRender(state?: unknown) {
       </MemoryRouter>
     </QueryClientProvider>,
   )
+  return { queryClient, ...view }
 }
 
 async function findEnabledRun(): Promise<HTMLElement> {
@@ -183,6 +184,38 @@ describe('SqlScreen', () => {
     fireEvent.click(await findEnabledRun())
 
     expect(await screen.findByText('2 rows affected · last_pk 7')).toBeInTheDocument()
+  })
+
+  it('invalidates the explorer row counts of the domain after DDL and DML, not after a SELECT (spec shell/010 §9)', async () => {
+    server.use(
+      http.post(SQL_URL, async ({ request }) => {
+        const { sql } = (await request.json()) as { sql: string }
+        if (sql.startsWith('CREATE')) return HttpResponse.json({ ok: true })
+        if (sql.startsWith('INSERT')) return HttpResponse.json({ affected: 1, last_pk: 1 })
+        return HttpResponse.json({ columns: ['id'], rows: [[1]], row_count: 1 })
+      }),
+    )
+    const countKey = ['rel-table-count', 'shop', 'orders']
+
+    const { queryClient, unmount } = await connectAndRender({ insertQuery: 'INSERT INTO orders (id) VALUES (1)' })
+    queryClient.setQueryData(countKey, 0)
+    fireEvent.click(await findEnabledRun())
+    await screen.findByText('1 rows affected · last_pk 1')
+    await waitFor(() => expect(queryClient.getQueryState(countKey)?.isInvalidated).toBe(true))
+    unmount()
+
+    const ddl = await connectAndRender({ insertQuery: 'CREATE TABLE t (id INTEGER PRIMARY KEY)' })
+    ddl.queryClient.setQueryData(countKey, 0)
+    fireEvent.click(await findEnabledRun())
+    await screen.findByText('ok · CREATE TABLE')
+    await waitFor(() => expect(ddl.queryClient.getQueryState(countKey)?.isInvalidated).toBe(true))
+    ddl.unmount()
+
+    const select = await connectAndRender({ insertQuery: 'SELECT id FROM orders' })
+    select.queryClient.setQueryData(countKey, 0)
+    fireEvent.click(await findEnabledRun())
+    await screen.findByRole('cell', { name: '1' })
+    expect(select.queryClient.getQueryState(countKey)?.isInvalidated).toBe(false)
   })
 
   it('renders a SQL error with the plain-text server message and a syntax docs link', async () => {

@@ -436,7 +436,7 @@ describe('KvBrowser', () => {
     expect(await screen.findByText('key is required')).toBeInTheDocument()
   })
 
-  it('also invalidates the kv-keys-probe activity query on create and on delete, so dots/tags/sections can follow without reload (spec shell/004 §1)', async () => {
+  it('also invalidates the kv-count activity query on create and on delete, so dots/tags/sections can follow without reload (spec shell/004 §1, shell/010 §3)', async () => {
     let freshCreated = false
     server.use(
       http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(freshCreated ? ['existing', 'fresh:1'] : ['existing']))),
@@ -451,7 +451,7 @@ describe('KvBrowser', () => {
     const { queryClient } = await connectAndRender()
     await screen.findByText('KEY existing')
 
-    const probeKey = ['kv-keys-probe', DOMAIN]
+    const probeKey = ['kv-count', DOMAIN]
     queryClient.setQueryData(probeKey, 1)
     expect(queryClient.getQueryState(probeKey)?.isInvalidated).toBe(false)
 

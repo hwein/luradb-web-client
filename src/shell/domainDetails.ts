@@ -90,21 +90,38 @@ export function jsonIndexesQueryOptions(apiClient: ApiClient | undefined, domain
 }
 
 /**
- * Zählabfrage für die Aktivitäts-Ableitung (spec shell/004 §1): `?limit=0` liefert `total` ohne einen einzigen Key
- * (Contract 0.6.1, spec data/011 §9) — der 60s-Poll je KV-Domäne überträgt keine Key-Listen mehr. Erst-Load
- * aufgezeichnet, Folge-Ticks still (general/012); der KV-Browser (data/002) nutzt einen eigenen recorded Scan (kvEntries.ts).
+ * Domänen-Key-Zähler für die Aktivitäts-Ableitung (spec shell/004 §1) über `GET …/kv/{domain}/count` (Contract 0.6.1,
+ * spec shell/010 §1) — ohne `prefix`, ohne Key-Transfer. Erst-Load aufgezeichnet, Folge-Ticks still (general/012);
+ * der KV-Browser (data/002) nutzt einen eigenen recorded Scan (kvEntries.ts).
  */
-export function kvKeysProbeQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
+export function kvKeyCountQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
-    queryKey: ['kv-keys-probe', domain] as const,
+    queryKey: ['kv-count', domain] as const,
     queryFn: async (context): Promise<number> => {
-      if (!apiClient) throw new Error('kv keys probe query requires an active connection')
-      const { data, response } = await apiClient.api.GET('/store-api/kv/{domain}/keys', {
-        params: { path: { domain }, query: { limit: 0 } },
+      if (!apiClient) throw new Error('kv count query requires an active connection')
+      const { data, response } = await apiClient.api.GET('/store-api/kv/{domain}/count', {
+        params: { path: { domain } },
         silentRecord: pollSilentRecord(context),
       })
-      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load keys')
-      return data.total
+      if (!response.ok || !data) throw new ApiError(response.status, 'failed to count keys')
+      return data.count
+    },
+    enabled: enabled && apiClient !== undefined,
+  })
+}
+
+/** Row-Count je Tabelle (spec shell/010 §4) — serverseitig ein O(n)-Key-Scan, daher nur für die expandierte Domäne und im 60s-Takt. */
+export function relTableRowCountQueryOptions(apiClient: ApiClient | undefined, domain: string, table: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: ['rel-table-count', domain, table] as const,
+    queryFn: async (context): Promise<number> => {
+      if (!apiClient) throw new Error('rel table count query requires an active connection')
+      const { data, response } = await apiClient.api.GET('/store-api/rel/{domain}/tables/{table}/count', {
+        params: { path: { domain, table } },
+        silentRecord: pollSilentRecord(context),
+      })
+      if (!response.ok || !data) throw new ApiError(response.status, 'failed to count rows')
+      return data.count
     },
     enabled: enabled && apiClient !== undefined,
   })
