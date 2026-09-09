@@ -25,10 +25,39 @@ const VERB_BY_ACTION: Record<KvBulkAction, string> = {
   'set-null': 'set null on',
 }
 
-/** Bestätigungstext (spec §4), z. B. `delete 138 keys in "sessions"?`. */
+/** Bestätigungstext (spec §4), z. B. `delete 138 keys in "sessions"?` — Fanout-Wege (clear, set null, delete ohne Prefix). */
 export function kvBulkConfirmText(action: KvBulkAction, count: number, domain: string): string {
   return `${VERB_BY_ACTION[action]} ${count} keys in "${domain}"?`
 }
+
+/** Einzige Stelle, die den Weg entscheidet (spec data/013 §1): der Server-Endpunkt verlangt einen nicht-leeren Prefix. */
+export function usesServerDelete(action: KvBulkAction, prefix: string): boolean {
+  return action === 'delete' && prefix !== ''
+}
+
+/** `DELETE …/keys?prefix=…[&contains=…]` — Anzeige und Call nutzen denselben String (spec data/013 §2/§5). */
+export function kvBulkDeletePath(domain: string, prefix: string, contains: string): string {
+  const search = new URLSearchParams({ prefix })
+  if (contains !== '') search.set('contains', contains)
+  return `${BASE_PATH}/kv/${encodeURIComponent(domain)}/keys?${search.toString()}`
+}
+
+/** Server-Weg nennt das Kriterium statt einer Zahl — der Endpunkt löscht auch Keys, die seit dem Scan dazukamen (spec data/013 §4). */
+export function kvBulkServerDeleteConfirmText(prefix: string, contains: string, domain: string): string {
+  const filter = contains === '' ? '' : ` containing "${contains}"`
+  return `delete all keys with prefix "${prefix}"${filter} in "${domain}"?`
+}
+
+/** Ein Call über `fetchRaw` — aufgezeichnet (bewusste Mutation, general/012); Nicht-2xx (413/400/404) wirft dort bereits den ApiError mit dem Servertext. */
+export async function runKvBulkDelete(apiClient: ApiClient, domain: string, prefix: string, contains: string): Promise<number> {
+  const response = await apiClient.fetchRaw(kvBulkDeletePath(domain, prefix, contains), { method: 'DELETE' })
+  const body: unknown = await response.json()
+  const deleted = typeof body === 'object' && body !== null ? (body as Record<string, unknown>).deleted : undefined
+  if (typeof deleted !== 'number') throw new Error('unexpected bulk delete response')
+  return deleted
+}
+
+export type KvBulkOutcome = { kind: 'server'; deleted: number } | { kind: 'fanout'; okCount: number; failures: KvBulkFailure[] }
 
 function requestFor(action: KvBulkAction, domain: string, key: string): { path: string; init: RequestInit } {
   const path = kvKeyPath(domain, key)

@@ -3,7 +3,19 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import type { ApiClient } from '../../api'
 import { openDocs } from '../docs/openDocs'
-import { kvBulkCallPattern, kvBulkConfirmText, runKvBulk, runKvBulkOp, KV_BULK_CONCURRENCY, type KvBulkAction, type KvBulkRunResult } from './kvBulk'
+import {
+  kvBulkCallPattern,
+  kvBulkConfirmText,
+  kvBulkDeletePath,
+  kvBulkServerDeleteConfirmText,
+  runKvBulk,
+  runKvBulkDelete,
+  runKvBulkOp,
+  usesServerDelete,
+  KV_BULK_CONCURRENCY,
+  type KvBulkAction,
+  type KvBulkOutcome,
+} from './kvBulk'
 import { invalidateKvKeys, kvBulkKeysQueryOptions } from './kvEntries'
 
 const ACTIONS: KvBulkAction[] = ['delete', 'clear', 'set-null']
@@ -33,10 +45,18 @@ interface KvBulkBarProps {
   initialContains: string
 }
 
+interface RunVariables {
+  keys: string[]
+  action: KvBulkAction
+  prefix: string
+  contains: string
+}
+
 /**
  * Bulk-Leiste (spec data/008): Panel unter dem Header, Karten-Vokabular. Grundlage ist der committete Kopf-Scan
  * (Prefix + Contains), der Contains-Filter ist hier explizit neu committbar — serverseitig, eine Seite am
  * Server-Maximum (spec data/011 §7). KvBrowser remountet die Leiste je committetem Scan (`key`), daher reicht der Initial-State.
+ * `delete` mit Prefix läuft als ein Server-Call (spec data/013), alle übrigen Wege als Fanout.
  */
 export function KvBulkBar({ domain, apiClient, prefix, initialContains }: KvBulkBarProps) {
   const queryClient = useQueryClient()
@@ -51,17 +71,22 @@ export function KvBulkBar({ domain, apiClient, prefix, initialContains }: KvBulk
   const selectedKeys = keysQuery.data?.keys ?? []
   const total = keysQuery.data?.total ?? 0
   const capped = total > selectedKeys.length
+  const serverDelete = action !== undefined && usesServerDelete(action, prefix)
 
-  const runMutation = useMutation<KvBulkRunResult, unknown, { keys: string[]; action: KvBulkAction }>({
-    mutationFn: async ({ keys: opKeys, action: opAction }) => {
+  const runMutation = useMutation<KvBulkOutcome, unknown, RunVariables>({
+    mutationFn: async (variables) => {
       if (!apiClient) throw new Error('no active connection')
-      setProgress({ done: 0, total: opKeys.length })
-      return runKvBulk(
-        opKeys,
+      if (usesServerDelete(variables.action, variables.prefix)) {
+        return { kind: 'server', deleted: await runKvBulkDelete(apiClient, domain, variables.prefix, variables.contains) }
+      }
+      setProgress({ done: 0, total: variables.keys.length })
+      const result = await runKvBulk(
+        variables.keys,
         KV_BULK_CONCURRENCY,
-        (key) => runKvBulkOp(apiClient, domain, opAction, key),
+        (key) => runKvBulkOp(apiClient, domain, variables.action, key),
         (done, total) => setProgress({ done, total }),
       )
+      return { kind: 'fanout', ...result }
     },
     onSuccess: () => {
       invalidateKvKeys(queryClient, domain)
@@ -99,7 +124,7 @@ export function KvBulkBar({ domain, apiClient, prefix, initialContains }: KvBulk
     }
     if (action === undefined) return
     setConfirmArmed(false)
-    runMutation.mutate({ keys: selectedKeys, action })
+    runMutation.mutate({ keys: selectedKeys, action, prefix, contains })
   }
 
   function openNullDocs(): void {
@@ -175,7 +200,8 @@ export function KvBulkBar({ domain, apiClient, prefix, initialContains }: KvBulk
         {confirmArmed ? (
           <span className="kv-bulk__confirm">
             <span className="kv-bulk__confirm-text">
-              {action !== undefined && kvBulkConfirmText(action, selectedKeys.length, domain)}
+              {action !== undefined &&
+                (serverDelete ? kvBulkServerDeleteConfirmText(prefix, contains, domain) : kvBulkConfirmText(action, selectedKeys.length, domain))}
               {(action === 'delete' || action === 'set-null') && <span className="kv-bulk__confirm-irreversible"> this cannot be undone.</span>}
             </span>
             <button type="button" className="kv-bulk__confirm-run" disabled={runMutation.isPending} onClick={handleRunClick}>
@@ -203,38 +229,41 @@ export function KvBulkBar({ domain, apiClient, prefix, initialContains }: KvBulk
 
       {action !== undefined && (
         <div className="kv-bulk__call-pattern mono-path">
-          {selectedKeys.length} × {kvBulkCallPattern(action, domain)} · not recorded
+          {serverDelete ? `DELETE ${kvBulkDeletePath(domain, prefix, contains)}` : `${selectedKeys.length} × ${kvBulkCallPattern(action, domain)} · not recorded`}
         </div>
       )}
 
-      {runMutation.isPending && progress !== undefined && (
-        <div className="kv-bulk__progress mono-path">
-          {progress.done}/{progress.total}
-        </div>
+      {runMutation.isPending && (serverDelete || progress !== undefined) && (
+        <div className="kv-bulk__progress mono-path">{serverDelete ? 'deleting…' : `${progress?.done}/${progress?.total}`}</div>
       )}
 
       {keysQuery.isError && <div className="kv-bulk__error">{messageOf(keysQuery.error)}</div>}
       {runMutation.isError && <div className="kv-bulk__error">{messageOf(runMutation.error)}</div>}
 
-      {runMutation.data !== undefined && (
-        <div className="kv-bulk__result">
-          <div className="kv-bulk__summary">
-            ok {runMutation.data.okCount} ·{' '}
-            <span className={runMutation.data.failures.length > 0 ? 'kv-bulk__summary-failed' : undefined}>
-              failed {runMutation.data.failures.length}
-            </span>
+      {runMutation.data !== undefined &&
+        (runMutation.data.kind === 'server' ? (
+          <div className="kv-bulk__result">
+            <div className="kv-bulk__summary">deleted {formatNumber(runMutation.data.deleted)}</div>
           </div>
-          {runMutation.data.failures.length > 0 && (
-            <ul className="kv-bulk__error-list">
-              {runMutation.data.failures.map((failure, index) => (
-                <li key={`${failure.key}-${index}`} className="kv-bulk__error-entry">
-                  {failure.key} · {failure.message}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+        ) : (
+          <div className="kv-bulk__result">
+            <div className="kv-bulk__summary">
+              ok {runMutation.data.okCount} ·{' '}
+              <span className={runMutation.data.failures.length > 0 ? 'kv-bulk__summary-failed' : undefined}>
+                failed {runMutation.data.failures.length}
+              </span>
+            </div>
+            {runMutation.data.failures.length > 0 && (
+              <ul className="kv-bulk__error-list">
+                {runMutation.data.failures.map((failure, index) => (
+                  <li key={`${failure.key}-${index}`} className="kv-bulk__error-entry">
+                    {failure.key} · {failure.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
     </div>
   )
 }
