@@ -10,9 +10,13 @@ describe('documentPreview', () => {
   })
 
   it('truncates to ~60 chars with an ellipsis', () => {
-    const long = documentPreview({ _key: 'x', text: 'a'.repeat(80) })
+    const long = documentPreview({ _key: 'x', _version: 1, text: 'a'.repeat(80) })
     expect(long.endsWith('…')).toBe(true)
     expect(long.length).toBe(61)
+  })
+
+  it('unwraps _content documents instead of showing the server wrapper', () => {
+    expect(documentPreview({ _key: 'scalar', _version: 1, _content: 42 })).toBe('42')
   })
 })
 

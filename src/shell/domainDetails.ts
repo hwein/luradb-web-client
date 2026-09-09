@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { ApiError, type ApiClient } from '../api'
 import type { components } from '../api/schema'
+import { KV_KEYS_SCAN_LIMIT } from '../screens/data/kvEntries'
 import { pollSilentRecord } from './pollSilentRecord'
 
 type TableSummary = components['schemas']['TableSummary']
@@ -92,8 +93,8 @@ export function jsonIndexesQueryOptions(apiClient: ApiClient | undefined, domain
 /**
  * Key-Scan für die Aktivitäts-Ableitung (spec shell/004 §1) — läuft über den typisierten Client, Erst-Load
  * aufgezeichnet, Folge-Ticks still (general/012); der KV-Browser (data/002) nutzt für seine Anzeige einen
- * eigenen recorded Scan (kvEntries.ts). Kein `limit`/`count` im Contract (Backlog server-repo) — voller Scan
- * ist die Zwischenlösung.
+ * eigenen recorded Scan (kvEntries.ts). Die Länge trägt die Key-Zahl am Domänen-Eintrag, deshalb derselbe
+ * `limit` wie dort — sonst kappte der Server-Default (1000) die Anzeige still.
  */
 export function kvKeysProbeQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
@@ -101,11 +102,11 @@ export function kvKeysProbeQueryOptions(apiClient: ApiClient | undefined, domain
     queryFn: async (context): Promise<string[]> => {
       if (!apiClient) throw new Error('kv keys probe query requires an active connection')
       const { data, response } = await apiClient.api.GET('/store-api/kv/{domain}/keys', {
-        params: { path: { domain } },
+        params: { path: { domain }, query: { limit: KV_KEYS_SCAN_LIMIT } },
         silentRecord: pollSilentRecord(context),
       })
       if (!response.ok || !data) throw new ApiError(response.status, 'failed to load keys')
-      return data
+      return data.keys
     },
     enabled: enabled && apiClient !== undefined,
   })

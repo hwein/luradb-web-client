@@ -8,11 +8,10 @@ interface DocsSidebarProps {
   search: string
   activeId: string | undefined
   searchInputRef: RefObject<HTMLInputElement | null>
-  serverUrl: string
 }
 
 /** Linke Spalte 250px (spec docs/001 §3): Suche + Kategorienliste, bei Suchtext stattdessen Treffer-Liste. */
-export function DocsSidebar({ search, activeId, searchInputRef, serverUrl }: DocsSidebarProps) {
+export function DocsSidebar({ search, activeId, searchInputRef }: DocsSidebarProps) {
   const hits = useMemo(() => searchArticles(search), [search])
   const isSearching = search.trim() !== ''
 
@@ -57,14 +56,6 @@ export function DocsSidebar({ search, activeId, searchInputRef, serverUrl }: Doc
           ))}
         </nav>
       )}
-
-      <div className="docs__footer">
-        API reference:
-        <br />
-        <a href={`${serverUrl}/test-ui`} target="_blank" rel="noreferrer">
-          swagger /test-ui ↗
-        </a>
-      </div>
     </div>
   )
 }

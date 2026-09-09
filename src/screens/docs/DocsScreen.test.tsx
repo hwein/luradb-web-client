@@ -112,11 +112,4 @@ describe('DocsScreen', () => {
 
     expect(screen.getByRole('heading', { name: 'What the status code is telling you' })).toBeInTheDocument()
   })
-
-  it('shows a swagger reference link', () => {
-    renderDocsScreen()
-
-    const link = screen.getByRole('link', { name: 'swagger /test-ui ↗' })
-    expect(link).toHaveAttribute('href', `${window.location.origin}/test-ui`)
-  })
 })

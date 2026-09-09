@@ -29,7 +29,7 @@ function ConnectedBackupsCard() {
 
 function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1 }])),
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([{ name: 'logs', created_at: 1 }])),
     http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
@@ -145,7 +145,7 @@ describe('BackupsCard list', () => {
     server.use(...baseHandlers(), http.get(BACKUPS_URL, () => HttpResponse.text('404 Not Found', { status: 404 })))
     await renderConnected()
 
-    expect(await screen.findByText('requires LuraDB ≥ 0.3.0 (server is 0.2.0)')).toBeInTheDocument()
+    expect(await screen.findByText('requires LuraDB ≥ 0.3.0 (server is 0.4.0)')).toBeInTheDocument()
   })
 })
 
@@ -260,7 +260,7 @@ describe('BackupsCard run backup now', () => {
   it('refreshes the domain lists when the scope target vanished (404)', async () => {
     let domainCalls = 0
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
       http.get(`${ORIGIN}/store-api/domains`, () => {
         domainCalls += 1
         return HttpResponse.json([{ name: 'shop', created_at: 1 }])

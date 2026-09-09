@@ -24,7 +24,7 @@ function makeConnection(): Connection {
 async function renderConnectedShell(path = '/sql'): Promise<void> {
   window.history.pushState({}, '', path)
   server.use(
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
     http.get(`${ORIGIN}/store-api/auth/users`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
@@ -92,7 +92,7 @@ describe('AppShell', () => {
     await screen.findByText('run a query to see results')
 
     expect(await screen.findByText('bearer ✓ admin')).toBeInTheDocument()
-    expect(await screen.findByText('luradb 0.2.0')).toBeInTheDocument()
+    expect(await screen.findByText('luradb 0.4.0')).toBeInTheDocument()
     expect(await screen.findByText('up 1h 11m')).toBeInTheDocument()
     expect(screen.getByText(`${window.location.host} ${BASE_PATH}`)).toBeInTheDocument()
     expect(screen.getByTitle('disconnect')).toHaveTextContent('connected')

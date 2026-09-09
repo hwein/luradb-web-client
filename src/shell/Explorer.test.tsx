@@ -7,7 +7,7 @@ import type { Connection } from '../app/connections'
 import { createAppQueryClient } from '../app/queryClient'
 import { connect, disconnect } from '../app/session'
 import { resetSqlState, useSqlState } from '../screens/sql/sqlStore'
-import { server } from '../test/msw'
+import { kvKeyScan, server } from '../test/msw'
 import { Explorer } from './Explorer'
 import { SelectedDomainProvider } from './SelectedDomainContext'
 
@@ -89,7 +89,7 @@ function jsonIndexesHandler(domain: string, count: number) {
 }
 
 function kvKeysHandler(domain: string, keys: string[]) {
-  return http.get(`${ORIGIN}/store-api/kv/${domain}/keys`, () => HttpResponse.json(keys))
+  return http.get(`${ORIGIN}/store-api/kv/${domain}/keys`, () => HttpResponse.json(kvKeyScan(keys)))
 }
 
 /**
@@ -128,7 +128,7 @@ function SqlRouteProbe() {
 }
 
 async function connectAndRender() {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
+  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })))
   await act(() => connect(makeConnection()))
 
   const queryClient = createAppQueryClient()

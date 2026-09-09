@@ -178,19 +178,6 @@
   white-space: nowrap;
 }
 
-.rest__swagger {
-  padding: 10px 16px 12px;
-  border-top: 1px solid var(--bord);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--acc);
-  text-decoration: none;
-}
-
-.rest__swagger:hover {
-  text-decoration: underline;
-}
-
 /* --- Response (rechte Spalte) ----------------------------------------- */
 
 .rest__response {

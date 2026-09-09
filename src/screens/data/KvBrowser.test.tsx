@@ -7,7 +7,7 @@ import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect } from '../../app/session'
 import { SelectedDomainProvider } from '../../shell/SelectedDomainContext'
-import { server } from '../../test/msw'
+import { kvKeyScan, server } from '../../test/msw'
 import { DataScreen } from './DataScreen'
 
 const ORIGIN = window.location.origin
@@ -35,7 +35,7 @@ function makeConnection(): Connection {
 
 function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: DOMAIN, created_at: 1 }])),
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
@@ -83,7 +83,7 @@ afterEach(() => {
 describe('KvBrowser', () => {
   it('arrives with ?key= (cross-engine jump from the rel row detail): selects that key initially, even though it is not first in the list (spec data/009 §5)', async () => {
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['alpha', 'cart_1'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha', 'cart_1']))),
       http.get(keyUrl('alpha'), () => rawValue('a')),
       http.get(keyUrl('cart_1'), () => rawValue('cart-contents')),
     )
@@ -96,7 +96,7 @@ describe('KvBrowser', () => {
   it('reveals a deep ?key= arrival in the master list: the display slice grows to the key position and marks it selected (nachtrag data/009)', async () => {
     const keys = Array.from({ length: 150 }, (_, i) => `k_${String(i).padStart(3, '0')}`)
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(keys)),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(keys))),
       http.get(keyUrl('k_120'), () => rawValue('deep value')),
     )
     await connectAndRender('/data?engine=kv&key=k_120')
@@ -109,7 +109,7 @@ describe('KvBrowser', () => {
 
   it('keeps the ?key= arrival selection when the key list is already in the query cache (nachtrag data/009: auto-select overwrote it)', async () => {
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['alpha', 'cart_1'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha', 'cart_1']))),
       http.get(keyUrl('alpha'), () => rawValue('a')),
       http.get(keyUrl('cart_1'), () => rawValue('cart-contents')),
     )
@@ -136,10 +136,13 @@ describe('KvBrowser', () => {
 
   it('scans keys via GET and shows the call in the footer; Scan commits a new prefix', async () => {
     let lastPrefix: string | null = null
+    let lastLimit: string | null = null
     server.use(
       http.get(KEYS_URL, ({ request }) => {
-        lastPrefix = new URL(request.url).searchParams.get('prefix')
-        return HttpResponse.json(lastPrefix === 'cart:' ? ['cart:1', 'cart:2'] : ['alpha', 'beta'])
+        const params = new URL(request.url).searchParams
+        lastPrefix = params.get('prefix')
+        lastLimit = params.get('limit')
+        return HttpResponse.json(kvKeyScan(lastPrefix === 'cart:' ? ['cart:1', 'cart:2'] : ['alpha', 'beta']))
       }),
       http.get(keyUrl('alpha'), () => rawValue('a')),
       http.get(keyUrl('cart:1'), () => rawValue('c')),
@@ -149,16 +152,18 @@ describe('KvBrowser', () => {
     expect(await screen.findByText('alpha')).toBeInTheDocument()
     expect(screen.getByText('beta')).toBeInTheDocument()
     await waitFor(() => expect(footerText()).toContain('2 keys'))
-    expect(footerText()).toContain(`GET /store-api/kv/${DOMAIN}/keys`)
+    expect(footerText()).toContain(`GET /store-api/kv/${DOMAIN}/keys?limit=10000`)
     expect(footerText()).toContain('limit 100')
     expect(footerText()).not.toContain('prefix=')
+    // Server-Maximum statt Default 1000 — der Scan bleibt so vollständig wie vor dem Envelope (general/013 §4).
+    expect(lastLimit as string | null).toBe('10000')
 
     fireEvent.change(screen.getByLabelText('key prefix'), { target: { value: 'cart:' } })
     fireEvent.click(screen.getByRole('button', { name: 'Scan' }))
 
     await waitFor(() => expect(lastPrefix as string | null).toBe('cart:'))
     expect(await screen.findByText('cart:1')).toBeInTheDocument()
-    await waitFor(() => expect(footerText()).toContain(`GET /store-api/kv/${DOMAIN}/keys?prefix=cart%3A`))
+    await waitFor(() => expect(footerText()).toContain(`GET /store-api/kv/${DOMAIN}/keys?prefix=cart%3A&limit=10000`))
   })
 
   it('reveals more of the already-fetched keys on "load more", without a second network request', async () => {
@@ -167,7 +172,7 @@ describe('KvBrowser', () => {
     server.use(
       http.get(KEYS_URL, () => {
         scanCalls += 1
-        return HttpResponse.json(allKeys)
+        return HttpResponse.json(kvKeyScan(allKeys))
       }),
       http.get(`${KEYS_URL}/:key`, () => rawValue('v')),
     )
@@ -188,7 +193,7 @@ describe('KvBrowser', () => {
   it('opens the bulk panel from "bulk…", based on the full scan result rather than the 100-key page cap (spec data/008 §2)', async () => {
     const allKeys = Array.from({ length: 150 }, (_, i) => `k${String(i).padStart(3, '0')}`)
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(allKeys)),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(allKeys))),
       http.get(`${KEYS_URL}/:key`, () => rawValue('v')),
     )
     await connectAndRender()
@@ -202,7 +207,7 @@ describe('KvBrowser', () => {
 
   it('shows JSON pretty-print, plaintext, and an empty value as a plain 0-bytes value (no special state)', async () => {
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['json-key', 'plain-key', 'empty-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['json-key', 'plain-key', 'empty-key']))),
       http.get(keyUrl('json-key'), () => rawValue('{"a":1}')),
       http.get(keyUrl('plain-key'), () => rawValue('hello world')),
       http.get(keyUrl('empty-key'), () => rawValue('')),
@@ -228,7 +233,7 @@ describe('KvBrowser', () => {
     let putBody: string | undefined
     let contentType: string | null = null
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['raw-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['raw-key']))),
       http.get(keyUrl('raw-key'), () => rawValue('hello')),
       http.put(keyUrl('raw-key'), async ({ request }) => {
         putBody = await request.text()
@@ -250,7 +255,7 @@ describe('KvBrowser', () => {
   it('arms and confirms "set null": PATCHes …/null; the key stays listed (server 0.2.0 upsert) and the detail shows the NULL marker', async () => {
     let nulled = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['null-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['null-key']))),
       http.get(keyUrl('null-key'), () => (nulled ? new HttpResponse(null, { status: 204 }) : rawValue('value'))),
       http.patch(`${keyUrl('null-key')}/null`, () => {
         nulled = true
@@ -272,7 +277,7 @@ describe('KvBrowser', () => {
   it('re-scanning with an unchanged prefix refetches: a key that expired server-side vanishes from list and detail', async () => {
     let expired = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(expired ? [] : ['zombie'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(expired ? [] : ['zombie']))),
       http.get(keyUrl('zombie'), () => rawValue('z')),
     )
     await connectAndRender()
@@ -289,7 +294,7 @@ describe('KvBrowser', () => {
   it('clears a key that vanished server-side (ttl expiry): the 404 read invalidates the list and the selection empties without leftovers', async () => {
     let expired = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(expired ? [] : ['ttl-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(expired ? [] : ['ttl-key']))),
       http.get(keyUrl('ttl-key'), () => {
         expired = true
         return new HttpResponse('not found', { status: 404 })
@@ -306,7 +311,7 @@ describe('KvBrowser', () => {
   it('arms and confirms delete, then removes the key from the invalidated list', async () => {
     let deleted = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(deleted ? [] : ['gone-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(deleted ? [] : ['gone-key']))),
       http.get(keyUrl('gone-key'), () => rawValue('bye')),
       http.delete(keyUrl('gone-key'), () => {
         deleted = true
@@ -325,7 +330,7 @@ describe('KvBrowser', () => {
   it('a bulk delete that removes the currently open key clears the detail selection like a single delete (spec data/008 §6)', async () => {
     let deleted = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(deleted ? [] : ['tomb-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(deleted ? [] : ['tomb-key']))),
       http.get(keyUrl('tomb-key'), () => rawValue('bye')),
       http.delete(keyUrl('tomb-key'), () => {
         deleted = true
@@ -347,7 +352,7 @@ describe('KvBrowser', () => {
   it('a bulk set null over the currently open key refetches its value: the detail switches to the NULL marker', async () => {
     let nulled = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['null-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['null-key']))),
       http.get(keyUrl('null-key'), () => (nulled ? new HttpResponse(null, { status: 204 }) : rawValue('old value'))),
       http.patch(`${keyUrl('null-key')}/null`, () => {
         nulled = true
@@ -372,7 +377,7 @@ describe('KvBrowser', () => {
   it('creates a new key via PUT with the given key and value, then selects it', async () => {
     let putBody: string | undefined
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(putBody !== undefined ? ['fresh:1'] : [])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(putBody !== undefined ? ['fresh:1'] : []))),
       http.put(keyUrl('fresh:1'), async ({ request }) => {
         putBody = await request.text()
         return new HttpResponse(null, { status: 200 })
@@ -392,7 +397,7 @@ describe('KvBrowser', () => {
   })
 
   it('requires a key name before creating', async () => {
-    server.use(http.get(KEYS_URL, () => HttpResponse.json([])))
+    server.use(http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan([]))))
     await connectAndRender()
     await screen.findByText('no keys')
 
@@ -405,7 +410,7 @@ describe('KvBrowser', () => {
   it('also invalidates the kv-keys-probe activity query on create and on delete, so dots/tags/sections can follow without reload (spec shell/004 §1)', async () => {
     let freshCreated = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(freshCreated ? ['existing', 'fresh:1'] : ['existing'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(freshCreated ? ['existing', 'fresh:1'] : ['existing']))),
       http.get(keyUrl('existing'), () => rawValue('e')),
       http.put(keyUrl('fresh:1'), () => {
         freshCreated = true
@@ -443,7 +448,7 @@ describe('KvBrowser', () => {
     server.use(
       http.get(KEYS_URL, () => {
         scanned += 1
-        return HttpResponse.json(scanned === 1 ? ['alpha'] : ['alpha', 'beta'])
+        return HttpResponse.json(kvKeyScan(scanned === 1 ? ['alpha'] : ['alpha', 'beta']))
       }),
       http.get(keyUrl('alpha'), () => rawValue('a')),
       watchStream(['event: set\ndata: beta\n\n', 'event: delete\ndata: alpha\n\n']),
@@ -466,7 +471,7 @@ describe('KvBrowser', () => {
       let call = 0
       let closeStream: (() => void) | undefined
       server.use(
-        http.get(KEYS_URL, () => HttpResponse.json(['alpha'])),
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha']))),
         http.get(keyUrl('alpha'), () => rawValue('a')),
         http.get(WATCH_URL, () => {
           call += 1
@@ -498,7 +503,7 @@ describe('KvBrowser', () => {
     let noTtlUrl: string | undefined
     let withTtlUrl: string | undefined
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json([])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan([]))),
       http.put(keyUrl('no-ttl'), async ({ request }) => {
         noTtlUrl = request.url
         return new HttpResponse(null, { status: 200 })
@@ -530,7 +535,7 @@ describe('KvBrowser', () => {
   it('rejects a non-positive-integer ttl on create without sending the request', async () => {
     let putCalled = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json([])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan([]))),
       http.put(keyUrl('fresh:1'), () => {
         putCalled = true
         return new HttpResponse(null, { status: 200 })
@@ -551,7 +556,7 @@ describe('KvBrowser', () => {
   it('edits a value with a ttl: PUT URL carries ?ttl= when entered', async () => {
     let lastUrl: string | undefined
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['raw-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['raw-key']))),
       http.get(keyUrl('raw-key'), () => rawValue('hello')),
       http.put(keyUrl('raw-key'), async ({ request }) => {
         lastUrl = request.url
@@ -571,7 +576,7 @@ describe('KvBrowser', () => {
   it('rejects a non-positive-integer ttl on edit without sending the request, keeping the editor open', async () => {
     let putCalled = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['raw-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['raw-key']))),
       http.get(keyUrl('raw-key'), () => rawValue('hello')),
       http.put(keyUrl('raw-key'), () => {
         putCalled = true

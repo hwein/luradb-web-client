@@ -257,10 +257,6 @@ export function RestScreen() {
             </div>
           ))}
         </div>
-
-        <a className="rest__swagger" href={`${serverUrl}/test-ui`} target="_blank" rel="noreferrer">
-          see also: /test-ui ↗
-        </a>
       </div>
 
       <div className="rest__response">

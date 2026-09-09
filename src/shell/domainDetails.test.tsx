@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
 import { createApi, type ApiClient, type CallInfo } from '../api'
 import { createAppQueryClient } from '../app/queryClient'
-import { server } from '../test/msw'
+import { kvKeyScan, server } from '../test/msw'
 import { kvKeysProbeQueryOptions } from './domainDetails'
 
 const BASE_URL = 'http://127.0.0.1:3000'
@@ -20,7 +20,7 @@ describe('kvKeysProbeQueryOptions recorder behaviour (general/012)', () => {
     server.use(
       http.get(`${BASE_URL}/store-api/kv/shop/keys`, () => {
         requests += 1
-        return HttpResponse.json(['a', 'b'])
+        return HttpResponse.json(kvKeyScan(['a', 'b']))
       }),
     )
     const apiClient = makeApiClient()

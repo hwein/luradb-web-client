@@ -24,7 +24,7 @@ function makeConnection(): Connection {
 
 function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: 'default', created_at: 1 }])),
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
@@ -68,8 +68,18 @@ describe('RestScreen', () => {
 
     expect(await screen.findByText('Key-Value Store')).toBeInTheDocument()
     expect(screen.getByText('JSON Document Store')).toBeInTheDocument()
+    expect(screen.getByText('Relational Import')).toBeInTheDocument()
+    expect(screen.getByText('Events')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'GET /kv/{domain}/keys/{key}' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'POST /json/{domain}/search' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'GET /events' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'DELETE /kv/{domain}/keys' })).toBeInTheDocument()
+  })
+
+  it('no longer offers a link to the server swagger UI', async () => {
+    await connectAndRender()
+
+    expect(screen.queryByRole('link', { name: /test-ui/ })).not.toBeInTheDocument()
   })
 
   it('sends the default request and renders status line and pretty body', async () => {

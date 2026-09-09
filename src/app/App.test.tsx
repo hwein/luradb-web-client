@@ -57,7 +57,7 @@ describe('App', () => {
   it('connects with one click on a remembered connection, then can disconnect back to the gate', async () => {
     storeRememberedConnection()
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
       http.get(`${ORIGIN}/store-api/auth/users`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),

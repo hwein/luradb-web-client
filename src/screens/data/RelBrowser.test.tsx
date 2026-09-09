@@ -7,7 +7,7 @@ import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect } from '../../app/session'
 import { SelectedDomainProvider } from '../../shell/SelectedDomainContext'
-import { server } from '../../test/msw'
+import { kvKeyScan, server } from '../../test/msw'
 import { resetDocsState, useDocsState } from '../docs/docsStore'
 import { DataScreen } from './DataScreen'
 
@@ -41,7 +41,7 @@ function makeConnection(): Connection {
 
 function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([{ name: DOMAIN, created_at: 1, state: 'active' }])),
@@ -50,7 +50,7 @@ function baseHandlers() {
     ),
     // Ref-Picker-Quellen (spec 004 §2) — Default leer, einzelne Tests überschreiben mit echtem Bestand.
     http.get(`${ORIGIN}/store-api/json/${DOMAIN}/documents`, () => HttpResponse.json({ documents: [], keys: [], total: 0, offset: 0, limit: 50 })),
-    http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json(kvKeyScan([]))),
   ]
 }
 
@@ -342,7 +342,7 @@ describe('RelBrowser', () => {
       }),
     )
     await connectAndRender(`/data?engine=rel&table=${TABLE}`, [
-      http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json(['cart_1', 'cart_2'])),
+      http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json(kvKeyScan(['cart_1', 'cart_2']))),
       http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys/cart_1`, () => new HttpResponse('cart-contents', { headers: { 'content-type': 'application/octet-stream' } })),
     ])
     await screen.findByText('ROW 1')
@@ -533,7 +533,7 @@ describe('RelBrowser', () => {
           limit: 50,
         }),
       ),
-      http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json(['cart_1', 'cart_2'])),
+      http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json(kvKeyScan(['cart_1', 'cart_2']))),
     ])
     await screen.findByText('no rows')
 

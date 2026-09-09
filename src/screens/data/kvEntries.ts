@@ -1,16 +1,21 @@
 import { queryOptions, type QueryClient } from '@tanstack/react-query'
 import { ApiError, BASE_PATH, withCall, type ApiClient, type CallMeta } from '../../api'
+import type { components } from '../../api/schema'
 
-/** Contract kennt kein `limit`/`offset` auf `scan_keys` (Response ist ein flaches `string[]`) — "load more" ist eine
- *  rein client-seitige Anzeige-Stufe über dem vollständigen Scan-Ergebnis, kein Nachladen (spec §2, Abweichung s. Bericht). */
+/** "load more" ist eine rein client-seitige Anzeige-Stufe über dem Scan-Ergebnis, kein Nachladen vom Server
+ *  (server-seitiges Paging über den Envelope ist data/011). */
 export const KV_KEYS_PAGE_SIZE = 100
+
+/** Server-Default wäre 1000; das Maximum hält den Scan so vollständig wie vor dem Envelope (general/013 §4). */
+export const KV_KEYS_SCAN_LIMIT = 10000
 
 export function kvKeyPath(domain: string, key: string): string {
   return `${BASE_PATH}/kv/${encodeURIComponent(domain)}/keys/${encodeURIComponent(key)}`
 }
 
-function withPrefixQuery(path: string, prefix: string): string {
-  return prefix === '' ? path : `${path}?${new URLSearchParams({ prefix }).toString()}`
+function withScanQuery(path: string, prefix: string): string {
+  const search = new URLSearchParams(prefix === '' ? { limit: String(KV_KEYS_SCAN_LIMIT) } : { prefix, limit: String(KV_KEYS_SCAN_LIMIT) })
+  return `${path}?${search.toString()}`
 }
 
 export interface KvKeysResult {
@@ -23,14 +28,17 @@ export function kvKeysQueryOptions(apiClient: ApiClient | undefined, domain: str
     queryKey: ['kv-keys', domain, prefix] as const,
     queryFn: async (): Promise<KvKeysResult> => {
       if (!apiClient) throw new Error('kv keys query requires an active connection')
-      const { data, call } = await withCall<string[]>('GET', async () => {
+      const { data, call } = await withCall<components['schemas']['KeyScanResponse']>('GET', async () => {
         const result = await apiClient.api.GET('/store-api/kv/{domain}/keys', {
-          params: { path: { domain }, query: prefix === '' ? undefined : { prefix } },
+          params: {
+            path: { domain },
+            query: prefix === '' ? { limit: KV_KEYS_SCAN_LIMIT } : { prefix, limit: KV_KEYS_SCAN_LIMIT },
+          },
         })
         return { data: result.data, response: result.response }
       })
       if (data === undefined) throw new ApiError(0, 'failed to load keys')
-      return { keys: data, call: { ...call, path: withPrefixQuery(call.path, prefix) } }
+      return { keys: data.keys, call: { ...call, path: withScanQuery(call.path, prefix) } }
     },
     enabled: apiClient !== undefined,
   })

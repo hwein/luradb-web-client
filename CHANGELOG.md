@@ -5,8 +5,17 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- REST Explorer lists the endpoints added in LuraDB 0.4.0.
+
+### Changed
+
+- Requires LuraDB 0.4.0 or newer.
+
 ### Removed
 
+- Links to the server's /test-ui (Swagger is now behind auth and off by default).
 - Configuration: the screen is gone — LuraDB is configured in `luradb.toml` on the server.
 
 ### Security

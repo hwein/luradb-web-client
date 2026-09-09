@@ -27,8 +27,8 @@ function ConnectedServerLogCard() {
   return <ServerLogCard apiClient={apiClient} />
 }
 
-function versionHandler(serverVersion = '0.3.2') {
-  return http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.2', server_version: serverVersion }))
+function versionHandler(serverVersion = '0.4.0') {
+  return http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: serverVersion }))
 }
 
 function tailBody(overrides: { file?: string; lines?: string[]; truncated?: boolean } = {}) {
@@ -213,21 +213,21 @@ describe('ServerLogCard disabled / old-server states', () => {
   })
 
   it('reports an old server from the tail 404 (no file param)', async () => {
-    server.use(versionHandler('0.2.0'), emptyFiles(), http.get(LOGS_URL, () => HttpResponse.text('404 Not Found', { status: 404 })))
+    server.use(versionHandler('0.4.0'), emptyFiles(), http.get(LOGS_URL, () => HttpResponse.text('404 Not Found', { status: 404 })))
     await renderConnected()
 
-    expect(await screen.findByText('requires LuraDB ≥ 0.3.0 (server is 0.2.0)')).toBeInTheDocument()
+    expect(await screen.findByText('requires LuraDB ≥ 0.3.0 (server is 0.4.0)')).toBeInTheDocument()
   })
 
   it('reports an old server from the unambiguous files-listing 404, even while the tail request never settles', async () => {
     server.use(
-      versionHandler('0.2.0'),
+      versionHandler('0.4.0'),
       http.get(FILES_URL, () => HttpResponse.text('404 Not Found', { status: 404 })),
       http.get(LOGS_URL, () => new Promise(() => {})),
     )
     await renderConnected()
 
-    expect(await screen.findByText('requires LuraDB ≥ 0.3.0 (server is 0.2.0)')).toBeInTheDocument()
+    expect(await screen.findByText('requires LuraDB ≥ 0.3.0 (server is 0.4.0)')).toBeInTheDocument()
   })
 })
 

@@ -7,7 +7,11 @@ describe('contract', () => {
   })
 
   it('reads CONTRACT_VERSION from the pinned openapi.json', () => {
-    expect(CONTRACT_VERSION).toEqual({ major: 0, minor: 2, patch: 2 })
+    expect(CONTRACT_VERSION).toEqual({ major: 0, minor: 6, patch: 1 })
+  })
+
+  it('pins the minimum supported server version', () => {
+    expect(MIN_SERVER_VERSION).toBe('0.4.0')
   })
 })
 

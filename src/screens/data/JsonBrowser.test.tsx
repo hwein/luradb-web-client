@@ -29,7 +29,7 @@ function makeConnection(): Connection {
 
 function baseHandlers(relDomain: boolean) {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([{ name: DOMAIN, created_at: 1, state: 'active' }])),
     http.get(`${ORIGIN}/store-api/rel/domains`, () =>
@@ -295,6 +295,41 @@ describe('JsonBrowser', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'edit' })).toBeInTheDocument())
     expect(await screen.findByText('v2')).toBeInTheDocument()
+  })
+
+  it('unwraps a scalar _content document and writes the bare scalar back (general/013 §6)', async () => {
+    let sentBody: string | undefined
+    server.use(
+      http.get(DOCS_URL, () =>
+        HttpResponse.json({
+          documents: [{ _key: 'scalar', _version: 1, _content: 42 }],
+          keys: ['scalar'],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        }),
+      ),
+      http.get(`${ORIGIN}/store-api/json/${DOMAIN}/documents/scalar`, () =>
+        HttpResponse.json({ _key: 'scalar', _version: 1, _content: 42 }, { headers: { ETag: '"etag-s"' } }),
+      ),
+      http.put(`${ORIGIN}/store-api/json/${DOMAIN}/documents/scalar`, async ({ request }) => {
+        sentBody = await request.text()
+        return HttpResponse.json({ _key: 'scalar', _version: 2, _content: 42 })
+      }),
+    )
+    await connectAndRender()
+
+    expect(await screen.findByText('DOCUMENT scalar')).toBeInTheDocument()
+    // Listen-Preview und Detail zeigen beide den Skalar, nicht den `_content`-Wrapper.
+    expect(screen.getAllByText('42')).toHaveLength(2)
+    expect(screen.queryByText(/_content/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'edit' }))
+    expect(await screen.findByLabelText('document editor')).toHaveTextContent('42')
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+
+    // Der Editor war mit dem Skalar vorbelegt — gespeichert wird er ohne `_content`-Wrapper (sonst 400).
+    await waitFor(() => expect(sentBody).toBe('42'))
   })
 
   it('arms and confirms delete, then removes the document from the invalidated list', async () => {

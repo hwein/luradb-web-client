@@ -157,23 +157,6 @@
   font-size: 12px;
 }
 
-.docs__footer {
-  padding: 12px;
-  border-top: 1px solid var(--bord);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  line-height: 1.6;
-  color: var(--mut);
-}
-
-.docs__footer a {
-  color: var(--mut);
-}
-
-.docs__footer a:hover {
-  color: var(--acc);
-}
-
 /* --- Artikel -------------------------------------------------------------- */
 
 .docs__article {

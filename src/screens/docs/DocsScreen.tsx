@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { useSession } from '../../app/session'
 import { ArticleView } from './ArticleView'
 import './DocsScreen.css'
 import { DocsSidebar } from './DocsSidebar'
@@ -19,8 +18,6 @@ export function DocsScreen() {
   const location = useLocation()
   const navigate = useNavigate()
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const session = useSession()
-  const serverUrl = session.status === 'connected' ? session.connection.type.url : window.location.origin
 
   // F1 (shell/001) trägt {focusSearch:true} als Router-State — Suchfeld fokussieren und den State danach
   // nicht erneut anwenden, sonst refokussiert jeder Re-Render.
@@ -37,7 +34,7 @@ export function DocsScreen() {
     <div className="docs">
       <DocsTabs tabs={tabs} activeId={activeId} />
       <div className="docs__body">
-        <DocsSidebar search={search} activeId={activeId} searchInputRef={searchInputRef} serverUrl={serverUrl} />
+        <DocsSidebar search={search} activeId={activeId} searchInputRef={searchInputRef} />
         <div className="docs__article">
           {activeArticle ? <ArticleView article={activeArticle} /> : <div className="docs__empty">Pick an article from the list to start reading.</div>}
         </div>

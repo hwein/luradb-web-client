@@ -22,7 +22,7 @@ function makeConnection(): Connection {
 
 function baseHandlers(adminOk: boolean) {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
     http.get(`${ORIGIN}/store-api/auth/users`, () => (adminOk ? HttpResponse.json([]) : new HttpResponse(null, { status: 403 }))),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
@@ -78,7 +78,7 @@ describe('AdminScreen', () => {
 
   it('shows "admin check failed" with the response detail instead of the role-gate hint on a probe 500 (spec admin/005 §3)', async () => {
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
       http.get(`${ORIGIN}/store-api/auth/users`, () => new HttpResponse(null, { status: 500 })),
     )
     await act(() => connect(makeConnection()))
@@ -100,7 +100,7 @@ describe('AdminScreen', () => {
   it('shows no gate text and no cards while the admin probe is still pending — no false "admin role required" flash (spec admin/005 §3)', async () => {
     let releaseProbe: (() => void) | undefined
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
       http.get(`${ORIGIN}/store-api/auth/users`, async () => {
         await new Promise<void>((resolve) => {
           releaseProbe = resolve

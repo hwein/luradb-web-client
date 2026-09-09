@@ -4,6 +4,7 @@ import type { components } from '../../api/schema'
 
 type DocumentListResponse = components['schemas']['DocumentListResponse']
 type SearchResponse = components['schemas']['SearchResponse']
+type DocumentResponse = components['schemas']['DocumentResponse']
 
 const PAGE_SIZE = 50
 const OMITTED_KEYS = new Set(['_key', '_version'])
@@ -23,15 +24,7 @@ export function safeJsonParse(text: string): ParseResult {
   }
 }
 
-function metaKey(doc: Record<string, unknown>): string {
-  return typeof doc._key === 'string' ? doc._key : ''
-}
-
-function metaVersion(doc: Record<string, unknown>): number {
-  return typeof doc._version === 'number' ? doc._version : 0
-}
-
-function withoutMeta(doc: Record<string, unknown>): Record<string, unknown> {
+function withoutMeta(doc: DocumentResponse): Record<string, unknown> {
   const fields: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(doc)) {
     if (!OMITTED_KEYS.has(key)) fields[key] = value
@@ -39,9 +32,17 @@ function withoutMeta(doc: Record<string, unknown>): Record<string, unknown> {
   return fields
 }
 
-/** Kompaktiertes JSON ohne `_key`/`_version`, erste ~60 Zeichen (spec §3). */
-export function documentPreview(doc: Record<string, unknown>): string {
-  const compact = JSON.stringify(withoutMeta(doc))
+/**
+ * Inhalt eines Dokuments: nicht-objektartige Dokumente legt der Server als `{_content: …}` ab (Probe-Fakt) —
+ * dann ist `_content` der Inhalt, sonst gilt das Dokument ohne `_key`/`_version`.
+ */
+function documentContent(doc: DocumentResponse): unknown {
+  return '_content' in doc ? doc._content : withoutMeta(doc)
+}
+
+/** Kompaktiertes JSON ohne Metafelder, erste ~60 Zeichen (spec §3). */
+export function documentPreview(doc: DocumentResponse): string {
+  const compact = JSON.stringify(documentContent(doc))
   return compact.length > 60 ? `${compact.slice(0, 60)}…` : compact
 }
 
@@ -51,8 +52,8 @@ export interface DocumentSummary {
   preview: string
 }
 
-function toSummary(doc: Record<string, unknown>): DocumentSummary {
-  return { key: metaKey(doc), version: metaVersion(doc), preview: documentPreview(doc) }
+function toSummary(doc: DocumentResponse): DocumentSummary {
+  return { key: doc._key, version: doc._version, preview: documentPreview(doc) }
 }
 
 export interface ParsedFilter {
@@ -134,8 +135,8 @@ export function jsonDocumentsQueryOptions(apiClient: ApiClient | undefined, doma
 export interface DocumentDetail {
   key: string
   version: number
-  /** Dokumentinhalt ohne `_key`/`_version` — Anzeige- und Edit-Grundlage (spec §4). */
-  fields: Record<string, unknown>
+  /** Dokumentinhalt ohne Metafelder — Anzeige- und Edit-Grundlage (spec §4); skalar bei `_content`-Dokumenten (general/013 §6). */
+  fields: unknown
   etag: string | undefined
 }
 
@@ -143,7 +144,7 @@ export function documentPath(domain: string, key: string): string {
   return `${BASE_PATH}/json/${encodeURIComponent(domain)}/documents/${encodeURIComponent(key)}`
 }
 
-/** GET Einzeldokument über `fetchRaw`: der Contract lässt den Response-Body/ETag-Header untypisiert (json/011). */
+/** GET Einzeldokument bleibt auf `fetchRaw`: der typisierte Client reicht den `ETag`-Header nicht durch und wirft auf 404. */
 export function jsonDocumentQueryOptions(apiClient: ApiClient | undefined, domain: string, key: string | undefined) {
   return queryOptions({
     queryKey: ['json-document', domain, key ?? ''] as const,
@@ -151,20 +152,22 @@ export function jsonDocumentQueryOptions(apiClient: ApiClient | undefined, domai
       if (!apiClient || key === undefined) throw new Error('document detail query requires an active connection and key')
       const response = await apiClient.fetchRaw(documentPath(domain, key))
       const body: unknown = await response.json()
-      if (!isJsonObject(body)) throw new ApiError(response.status, 'unexpected document shape')
-      return { key: metaKey(body), version: metaVersion(body), fields: withoutMeta(body), etag: response.headers.get('etag') ?? undefined }
+      if (!isJsonObject(body) || typeof body._key !== 'string') throw new ApiError(response.status, 'unexpected document shape')
+      const doc = body as DocumentResponse
+      return { key: doc._key, version: doc._version, fields: documentContent(doc), etag: response.headers.get('etag') ?? undefined }
     },
     enabled: apiClient !== undefined && key !== undefined,
   })
 }
 
+/** Schreibpfade bleiben auf `fetchRaw`: der Contract typisiert den Request-Body als `Record<string, never>` — der typisierte Client brächte nur einen Cast. */
 export async function putDocument(apiClient: ApiClient, domain: string, key: string, etag: string | undefined, fields: unknown): Promise<void> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (etag !== undefined) headers['If-Match'] = etag
   await apiClient.fetchRaw(documentPath(domain, key), { method: 'PUT', headers, body: JSON.stringify(fields) })
 }
 
-/** Server vergibt den Key; die 201-Antwort ist laut Contract inhaltslos, liefert real aber das Dokument inkl. `_key`. */
+/** Server vergibt den Key; die 201-Antwort trägt das angelegte Dokument inkl. `_key`. */
 export async function createDocument(apiClient: ApiClient, domain: string, fields: unknown): Promise<string> {
   const response = await apiClient.fetchRaw(`${BASE_PATH}/json/${encodeURIComponent(domain)}/documents`, {
     method: 'POST',

@@ -76,21 +76,21 @@ describe('connect', () => {
   })
 
   it('connects to any server at or above the minimum', async () => {
-    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.1' })))
+    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.1' })))
     render(<SessionProbe />)
 
     await act(() => connect(makeConnection()))
 
-    expect(screen.getByTestId('session')).toHaveTextContent(/connected 0\.2\.1/)
+    expect(screen.getByTestId('session')).toHaveTextContent(/connected 0\.4\.1/)
   })
 
   it('connects cleanly on a matching version', async () => {
-    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
+    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })))
     render(<SessionProbe />)
 
     await act(() => connect(makeConnection()))
 
-    expect(screen.getByTestId('session')).toHaveTextContent('connected 0.2.0')
+    expect(screen.getByTestId('session')).toHaveTextContent('connected 0.4.0')
   })
 })
 
@@ -177,19 +177,19 @@ describe('useConnectedSession', () => {
   })
 
   it('exposes apiClient, serverVersion and connectionId once connected', async () => {
-    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.3' })))
+    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.3' })))
     render(<ConnectedSessionProbe />)
 
     await act(() => connect(makeConnection()))
 
-    expect(screen.getByTestId('connected-session')).toHaveTextContent('0.2.3 conn-1')
+    expect(screen.getByTestId('connected-session')).toHaveTextContent('0.4.3 conn-1')
     act(() => disconnect())
   })
 })
 
 describe('disconnect', () => {
   it('returns to the unauthenticated gate', async () => {
-    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
+    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })))
     render(<SessionProbe />)
     await act(() => connect(makeConnection()))
     expect(screen.getByTestId('session')).toHaveTextContent('connected')
