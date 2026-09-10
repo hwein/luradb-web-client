@@ -39,6 +39,9 @@ export interface SseStreamOptions {
 
 const STABLE_RESET_MS = 60_000
 
+/** 3× Server-Keep-Alive (~15 s): danach gilt der Stream als tot — eine halboffene Verbindung meldet sich nie von selbst. */
+const SSE_IDLE_TIMEOUT_MS = 45_000
+
 /** `data` des reset-Frames ist best effort — jeder unbekannte, fehlende oder kaputte Wert wird 'unknown', nie ein Wurf. */
 function resetReasonOf(data: string): SseResetReason {
   let parsed: unknown
@@ -83,9 +86,9 @@ function abortableDelay(ms: number, signal: AbortSignal): Promise<boolean> {
 }
 
 /**
- * Liest den Body zeilenweise und dispatcht SSE-Frames; kehrt zurück, wenn der Server schließt oder
- * `signal` abbricht (Abbruch cancelt den Reader — der Signal wird nie an fetch gereicht, damit
- * fremde AbortSignal-Realms wie jsdom/undici nicht kollidieren).
+ * Liest den Body zeilenweise und dispatcht SSE-Frames; kehrt zurück, wenn der Server schließt,
+ * `SSE_IDLE_TIMEOUT_MS` ohne Chunk vergehen oder `signal` abbricht (Abbruch cancelt den Reader — der
+ * Signal wird nie an fetch gereicht, damit fremde AbortSignal-Realms wie jsdom/undici nicht kollidieren).
  */
 async function readFrames(
   body: ReadableStream<Uint8Array>,
@@ -119,10 +122,18 @@ async function readFrames(
     dataLines = []
   }
 
+  let idleTimer: ReturnType<typeof setTimeout> | undefined
+  const armIdleTimer = (): void => {
+    clearTimeout(idleTimer)
+    idleTimer = setTimeout(() => void reader.cancel().catch(() => {}), SSE_IDLE_TIMEOUT_MS)
+  }
+
   try {
+    armIdleTimer()
     for (;;) {
       const { value, done } = await reader.read()
       if (done) break
+      armIdleTimer()
       buffer += decoder.decode(value, { stream: true })
       let nl: number
       while ((nl = buffer.indexOf('\n')) >= 0) {
@@ -145,6 +156,7 @@ async function readFrames(
       }
     }
   } finally {
+    clearTimeout(idleTimer)
     signal.removeEventListener('abort', onAbort)
   }
 }
@@ -153,6 +165,8 @@ async function readFrames(
  * Hält einen SSE-Stream offen: parst Frames, nimmt nach Abbruch mit `last_event_id` wieder auf und verbindet
  * mit Backoff 1s→2s→5s neu (Reset nach stabiler Minute), endet endgültig bei 410 (Domäne gelöscht),
  * 403 (Key ohne Stream-Recht) und 401 (Session ungültig).
+ * Auslöser des Reconnects ist entweder ein Stream-Ende oder 45 s ohne Chunk — eine halboffene Verbindung
+ * (Server-Neustart hinter einem Proxy) bliebe sonst für immer auf `connected` stehen.
  * Der übergebene `signal` beendet alles — auch laufende Backoff-Timer.
  */
 export async function sseStream(path: string, options: SseStreamOptions): Promise<void> {

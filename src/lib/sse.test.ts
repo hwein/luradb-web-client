@@ -175,7 +175,11 @@ describe('sseStream reconnect', () => {
 
     const promise = sseStream('/watch', { open, signal: new AbortController().signal, onEvent: () => {} })
     await vi.advanceTimersByTimeAsync(3000) // opens at 0, 1000, 3000 (now connected & stable)
-    await vi.advanceTimersByTimeAsync(61000) // hold the connection past the 60s reset threshold
+    for (let i = 0; i < 3; i += 1) {
+      await vi.advanceTimersByTimeAsync(20_000) // Keep-Alives halten den Idle-Watchdog still
+      stable.push(':\n\n')
+    }
+    await vi.advanceTimersByTimeAsync(1000) // hold the connection past the 60s reset threshold
     stable.close()
     await vi.advanceTimersByTimeAsync(1000) // reset ⇒ next backoff is 1s, not 5s
     await promise
@@ -279,6 +283,86 @@ describe('sseStream reset', () => {
     await promise
 
     expect(reasons).toEqual(['unknown', 'unknown', 'unknown', 'unknown'])
+  })
+})
+
+describe('sseStream idle watchdog', () => {
+  it('reconnects with the last id when no chunk arrives for 45s', async () => {
+    vi.useFakeTimers()
+    const contexts: SseOpenContext[] = []
+    const silent = controllableStream()
+    const open = vi.fn(async (_path: string, context: SseOpenContext) => {
+      contexts.push(context)
+      return contexts.length === 1 ? silent.response : new Response(null, { status: 410 })
+    })
+
+    const promise = sseStream('/watch', { open, signal: new AbortController().signal, onEvent: () => {} })
+    await vi.advanceTimersByTimeAsync(0)
+    silent.push('id: w-abc-3\nevent: set\ndata: k1\n\n')
+    await vi.advanceTimersByTimeAsync(44_000)
+    expect(open).toHaveBeenCalledTimes(1) // Watchdog läuft noch
+
+    await vi.advanceTimersByTimeAsync(1_000 + 1_000) // 45s still ⇒ Abbruch, danach 1s Backoff
+    await promise
+
+    expect(contexts).toEqual([
+      { lastEventId: undefined, reconnect: false },
+      { lastEventId: 'w-abc-3', reconnect: true },
+    ])
+  })
+
+  it('stays connected while keep-alive comments keep arriving', async () => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    const stream = controllableStream()
+    const open = vi.fn(async () => stream.response)
+
+    const promise = sseStream('/watch', { open, signal: controller.signal, onEvent: () => {} })
+    await vi.advanceTimersByTimeAsync(0)
+    for (let i = 0; i < 3; i += 1) {
+      await vi.advanceTimersByTimeAsync(20_000)
+      stream.push(':\n\n')
+    }
+    await vi.advanceTimersByTimeAsync(20_000) // 80s Gesamtzeit, aber nie mehr als 20s Stille
+
+    expect(open).toHaveBeenCalledTimes(1)
+
+    controller.abort()
+    await vi.advanceTimersByTimeAsync(0)
+    await promise
+  })
+
+  it('leaves no watchdog behind when the signal aborts mid-stream', async () => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    const stream = controllableStream()
+    const open = vi.fn(async () => stream.response)
+
+    const promise = sseStream('/watch', { open, signal: controller.signal, onEvent: () => {} })
+    await vi.advanceTimersByTimeAsync(0)
+    controller.abort()
+    await vi.advanceTimersByTimeAsync(0)
+    await promise
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('leaves no watchdog behind when the server ends the stream', async () => {
+    vi.useFakeTimers()
+    const open = vi
+      .fn<(path: string) => Promise<Response>>()
+      .mockResolvedValueOnce(closedStream('event: set\ndata: k1\n\n'))
+      .mockResolvedValue(new Response(null, { status: 410 }))
+
+    const promise = sseStream('/watch', { open, signal: new AbortController().signal, onEvent: () => {} })
+    await vi.advanceTimersByTimeAsync(1000)
+    await promise
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(open).toHaveBeenCalledTimes(2)
+    expect(vi.getTimerCount()).toBe(0)
   })
 })
 

@@ -36,6 +36,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Admin no longer flashes a false "admin role required" gate while the admin check is still loading, and shows a distinct message when the check itself fails.
 - KV watch reconnects resume from the last received event instead of losing the events of the gap.
 - KV watch no longer retries endlessly when the key has no permission for the stream (403).
+- KV watch detects a silently dropped connection within 45 s and reconnects instead of staying on "live".
 
 ### Changed
 

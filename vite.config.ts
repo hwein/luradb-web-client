@@ -5,6 +5,7 @@ import type { ProxyOptions } from 'vite'
 import { configDefaults, defineConfig } from 'vitest/config'
 
 // Backend nicht erreichbar ⇒ 502 statt Vites generischem 500 (general/004 unterscheidet "server unreachable" am Status).
+// Für SSE zusätzlich: Header sofort weiterreichen und die Browser-Response beenden, wenn der Upstream abreißt (spec general/015).
 function localServerProxy(): ProxyOptions {
   return {
     target: 'http://127.0.0.1:3000',
@@ -12,6 +13,17 @@ function localServerProxy(): ProxyOptions {
       proxyServer.on('error', (_err, _req, res) => {
         if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'text/plain' })
         res.end('upstream unreachable')
+      })
+      proxyServer.on('proxyRes', (proxyRes, _req, res) => {
+        if (proxyRes.headers['content-type']?.includes('text/event-stream') !== true) return
+        // http-proxy schreibt Status/Header erst synchron nach diesem Event — sonst flushten wir ins Leere.
+        process.nextTick(() => res.flushHeaders())
+        // Ohne das bliebe der Browser-Stream nach einem Upstream-Abriss halboffen hängen statt zu reconnecten.
+        const endResponse = (): void => void res.destroy()
+        proxyRes.on('close', () => {
+          if (!proxyRes.complete) endResponse()
+        })
+        proxyRes.on('error', endResponse)
       })
     },
   }
