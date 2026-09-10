@@ -12,6 +12,7 @@ import { Explorer } from './Explorer'
 import { Rail } from './Rail'
 import { SelectedDomainProvider } from './SelectedDomainContext'
 import { Statusbar } from './Statusbar'
+import { useStoreEvents } from './useStoreEvents'
 
 /** F1 ist global für die Docs-Suche reserviert. Hook-Punkt für sql/001: CodeMirror fängt F1 im Editor-Fokus selbst ab. */
 function useDocsShortcut(): void {
@@ -48,6 +49,7 @@ function useCommandPalette(): { open: boolean; close: () => void } {
 
 export function AppShell() {
   useDocsShortcut()
+  useStoreEvents()
   const commandPalette = useCommandPalette()
 
   return (

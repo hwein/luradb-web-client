@@ -17,6 +17,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Requires LuraDB 0.4.0 or newer.
 - KV bulk delete with a prefix runs as a single server-side operation; a selection over the server cap is rejected as a whole (413).
+- The explorer now updates from a live server event stream instead of waiting for the next poll.
 
 ### Removed
 

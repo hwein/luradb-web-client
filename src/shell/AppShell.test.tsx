@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { BrowserRouter } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -12,6 +12,8 @@ import { AppShell } from './AppShell'
 
 const ORIGIN = window.location.origin
 
+let eventStreamOpens = 0
+
 function makeConnection(): Connection {
   return {
     id: 'conn-1',
@@ -23,7 +25,13 @@ function makeConnection(): Connection {
 
 async function renderConnectedShell(path = '/sql'): Promise<void> {
   window.history.pushState({}, '', path)
+  eventStreamOpens = 0
   server.use(
+    // Der Shell-Stream (spec shell/009) läuft in jedem dieser Tests mit — offen gehalten, damit kein Reconnect dazwischenfunkt.
+    http.get(`${ORIGIN}/store-api/events`, () => {
+      eventStreamOpens += 1
+      return new HttpResponse(new ReadableStream<Uint8Array>({ start() {} }), { headers: { 'Content-Type': 'text/event-stream' } })
+    }),
     http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
     http.get(`${ORIGIN}/store-api/auth/users`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
@@ -160,6 +168,17 @@ describe('AppShell', () => {
     fireEvent.click(document.querySelector('.cmdk') as HTMLElement)
 
     expect(screen.queryByLabelText('command palette search')).not.toBeInTheDocument()
+  })
+
+  it('subscribes to the store event stream exactly once', async () => {
+    await renderConnectedShell('/sql')
+    await screen.findByText('run a query to see results')
+
+    await waitFor(() => expect(eventStreamOpens).toBe(1))
+    fireEvent.click(screen.getByTitle('Data browser'))
+    await screen.findByText('no domain selected')
+
+    expect(eventStreamOpens).toBe(1)
   })
 
   it('toggles the theme via the rail pill', async () => {
