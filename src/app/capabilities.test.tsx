@@ -54,16 +54,6 @@ function whoamiStatus(status: number) {
   return http.get(`${ORIGIN}/store-api/auth/whoami`, () => new HttpResponse('Unauthorized', { status }))
 }
 
-/** Zählt die anonyme auth.enabled-Probe (`GET /store-api/domains` ohne Key) — antwortet wie ein Server mit dem gegebenen Status. */
-function anonymousProbe(status: number) {
-  const hits = { count: 0 }
-  const handler = http.get(`${ORIGIN}/store-api/domains`, () => {
-    hits.count += 1
-    return status === 200 ? HttpResponse.json([]) : new HttpResponse(null, { status })
-  })
-  return { hits, handler }
-}
-
 describe('useCapabilities', () => {
   it('derives admin: yes plus the identity from whoami role Admin', async () => {
     await connectSuccessfully()
@@ -132,84 +122,15 @@ describe('useCapabilities', () => {
     act(() => disconnect())
   })
 
-  it.each([401, 403])('falls back to the anonymous probe on a %s: open server ⇒ admin: yes without an identity', async (status) => {
+  it.each([401, 403])('derives admin: no without identity or error from a %s on whoami — a regular gate, not an error', async (status) => {
     await connectSuccessfully()
-    const anonymous = anonymousProbe(200)
-    server.use(whoamiStatus(status), anonymous.handler)
-
-    renderProbe()
-
-    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: yes'))
-    expect(screen.queryByTestId('identity')).not.toBeInTheDocument()
-    expect(anonymous.hits.count).toBe(1)
-    act(() => disconnect())
-  })
-
-  it('falls back to the anonymous probe on a 401: auth enabled ⇒ admin: no — a regular gate, not an error', async () => {
-    await connectSuccessfully()
-    server.use(whoamiStatus(401), anonymousProbe(401).handler)
+    server.use(whoamiStatus(status))
 
     renderProbe()
 
     await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: no'))
     expect(screen.queryByTestId('admin-error')).not.toBeInTheDocument()
     expect(screen.queryByTestId('identity')).not.toBeInTheDocument()
-    act(() => disconnect())
-  })
-
-  it('derives admin: error when whoami says 401 and the anonymous probe fails', async () => {
-    await connectSuccessfully()
-    server.use(whoamiStatus(401), anonymousProbe(500).handler)
-
-    renderProbe()
-
-    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: error'))
-    expect(screen.getByTestId('admin-error')).toHaveTextContent('unexpected auth probe response (HTTP 500)')
-    act(() => disconnect())
-  })
-
-  it('stays pending while the anonymous fallback probe is still running', async () => {
-    await connectSuccessfully()
-    server.use(
-      whoamiStatus(401),
-      http.get(`${ORIGIN}/store-api/domains`, () => new Promise<never>(() => {})),
-    )
-
-    renderProbe()
-    await act(async () => {})
-    await act(async () => {})
-
-    expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: pending')
-    act(() => disconnect())
-  })
-
-  it('never fires the anonymous probe when whoami answers 200', async () => {
-    await connectSuccessfully()
-    const anonymous = anonymousProbe(200)
-    server.use(whoamiReturns({ name: 'admin', role: 'Admin' }), anonymous.handler)
-
-    renderProbe()
-
-    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: yes'))
-    await act(async () => {})
-    expect(anonymous.hits.count).toBe(0)
-    act(() => disconnect())
-  })
-
-  it('does not start the anonymous probe while whoami is still pending', async () => {
-    await connectSuccessfully()
-    const anonymous = anonymousProbe(200)
-    server.use(
-      http.get(`${ORIGIN}/store-api/auth/whoami`, () => new Promise<never>(() => {})),
-      anonymous.handler,
-    )
-
-    renderProbe()
-    await act(async () => {})
-    await act(async () => {})
-
-    expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: pending')
-    expect(anonymous.hits.count).toBe(0)
     act(() => disconnect())
   })
 

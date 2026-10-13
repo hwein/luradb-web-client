@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query'
-import { BASE_PATH, type ApiClient } from '../api'
+import { BASE_PATH, type ApiClient } from '../../api'
 
 export const AUTH_ENABLED_PROBE_KEY = ['auth-enabled-probe'] as const
 

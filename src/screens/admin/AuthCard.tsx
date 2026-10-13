@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { authEnabledProbeQueryOptions } from '../../app/authProbe'
 import { useConnectedSession } from '../../app/session'
+import { authEnabledProbeQueryOptions } from './authProbe'
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'request failed'

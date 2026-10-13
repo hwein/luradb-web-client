@@ -1,7 +1,6 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { ApiError, type ApiClient } from '../api'
 import type { components } from '../api/schema'
-import { authEnabledProbeQueryOptions } from './authProbe'
 import { useConnectedSession } from './session'
 
 export type AdminCapability = 'yes' | 'no' | 'pending' | 'error'
@@ -45,8 +44,7 @@ export function whoamiQueryOptions(apiClient: ApiClient | undefined) {
 /**
  * Rechte-Fassade: Screens fragen ausschließlich diesen Hook, nie Rollen-Strings oder Auth-Details.
  * Ableitung aus `GET /auth/whoami` (spec general/014): `Admin` und `Disabled` (offener Server) ⇒ yes, jede
- * andere Rolle ⇒ no (least privilege). Nur ein 401/403 fällt auf die anonyme auth.enabled-Probe zurück —
- * im Regelpfad kostet sie keinen Request.
+ * andere Rolle sowie 401/403 ⇒ no (least privilege).
  * Vierwertig statt boolesch (spec admin/005 §Entscheidungen): `pending` (lädt, auch ohne Verbindung — die
  * Query ist dann `enabled: false` und bleibt TanStack-seitig für immer `isPending`) und `error` (Anfrage
  * scheiterte, kein 401/403) dürfen nie zu "kein Admin" kollabieren.
@@ -57,16 +55,10 @@ export function useCapabilities(): Capabilities {
   const connected = useConnectedSession()
   const apiClient = connected?.apiClient
   const whoami = useQuery(whoamiQueryOptions(apiClient))
-  const authProbe = useQuery({ ...authEnabledProbeQueryOptions(apiClient), enabled: apiClient !== undefined && whoami.data === null })
 
   if (whoami.isPending) return { admin: 'pending' }
   if (whoami.isError) return { admin: 'error', adminError: messageOf(whoami.error) }
-
-  if (whoami.data === null) {
-    if (authProbe.isPending) return { admin: 'pending' }
-    if (authProbe.isError) return { admin: 'error', adminError: messageOf(authProbe.error) }
-    return { admin: authProbe.data ? 'no' : 'yes' }
-  }
+  if (whoami.data === null) return { admin: 'no' }
 
   const { name, role } = whoami.data
   const admin = role === 'Admin' || role === 'Disabled' ? 'yes' : 'no'
