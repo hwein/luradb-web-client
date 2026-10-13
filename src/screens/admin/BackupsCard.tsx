@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { ApiError, type ApiClient } from '../../api'
-import { ADMIN_PROBE_KEY } from '../../app/capabilities'
+import { WHOAMI_KEY } from '../../app/capabilities'
 import { useConnectedSession } from '../../app/session'
 import { formatBytes } from '../../lib'
 import { jsonDomainsQueryOptions, kvDomainsQueryOptions } from '../../shell/domains'
@@ -83,7 +83,7 @@ function RestoreRow({ entry, result, statusError, onView }: RestoreRowProps) {
     invalidateDomainLists(queryClient)
     if (entry.include_auth) {
       void queryClient.invalidateQueries({ queryKey: USERS_KEY })
-      void queryClient.invalidateQueries({ queryKey: ADMIN_PROBE_KEY })
+      void queryClient.invalidateQueries({ queryKey: WHOAMI_KEY })
     }
   }, [terminal, entry.restore_id, entry.include_auth, queryClient])
 

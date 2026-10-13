@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
-import { http, HttpResponse } from 'msw'
+import { http, HttpResponse, type HttpResponseResolver } from 'msw'
 import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { ApiClient } from '../api'
-import { ADMIN_PROBE_KEY, useCapabilities } from '../app/capabilities'
+import { WHOAMI_KEY, useCapabilities } from '../app/capabilities'
 import type { Connection } from '../app/connections'
 import { createAppQueryClient } from '../app/queryClient'
 import { connect, disconnect, useSession } from '../app/session'
@@ -26,11 +26,14 @@ function makeConnection(): Connection {
   }
 }
 
+const adminWhoami: HttpResponseResolver = () => HttpResponse.json({ name: 'admin', role: 'Admin' })
+const userWhoami: HttpResponseResolver = () => HttpResponse.json({ name: 'alice', role: 'User' })
+
 /** Verbindet und liefert den ApiClient der Sitzung — Aufhänger für den `openStream`-Spy. */
-async function connectSession(adminStatus = 200): Promise<ApiClient> {
+async function connectSession(whoami: HttpResponseResolver = adminWhoami): Promise<ApiClient> {
   server.use(
     http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
-    http.get(`${ORIGIN}/store-api/auth/users`, () => (adminStatus === 200 ? HttpResponse.json([]) : new HttpResponse(null, { status: adminStatus }))),
+    http.get(`${ORIGIN}/store-api/auth/whoami`, whoami),
   )
   await act(() => connect(makeConnection()))
 
@@ -115,10 +118,10 @@ describe('useStoreEvents', () => {
   })
 
   it.each([
-    ['no', 403],
-    ['error', 500],
-  ])('opens no stream while the admin capability is %s', async (expected, adminStatus) => {
-    const apiClient = await connectSession(adminStatus)
+    ['no', userWhoami],
+    ['error', () => new HttpResponse(null, { status: 500 })],
+  ])('opens no stream while the admin capability is %s', async (expected, whoami) => {
+    const apiClient = await connectSession(whoami)
     const openStream = vi.spyOn(apiClient, 'openStream')
     server.use(eventStream([]))
 
@@ -129,8 +132,7 @@ describe('useStoreEvents', () => {
   })
 
   it('opens no stream while the admin capability is still pending', async () => {
-    server.use(http.get(`${ORIGIN}/store-api/auth/users`, () => new Promise<never>(() => {})))
-    const apiClient = await connectSession()
+    const apiClient = await connectSession(() => new Promise<never>(() => {}))
     const openStream = vi.spyOn(apiClient, 'openStream')
     server.use(eventStream([]))
 
@@ -142,7 +144,7 @@ describe('useStoreEvents', () => {
   })
 
   it('starts the stream once the admin capability flips to yes', async () => {
-    const apiClient = await connectSession(403)
+    const apiClient = await connectSession(userWhoami)
     const openStream = vi.spyOn(apiClient, 'openStream')
     server.use(eventStream([]))
     const queryClient = createAppQueryClient()
@@ -151,8 +153,8 @@ describe('useStoreEvents', () => {
     await waitFor(() => expect(screen.getByTestId('admin')).toHaveTextContent('no'))
     expect(openStream).not.toHaveBeenCalled()
 
-    server.use(http.get(`${ORIGIN}/store-api/auth/users`, () => HttpResponse.json([])))
-    await act(() => queryClient.invalidateQueries({ queryKey: ADMIN_PROBE_KEY }))
+    server.use(http.get(`${ORIGIN}/store-api/auth/whoami`, adminWhoami))
+    await act(() => queryClient.invalidateQueries({ queryKey: WHOAMI_KEY }))
 
     await waitFor(() => expect(openStream).toHaveBeenCalledTimes(1))
   })

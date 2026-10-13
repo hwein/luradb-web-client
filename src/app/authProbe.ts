@@ -1,11 +1,12 @@
 import { queryOptions } from '@tanstack/react-query'
-import { BASE_PATH, type ApiClient } from '../../api'
+import { BASE_PATH, type ApiClient } from '../api'
 
 export const AUTH_ENABLED_PROBE_KEY = ['auth-enabled-probe'] as const
 
 /**
- * `auth.enabled` steht nur in luradb.toml, nicht im REST-Contract — Ableitung über eine einmalige,
- * anonyme Anfrage ohne Authorization-Header: 401 (Key verlangt) ⇒ enabled, 200 (offen) ⇒ disabled.
+ * `auth.enabled` steht nur in luradb.toml; der REST-Contract zeigt es nur indirekt (whoami-Rolle `Disabled`,
+ * general/014) — die AUTH-Karte leitet es über eine einmalige, anonyme Anfrage ohne Authorization-Header ab:
+ * 401 (Key verlangt) ⇒ enabled, 200 (offen) ⇒ disabled.
  * Läuft über `apiClient.fetchAnonymous` (derselbe `fetchImpl`/`baseUrl` wie der übrige Client, kein
  * Transport-Aufbau pro Query-Lauf — admin/005 §4). staleTime Infinity, weil sich das für die laufende
  * Session nicht ändert.

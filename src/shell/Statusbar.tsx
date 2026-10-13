@@ -8,7 +8,7 @@ import './Statusbar.css'
 export function Statusbar() {
   const queryClient = useQueryClient()
   const session = useSession()
-  const { state, hostLabel, authLabel, serverLabel, uptimeLabel } = useConnection()
+  const { state, hostLabel, authLabel, signedInLabel, serverLabel, uptimeLabel } = useConnection()
   const host = hostLabel.slice(0, hostLabel.length - BASE_PATH.length)
 
   function handleDisconnect(): void {
@@ -28,6 +28,11 @@ export function Statusbar() {
         </span>
       )}
       {authLabel && <span>{authLabel}</span>}
+      {signedInLabel && (
+        <span className="statusbar__identity" title={signedInLabel}>
+          {signedInLabel}
+        </span>
+      )}
       {session.status === 'connected' && session.compatibilityWarning && (
         <span className="statusbar__warning">⚠ {session.compatibilityWarning}</span>
       )}

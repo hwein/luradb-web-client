@@ -58,7 +58,7 @@ describe('App', () => {
     storeRememberedConnection()
     server.use(
       http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
-      http.get(`${ORIGIN}/store-api/auth/users`, () => HttpResponse.json([])),
+      http.get(`${ORIGIN}/store-api/auth/whoami`, () => HttpResponse.json({ name: 'admin', role: 'Admin' })),
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),

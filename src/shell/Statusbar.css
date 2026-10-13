@@ -40,6 +40,13 @@
   background: var(--err);
 }
 
+.statusbar__identity {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Kein eigenes Warn-Token in tokens.css — nutzt den amber-Farbton des JSON-Engine-Hues (Design-Amber). */
 .statusbar__warning {
   color: var(--eng-json-label);

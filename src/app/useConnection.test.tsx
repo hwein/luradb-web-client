@@ -24,7 +24,7 @@ function ConnectionProbe() {
   const info = useConnection()
   return (
     <p data-testid="connection">
-      state:[{info.state}] host:[{info.hostLabel}] auth:[{info.authLabel}] server:[{info.serverLabel}] uptime:[{info.uptimeLabel}]
+      state:[{info.state}] host:[{info.hostLabel}] auth:[{info.authLabel}] signedIn:[{info.signedInLabel}] server:[{info.serverLabel}] uptime:[{info.uptimeLabel}]
     </p>
   )
 }
@@ -32,6 +32,10 @@ function ConnectionProbe() {
 async function connectSuccessfully(): Promise<void> {
   server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })))
   await act(() => connect(makeConnection()))
+}
+
+function whoami(status: number, body?: { name: string | null; role: string }) {
+  return http.get(`${ORIGIN}/store-api/auth/whoami`, () => (body === undefined ? new HttpResponse(null, { status }) : HttpResponse.json(body, { status })))
 }
 
 function renderProbe() {
@@ -48,13 +52,13 @@ describe('useConnection', () => {
     disconnect()
     renderProbe()
 
-    expect(screen.getByTestId('connection')).toHaveTextContent('state:[unauthenticated] host:[] auth:[] server:[] uptime:[]')
+    expect(screen.getByTestId('connection')).toHaveTextContent('state:[unauthenticated] host:[] auth:[] signedIn:[] server:[] uptime:[]')
   })
 
-  it('reflects real responses once connected: host, admin role, server version, and uptime', async () => {
+  it('reflects real responses once connected: host, role, signed-in user, server version, and uptime', async () => {
     await connectSuccessfully()
     server.use(
-      http.get(`${ORIGIN}/store-api/auth/users`, () => HttpResponse.json([])),
+      whoami(200, { name: 'admin', role: 'Admin' }),
       http.get(`${ORIGIN}/health`, () => HttpResponse.json({ status: 'ok', uptime_secs: 4260 })),
     )
 
@@ -62,7 +66,7 @@ describe('useConnection', () => {
 
     await waitFor(() =>
       expect(screen.getByTestId('connection')).toHaveTextContent(
-        `state:[connected] host:[${window.location.host}${BASE_PATH}] auth:[bearer ✓ admin] server:[luradb 0.4.0] uptime:[up 1h 11m]`,
+        `state:[connected] host:[${window.location.host}${BASE_PATH}] auth:[bearer ✓ admin] signedIn:[signed in as admin] server:[luradb 0.4.0] uptime:[up 1h 11m]`,
       ),
     )
     act(() => disconnect())
@@ -71,7 +75,7 @@ describe('useConnection', () => {
   it('omits the uptime while /health does not answer', async () => {
     await connectSuccessfully()
     server.use(
-      http.get(`${ORIGIN}/store-api/auth/users`, () => HttpResponse.json([])),
+      whoami(200, { name: 'admin', role: 'Admin' }),
       http.get(`${ORIGIN}/health`, () => new HttpResponse(null, { status: 500 })),
     )
 
@@ -79,6 +83,53 @@ describe('useConnection', () => {
 
     await waitFor(() => expect(screen.getByTestId('connection')).toHaveTextContent('auth:[bearer ✓ admin]'))
     expect(screen.getByTestId('connection')).toHaveTextContent('server:[luradb 0.4.0] uptime:[]')
+    act(() => disconnect())
+  })
+
+  it('labels a regular user with the user role and their own name', async () => {
+    await connectSuccessfully()
+    server.use(whoami(200, { name: 'alice', role: 'User' }))
+
+    renderProbe()
+
+    await waitFor(() => expect(screen.getByTestId('connection')).toHaveTextContent('auth:[bearer ✓ user] signedIn:[signed in as alice]'))
+    act(() => disconnect())
+  })
+
+  it.each([
+    ['Disabled', 'bearer ✓ admin'],
+    ['TrustedPeer', 'bearer ✓ user'],
+  ])('has no signed-in label for the nameless %s role', async (role, authLabel) => {
+    await connectSuccessfully()
+    server.use(whoami(200, { name: null, role }))
+
+    renderProbe()
+
+    await waitFor(() => expect(screen.getByTestId('connection')).toHaveTextContent(`auth:[${authLabel}] signedIn:[]`))
+    act(() => disconnect())
+  })
+
+  it('has neither an auth nor a signed-in label while whoami fails', async () => {
+    await connectSuccessfully()
+    server.use(whoami(500))
+
+    renderProbe()
+
+    await waitFor(() => expect(screen.getByTestId('connection')).toHaveTextContent('state:[connected]'))
+    await act(async () => {})
+    expect(screen.getByTestId('connection')).toHaveTextContent('auth:[] signedIn:[]')
+    act(() => disconnect())
+  })
+
+  it('has neither an auth nor a signed-in label while whoami is still pending', async () => {
+    await connectSuccessfully()
+    server.use(http.get(`${ORIGIN}/store-api/auth/whoami`, () => new Promise<never>(() => {})))
+
+    renderProbe()
+
+    await waitFor(() => expect(screen.getByTestId('connection')).toHaveTextContent('state:[connected]'))
+    await act(async () => {})
+    expect(screen.getByTestId('connection')).toHaveTextContent('auth:[] signedIn:[]')
     act(() => disconnect())
   })
 })

@@ -524,7 +524,7 @@ describe('BackupsCard restore row', () => {
     expect(screen.getByRole('button', { name: '▶ run backup now' })).toBeEnabled()
   })
 
-  it('also invalidates users and the capability probe when the restore carried auth records', async () => {
+  it('also invalidates users and the whoami identity when the restore carried auth records', async () => {
     seedRestore(true)
     server.use(...restoreHandlers('failed'))
     const queryClient = await renderConnected()
@@ -532,7 +532,7 @@ describe('BackupsCard restore row', () => {
 
     expect(await screen.findByText('restore · failed')).toBeInTheDocument()
     await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ['auth', 'users'] }))
-    expect(spy).toHaveBeenCalledWith({ queryKey: ['capabilities', 'admin-probe'] })
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['capabilities', 'whoami'] })
   })
 
   it('reports a lost status after a server restart and still invalidates the domain lists', async () => {

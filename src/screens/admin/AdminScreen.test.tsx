@@ -23,7 +23,9 @@ function makeConnection(): Connection {
 function baseHandlers(adminOk: boolean) {
   return [
     http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
-    http.get(`${ORIGIN}/store-api/auth/users`, () => (adminOk ? HttpResponse.json([]) : new HttpResponse(null, { status: 403 }))),
+    http.get(`${ORIGIN}/store-api/auth/whoami`, () =>
+      HttpResponse.json(adminOk ? { name: 'admin', role: 'Admin' } : { name: 'alice', role: 'User' }),
+    ),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
@@ -76,10 +78,10 @@ describe('AdminScreen', () => {
     expect(await screen.findByPlaceholderText('new domain (max 50 chars)')).toBeInTheDocument()
   })
 
-  it('shows "admin check failed" with the response detail instead of the role-gate hint on a probe 500 (spec admin/005 §3)', async () => {
+  it('shows "admin check failed" with the response detail instead of the role-gate hint on a whoami 500 (spec admin/005 §3)', async () => {
     server.use(
       http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
-      http.get(`${ORIGIN}/store-api/auth/users`, () => new HttpResponse(null, { status: 500 })),
+      http.get(`${ORIGIN}/store-api/auth/whoami`, () => new HttpResponse(null, { status: 500 })),
     )
     await act(() => connect(makeConnection()))
     const queryClient = createAppQueryClient()
@@ -97,15 +99,15 @@ describe('AdminScreen', () => {
     expect(screen.queryByText('admin role required — your key has per-domain permissions only')).not.toBeInTheDocument()
   })
 
-  it('shows no gate text and no cards while the admin probe is still pending — no false "admin role required" flash (spec admin/005 §3)', async () => {
+  it('shows no gate text and no cards while whoami is still pending — no false "admin role required" flash (spec admin/005 §3)', async () => {
     let releaseProbe: (() => void) | undefined
     server.use(
       http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
-      http.get(`${ORIGIN}/store-api/auth/users`, async () => {
+      http.get(`${ORIGIN}/store-api/auth/whoami`, async () => {
         await new Promise<void>((resolve) => {
           releaseProbe = resolve
         })
-        return HttpResponse.json([])
+        return HttpResponse.json({ name: 'admin', role: 'Admin' })
       }),
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),

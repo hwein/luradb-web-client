@@ -10,6 +10,7 @@ export interface ConnectionInfo {
   state: 'unauthenticated' | 'connecting' | 'connected' | 'error'
   hostLabel: string
   authLabel: string
+  signedInLabel: string
   serverLabel: string
   uptimeLabel: string
 }
@@ -35,7 +36,7 @@ export function useConnection(): ConnectionInfo {
   const health = useQuery({ ...healthQueryOptions(apiClient), refetchInterval: 60_000 })
 
   if (session.status !== 'connected') {
-    return { state: session.status, hostLabel: '', authLabel: '', serverLabel: '', uptimeLabel: '' }
+    return { state: session.status, hostLabel: '', authLabel: '', signedInLabel: '', serverLabel: '', uptimeLabel: '' }
   }
 
   const env = getEnvironment()
@@ -48,6 +49,7 @@ export function useConnection(): ConnectionInfo {
     state: 'connected',
     hostLabel,
     authLabel,
+    signedInLabel: capabilities.identity === undefined ? '' : `signed in as ${capabilities.identity.name}`,
     serverLabel: `luradb ${session.serverVersion}`,
     uptimeLabel: health.data === undefined ? '' : formatUptime(health.data.uptimeSecs),
   }
