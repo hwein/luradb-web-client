@@ -1,12 +1,14 @@
 export class ApiError extends Error {
   readonly status: number
   readonly body?: unknown
+  readonly retryAfterSecs?: number
 
-  constructor(status: number, message: string, body?: unknown) {
+  constructor(status: number, message: string, body?: unknown, retryAfterSecs?: number) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.body = body
+    this.retryAfterSecs = retryAfterSecs
   }
 }
 
@@ -38,7 +40,13 @@ export async function apiErrorFromResponse(response: Response): Promise<ApiError
   const statusText = response.statusText.length > 0 ? response.statusText : `HTTP ${response.status}`
   const firstLine = (trimmed.split('\n', 1)[0] ?? '').slice(0, MAX_PLAINTEXT_MESSAGE)
   const plaintext = isJson || firstLine === '' ? undefined : firstLine
-  return new ApiError(response.status, messageFromBody(body) ?? plaintext ?? statusText, body)
+  const message = messageFromBody(body) ?? plaintext ?? statusText
+  const header = response.headers.get('Retry-After')?.trim() ?? ''
+  if (!/^\d+$/.test(header)) return new ApiError(response.status, message, body)
+  const secs = Number(header)
+  // 507 text already names the delay; repeating it would show the wait twice
+  const named = message.includes(`retry in ${secs} s`)
+  return new ApiError(response.status, named ? message : `${message} · retry in ${secs} s`, body, secs)
 }
 
 /** `cause` = Original-Fehlertext des Transports (z. B. Tauri-Scope-Denial) — er trägt die eigentliche Diagnose. */

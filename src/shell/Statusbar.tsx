@@ -8,7 +8,7 @@ import './Statusbar.css'
 export function Statusbar() {
   const queryClient = useQueryClient()
   const session = useSession()
-  const { state, hostLabel, authLabel, signedInLabel, serverLabel, uptimeLabel } = useConnection()
+  const { state, hostLabel, authLabel, signedInLabel, serverLabel, uptimeLabel, healthLabel, healthBlocked } = useConnection()
   const host = hostLabel.slice(0, hostLabel.length - BASE_PATH.length)
 
   function handleDisconnect(): void {
@@ -35,6 +35,9 @@ export function Statusbar() {
       )}
       {session.status === 'connected' && session.compatibilityWarning && (
         <span className="statusbar__warning">⚠ {session.compatibilityWarning}</span>
+      )}
+      {healthLabel && (
+        <span className={`statusbar__health${healthBlocked ? ' statusbar__health--err' : ''}`}>{healthLabel}</span>
       )}
       {serverLabel && (
         <span className="statusbar__server">

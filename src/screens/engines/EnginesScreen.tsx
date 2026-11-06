@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, type NavigateFunction } from 'react-router'
+import { ApiError } from '../../api'
+import { useCapabilities } from '../../app/capabilities'
 import { useSession } from '../../app/session'
 import { formatBytes } from '../../lib'
 import { useSelectedDomain } from '../../shell'
@@ -9,6 +11,7 @@ import { EngineCard, type EngineCardRow, type EngineTone } from './EngineCard'
 import './EnginesScreen.css'
 import { formatNumber } from '../../lib'
 import { healthQueryOptions } from './health'
+import { HealthBar } from './HealthBar'
 import { metricsQueryOptions } from './metrics'
 import { RecentRequestsCard } from './RecentRequestsCard'
 import { SystemThroughput } from './SystemThroughput'
@@ -44,6 +47,7 @@ export function EnginesScreen() {
   const healthQuery = useQuery(healthQueryOptions(apiClient))
   const metricsQuery = useQuery(metricsQueryOptions(apiClient))
   const health = healthQuery.data
+  const isAdmin = useCapabilities().admin === 'yes'
 
   const jsonTotals = useJsonEngineTotals(
     apiClient,
@@ -76,6 +80,13 @@ export function EnginesScreen() {
   return (
     <div className="engines">
       <SystemThroughput metrics={metricsQuery.data} />
+      {health && (
+        <HealthBar
+          health={health}
+          resources={isAdmin ? metricsQuery.data?.resources : undefined}
+          metricsUnavailable={isAdmin && metricsQuery.error instanceof ApiError && metricsQuery.error.status === 503}
+        />
+      )}
       <div className="engines__cards">
         <EngineCard
           tone="kv"

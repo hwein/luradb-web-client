@@ -12,6 +12,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Explorer shows the row count next to each table of the expanded domain.
 - KV key detail shows the remaining TTL and the last modification time.
 - KV watch feed shows key expiry as a `delete` event and refreshes the key list.
+- Status bar and Engines screen show server health (shards, disk, memory, I/O); write errors under overload or low resources name the server's retry delay.
 
 ### Changed
 

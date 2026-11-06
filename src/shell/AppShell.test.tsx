@@ -31,7 +31,9 @@ function makeConnection(): Connection {
   }
 }
 
-async function renderConnectedShell(path = '/sql', whoami: WhoamiMock = ADMIN_WHOAMI): Promise<void> {
+const HEALTH_OK = { status: 'ok', uptime_secs: 4260 }
+
+async function renderConnectedShell(path = '/sql', whoami: WhoamiMock = ADMIN_WHOAMI, health: object = HEALTH_OK): Promise<void> {
   window.history.pushState({}, '', path)
   eventStreamOpens = 0
   whoamiRequests = 0
@@ -50,7 +52,7 @@ async function renderConnectedShell(path = '/sql', whoami: WhoamiMock = ADMIN_WH
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/backups`, () => HttpResponse.json({ backups: [], running: null })),
-    http.get(`${ORIGIN}/health`, () => HttpResponse.json({ status: 'ok', uptime_secs: 4260 })),
+    http.get(`${ORIGIN}/health`, () => HttpResponse.json(health)),
     http.get(`${ORIGIN}/store-api/logs`, () => HttpResponse.text('503 Service Unavailable: log access is disabled (log.http_access = false)', { status: 503 })),
     http.get(`${ORIGIN}/store-api/logs/files`, () =>
       HttpResponse.text('503 Service Unavailable: log access is disabled (log.http_access = false)', { status: 503 }),
@@ -117,6 +119,35 @@ describe('AppShell', () => {
     expect(await screen.findByText('up 1h 11m')).toBeInTheDocument()
     expect(screen.getByText(`${window.location.host} ${BASE_PATH}`)).toBeInTheDocument()
     expect(screen.getByTitle('disconnect')).toHaveTextContent('connected')
+  })
+
+  it('shows no health label while the server is ok', async () => {
+    await renderConnectedShell('/sql')
+    await screen.findByText('up 1h 11m')
+
+    expect(document.querySelector('.statusbar__health')).toBeNull()
+  })
+
+  it('shows a degraded health label in warn style for a mere warning', async () => {
+    await renderConnectedShell('/sql', ADMIN_WHOAMI, {
+      status: 'degraded',
+      resources: { state: 'warning', disk_state: 'warning', memory_state: 'ok' },
+    })
+
+    const label = await screen.findByText('degraded · disk space low')
+    expect(label).toHaveClass('statusbar__health')
+    expect(label).not.toHaveClass('statusbar__health--err')
+  })
+
+  it('marks the health label as err when a shard is not ok', async () => {
+    await renderConnectedShell('/sql', ADMIN_WHOAMI, {
+      status: 'degraded',
+      shards: [{ id: 1, status: 'timeout' }],
+      resources: { state: 'ok', disk_state: 'ok', memory_state: 'ok' },
+    })
+
+    const label = await screen.findByText('degraded · shard 1 timeout')
+    expect(label).toHaveClass('statusbar__health', 'statusbar__health--err')
   })
 
   it('shows the signed-in user right after the auth label, with the full label as title', async () => {

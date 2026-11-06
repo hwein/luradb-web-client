@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { BASE_PATH } from '../api'
-import { healthQueryOptions } from '../screens/engines/health'
+import { healthQueryOptions, type HealthSnapshot } from '../screens/engines/health'
 import { useCapabilities } from './capabilities'
 import { authStatusLabel, connectionHostLabel } from './connectionRegistry'
 import { getEnvironment } from './environment'
@@ -13,6 +13,30 @@ export interface ConnectionInfo {
   signedInLabel: string
   serverLabel: string
   uptimeLabel: string
+  healthLabel: string
+  healthBlocked: boolean
+}
+
+function healthReasons(health: HealthSnapshot): string[] {
+  const { resources } = health
+  const reasons = health.shards.filter((shard) => shard.status !== 'ok').map((shard) => `shard ${shard.id} ${shard.status}`)
+  if (resources.diskState === 'warning') reasons.push('disk space low')
+  if (resources.diskState === 'blocked') reasons.push('writes blocked: disk')
+  if (resources.memoryState === 'warning') reasons.push('memory low')
+  if (resources.memoryState === 'blocked') reasons.push('writes blocked: memory')
+  if (health.ioFailures > 0) reasons.push(`i/o failures: ${health.ioFailures}`)
+  return reasons
+}
+
+function healthLabelOf(health: HealthSnapshot | undefined): string {
+  if (health === undefined || health.status === 'ok') return ''
+  return ['degraded', ...healthReasons(health)].join(' · ')
+}
+
+function isHealthBlocked(health: HealthSnapshot | undefined): boolean {
+  if (health === undefined || health.status === 'ok') return false
+  const { resources } = health
+  return resources.diskState === 'blocked' || resources.memoryState === 'blocked' || health.shards.some((shard) => shard.status !== 'ok')
 }
 
 /** Minutengenau — feiner löst das 60s-Poll-Intervall ohnehin nicht auf. */
@@ -36,7 +60,7 @@ export function useConnection(): ConnectionInfo {
   const health = useQuery({ ...healthQueryOptions(apiClient), refetchInterval: 60_000 })
 
   if (session.status !== 'connected') {
-    return { state: session.status, hostLabel: '', authLabel: '', signedInLabel: '', serverLabel: '', uptimeLabel: '' }
+    return { state: session.status, hostLabel: '', authLabel: '', signedInLabel: '', serverLabel: '', uptimeLabel: '', healthLabel: '', healthBlocked: false }
   }
 
   const env = getEnvironment()
@@ -52,5 +76,7 @@ export function useConnection(): ConnectionInfo {
     signedInLabel: capabilities.identity === undefined ? '' : `signed in as ${capabilities.identity.name}`,
     serverLabel: `luradb ${session.serverVersion}`,
     uptimeLabel: health.data === undefined ? '' : formatUptime(health.data.uptimeSecs),
+    healthLabel: healthLabelOf(health.data),
+    healthBlocked: isHealthBlocked(health.data),
   }
 }

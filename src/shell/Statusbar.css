@@ -52,6 +52,14 @@
   color: var(--eng-json-label);
 }
 
+.statusbar__health {
+  color: var(--warn);
+}
+
+.statusbar__health--err {
+  color: var(--err);
+}
+
 .statusbar__server {
   margin-left: auto;
   display: flex;

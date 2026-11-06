@@ -47,6 +47,23 @@
   color: var(--mut);
 }
 
+.engines__health {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+}
+
+.engines__health-seg--warn {
+  color: var(--warn);
+}
+
+.engines__health-seg--err {
+  color: var(--err);
+}
+
 .engines__spark {
   display: flex;
   align-items: flex-end;

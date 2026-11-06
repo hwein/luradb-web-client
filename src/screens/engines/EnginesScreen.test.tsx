@@ -52,6 +52,7 @@ function baseHandlers() {
     ),
     http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1, state: 'active' }])),
     http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1, state: 'active' }])),
+    http.get(`${ORIGIN}/store-api/auth/whoami`, () => HttpResponse.json({ name: 'admin', role: 'Admin' })),
     http.get(`${ORIGIN}/health`, () => HttpResponse.json(HEALTH)),
     http.get(`${ORIGIN}/store-api/metrics`, () => HttpResponse.json(METRICS)),
     http.get(`${ORIGIN}/store-api/json/domains/shop`, () =>
@@ -308,6 +309,77 @@ describe('EnginesScreen', () => {
     expect(throughputText()).toContain('0 reads/s')
     expect(throughputText()).toContain('0 writes/s')
     expect(document.querySelectorAll('.engines__spark-bar')).toHaveLength(24) // 2 Sparklines à 12 Balken
+  })
+
+  describe('health bar (spec s-c5d388f5)', () => {
+    const HEALTH_DEGRADED = {
+      ...HEALTH,
+      status: 'degraded',
+      shards: [
+        { id: 0, status: 'ok' },
+        { id: 1, status: 'timeout' },
+      ],
+      resources: { state: 'warning', disk_state: 'blocked', memory_state: 'warning' },
+      io: { failures: 2 },
+    }
+    const barText = () => document.querySelector('.engines__health')?.textContent ?? ''
+
+    it('shows the health bar', async () => {
+      await connectAndRender('/engines', [http.get(`${ORIGIN}/health`, () => HttpResponse.json(HEALTH_DEGRADED, { status: 503 }))])
+
+      await waitFor(() => expect(barText()).toContain('shards 1/2 ok'))
+      expect(barText()).toContain('disk blocked')
+      expect(barText()).toContain('memory warning')
+      expect(barText()).toContain('i/o 2 failures')
+      expect(screen.getByText('shards 1/2 ok')).toHaveAttribute('title', 'shard 0: ok\nshard 1: timeout')
+      expect(screen.getByText('disk blocked')).toHaveClass('engines__health-seg--err')
+      expect(screen.getByText('memory warning')).toHaveClass('engines__health-seg--warn')
+    })
+
+    it('appends admin numbers from metrics', async () => {
+      await connectAndRender('/engines', [
+        http.get(`${ORIGIN}/store-api/metrics`, () =>
+          HttpResponse.json({
+            ...METRICS,
+            resources: {
+              disk: [{ path: '/data', size_bytes: 2097152, free_bytes: 1048576, state: 'ok' }],
+              memory: { rss_anon_bytes: 1048576, budget_bytes: 4194304, state: 'ok' },
+            },
+          }),
+        ),
+      ])
+
+      await waitFor(() => expect(barText()).toContain('1.0 MB free of 2.0 MB'))
+      expect(barText()).toContain('1.0 MB of 4.0 MB')
+    })
+
+    it('names titled segments by their visible text', async () => {
+      await connectAndRender('/engines', [
+        http.get(`${ORIGIN}/health`, () => HttpResponse.json(HEALTH_DEGRADED, { status: 503 })),
+        http.get(`${ORIGIN}/store-api/metrics`, () =>
+          HttpResponse.json({
+            ...METRICS,
+            resources: { disk: [{ path: '/data', size_bytes: 2097152, free_bytes: 1048576, state: 'ok' }] },
+          }),
+        ),
+      ])
+
+      const shardsSeg = await screen.findByRole('group', { name: 'shards 1/2 ok' })
+      expect(shardsSeg).toHaveAttribute('title', 'shard 0: ok\nshard 1: timeout')
+      const volumeSeg = await screen.findByRole('group', { name: '1.0 MB free of 2.0 MB' })
+      expect(volumeSeg).toHaveAttribute('title', '/data')
+    })
+
+    it('shows metrics unavailable on 503', async () => {
+      await connectAndRender('/engines', [
+        http.get(`${ORIGIN}/store-api/metrics`, () => HttpResponse.text('503 Service Unavailable', { status: 503 })),
+      ])
+
+      await waitFor(() => expect(barText()).toContain('metrics unavailable'))
+      expect(barText()).toContain('shards 0/0 ok')
+      expect(barText()).not.toContain('free of')
+      await waitFor(() => expect(cardText('kv')).toContain('2.0 MB'))
+    })
   })
 
   it('renders recorder rows newest-first (max 20 visible), a why? link on a 409 row, and a distinct stream row', async () => {
