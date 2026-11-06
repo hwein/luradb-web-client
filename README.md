@@ -72,7 +72,7 @@ Build Tools + WebView2; Linux: `webkit2gtk`, `libayatana-appindicator3`,
 
 ```
 npm install
-npm run dev        # browser mode: Vite dev server (proxy → 127.0.0.1:3000)
+npm run dev        # browser mode: Vite dev server (proxy → LURADB_URL from .env.local, default 127.0.0.1:3000)
 npm run app:dev    # desktop app in dev mode (Tauri; needs Rust)
 npm run check      # tsc --noEmit + ESLint — always before npm test
 npm test           # Vitest
