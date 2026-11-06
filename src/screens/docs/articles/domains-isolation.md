@@ -9,6 +9,7 @@ A domain is a logical namespace — everything inside one is invisible to every 
 2. **KV, JSON, and REL keep separate registries.** A domain called `shop` in KV, JSON, and REL is really three independent registrations that merely share a name. Nothing is provisioned automatically across engines, and none of them can see another's data.
 3. **Deletion is asynchronous.** `DELETE` answers `202 Accepted` immediately; the domain is masked from reads right away while a background purger physically removes its data.
 4. **JSON and REL expose the in-between state, KV does not.** A JSON or REL domain response carries `"state": "active" | "deleting"`, and any CRUD against a `deleting` domain answers `410 Gone` (see [errors & status codes](docs:errors-status-codes)). KV instead drops the domain's metadata immediately on delete — it simply disappears from `GET /store-api/domains` while its keys are swept from storage in the background.
+5. **Conditional writes can be made mandatory per domain.** A KV or JSON domain created with `require_conditional_writes: true` answers `428` to single-key writes without `If-Match` or `If-None-Match: *`; the flag is set at creation and fixed afterwards.
 
 ## Example
 

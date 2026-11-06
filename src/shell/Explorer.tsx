@@ -4,7 +4,7 @@ import type { ApiClient } from '../api'
 import { useSession } from '../app/session'
 import { CreateDomainForm } from './CreateDomainForm'
 import { DomainLinksPanel } from './DomainLinksPanel'
-import { useDomainSummaries, useDomainsPending, type DomainSummary } from './domains'
+import { conditionalWritesTitle, useDomainSummaries, useDomainsPending, type DomainSummary } from './domains'
 import './Explorer.css'
 import { ExpandedDomain } from './ExpandedDomain'
 import { useEngineActivity, type EngineActivityLevel } from './engineActivity'
@@ -25,10 +25,11 @@ function CollapsedDomainRow({ domain, apiClient, onSelect }: { domain: DomainSum
     domain.engines.rel && shouldTagEngine(domain.engines.rel.state, activity.rel) && tagFor('rel', domain.engines.rel.state),
     domain.engines.json && shouldTagEngine(domain.engines.json.state, activity.json) && tagFor('json', domain.engines.json.state),
     domain.engines.kv && activity.kv === 'active' && 'kv',
+    conditionalWritesTitle(domain) !== undefined && 'conditional writes',
   ].filter((tag): tag is string => Boolean(tag))
 
   return (
-    <button type="button" className="explorer__domain-row" onClick={onSelect}>
+    <button type="button" className="explorer__domain-row" title={conditionalWritesTitle(domain)} onClick={onSelect}>
       <span>▸ {domain.name}</span>
       <span className="explorer__engine-tags">{tags.join(' · ')}</span>
     </button>

@@ -11,7 +11,7 @@ import {
   relTablesQueryOptions,
   relViewsQueryOptions,
 } from './domainDetails'
-import type { DomainSummary } from './domains'
+import { conditionalWritesTitle, type DomainSummary } from './domains'
 import { useEngineActivity } from './engineActivity'
 
 interface ExpandedDomainProps {
@@ -95,6 +95,11 @@ export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
       <div className="explorer__domain-card">
         <div className="explorer__domain-header">
           <span className="explorer__domain-chevron">▾</span> {domain.name}
+          {conditionalWritesTitle(domain) !== undefined && (
+            <span className="explorer__domain-tag" role="group" aria-label="conditional writes" title={conditionalWritesTitle(domain)}>
+              conditional writes
+            </span>
+          )}
         </div>
         <div className="explorer__sections">
           {hasRel && (

@@ -11,7 +11,10 @@ import {
   kvKeysQueryOptions,
   kvMetaQueryOptions,
   kvValueQueryOptions,
+  deleteValue,
   parseTtlSeconds,
+  putValue,
+  setNullValue,
   tryParseJson,
 } from './kvEntries'
 
@@ -153,6 +156,21 @@ describe('kvValueQueryOptions', () => {
 
     expect(value).toEqual({ state: 'null' })
   })
+
+  it('reads the ETag from 200 and 204', async () => {
+    server.use(
+      http.get(`${BASE_URL}/store-api/kv/shop/keys/live`, () => new HttpResponse('v', { headers: { ETag: '"e1"' } })),
+      http.get(`${BASE_URL}/store-api/kv/shop/keys/nulled`, () => new HttpResponse(null, { status: 204, headers: { ETag: '"e2"' } })),
+      http.get(`${BASE_URL}/store-api/kv/shop/keys/bare`, () => new HttpResponse('v')),
+    )
+    const apiClient = makeApi()
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+    expect(await queryClient.fetchQuery(kvValueQueryOptions(apiClient, 'shop', 'live'))).toEqual({ state: 'found', bytes: 1, text: 'v', etag: '"e1"' })
+    expect(await queryClient.fetchQuery(kvValueQueryOptions(apiClient, 'shop', 'nulled'))).toEqual({ state: 'null', etag: '"e2"' })
+    const bare = await queryClient.fetchQuery(kvValueQueryOptions(apiClient, 'shop', 'bare'))
+    expect(bare.state === 'found' && bare.etag).toBeUndefined()
+  })
 })
 
 describe('kvMetaQueryOptions (spec data/012 §1)', () => {
@@ -196,6 +214,54 @@ describe('formatShortDuration (spec data/012 §2)', () => {
   it('treats negative input (clock skew) as zero', () => {
     expect(formatShortDuration(-0.4)).toBe('0s')
     expect(formatShortDuration(-90)).toBe('0s')
+  })
+})
+
+describe('conditional writes', () => {
+  const KEY_URL = `${BASE_URL}/store-api/kv/shop/keys/k`
+  const seen: Record<string, { ifMatch: string | null; ifNoneMatch: string | null }> = {}
+  function record(method: string, request: Request) {
+    seen[method] = { ifMatch: request.headers.get('if-match'), ifNoneMatch: request.headers.get('if-none-match') }
+    return new HttpResponse(null, { status: 204 })
+  }
+  function useRecorder() {
+    server.use(
+      http.put(KEY_URL, ({ request }) => record('PUT', request)),
+      http.patch(`${KEY_URL}/null`, ({ request }) => record('PATCH', request)),
+      http.delete(KEY_URL, ({ request }) => record('DELETE', request)),
+    )
+  }
+
+  it('sends If-Match on put, set null and delete', async () => {
+    useRecorder()
+    const api = makeApi()
+
+    await putValue(api, 'shop', 'k', 'v', undefined, { etag: '"e1"' })
+    await setNullValue(api, 'shop', 'k', '"e2"')
+    await deleteValue(api, 'shop', 'k', '"e3"')
+
+    expect(seen.PUT).toEqual({ ifMatch: '"e1"', ifNoneMatch: null })
+    expect(seen.PATCH).toEqual({ ifMatch: '"e2"', ifNoneMatch: null })
+    expect(seen.DELETE).toEqual({ ifMatch: '"e3"', ifNoneMatch: null })
+  })
+
+  it('sends If-None-Match * when creating', async () => {
+    useRecorder()
+
+    await putValue(makeApi(), 'shop', 'k', 'v', undefined, { createOnly: true })
+
+    expect(seen.PUT).toEqual({ ifMatch: null, ifNoneMatch: '*' })
+  })
+
+  it('stays unconditional without an etag or createOnly', async () => {
+    useRecorder()
+    const api = makeApi()
+
+    await putValue(api, 'shop', 'k', 'v')
+    await setNullValue(api, 'shop', 'k')
+    await deleteValue(api, 'shop', 'k')
+
+    for (const method of ['PUT', 'PATCH', 'DELETE']) expect(seen[method]).toEqual({ ifMatch: null, ifNoneMatch: null })
   })
 })
 

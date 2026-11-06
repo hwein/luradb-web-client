@@ -1,3 +1,4 @@
+import { EditorView } from '@codemirror/view'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
@@ -436,6 +437,156 @@ describe('KvBrowser', () => {
 
     await waitFor(() => expect(putBody).toBe(''))
     expect(await screen.findByText('KEY fresh:1')).toBeInTheDocument()
+  })
+
+  it('shows key already exists on 412 when creating', async () => {
+    let ifNoneMatch: string | null | undefined
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan([]))),
+      http.put(keyUrl('taken'), ({ request }) => {
+        ifNoneMatch = request.headers.get('If-None-Match')
+        return HttpResponse.json({ error: 'precondition failed' }, { status: 412 })
+      }),
+    )
+    await connectAndRender()
+    await screen.findByText('no keys')
+
+    fireEvent.click(screen.getByRole('button', { name: '+ new' }))
+    fireEvent.change(screen.getByLabelText('new key name'), { target: { value: 'taken' } })
+    fireEvent.change(screen.getByLabelText('ttl (seconds)'), { target: { value: '60' } })
+    fireEvent.click(screen.getByRole('button', { name: 'create' }))
+
+    expect(await screen.findByText('key already exists')).toBeInTheDocument()
+    expect(ifNoneMatch).toBe('*')
+    expect(screen.getByLabelText('new key name')).toHaveValue('taken')
+    expect(screen.getByLabelText('ttl (seconds)')).toHaveValue('60')
+  })
+
+  it('shows the conflict line on 412 when saving', async () => {
+    let ifMatch: string | null | undefined
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['k']))),
+      http.get(keyUrl('k'), () => new HttpResponse('v1', { headers: { ETag: '"e1"' } })),
+      http.put(keyUrl('k'), ({ request }) => {
+        ifMatch = request.headers.get('If-Match')
+        return HttpResponse.text('412 Precondition Failed: etag mismatch', { status: 412 })
+      }),
+    )
+    await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'save' }))
+
+    expect(await screen.findByText(/version conflict — the key changed on the server/)).toBeInTheDocument()
+    expect(ifMatch).toBe('"e1"')
+    expect(screen.getByRole('button', { name: 'reload' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'docs' })).toBeInTheDocument()
+    expect(screen.queryByText(/etag mismatch/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/save failed/)).not.toBeInTheDocument()
+  })
+
+  it('shows the conflict line on 412 when deleting', async () => {
+    let value = 'v1'
+    let etag = '"e1"'
+    let ifMatch: string | null | undefined
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['k']))),
+      http.get(keyUrl('k'), () => new HttpResponse(value, { headers: { ETag: etag } })),
+      http.delete(keyUrl('k'), ({ request }) => {
+        ifMatch = request.headers.get('If-Match')
+        return ifMatch === etag ? new HttpResponse(null, { status: 204 }) : HttpResponse.text('412', { status: 412 })
+      }),
+    )
+    await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'delete' }))
+    value = 'v2'
+    etag = '"e2"'
+    fireEvent.click(await screen.findByRole('button', { name: 'delete — sure?' }))
+
+    expect(await screen.findByText(/version conflict — the key changed on the server/)).toBeInTheDocument()
+    expect(ifMatch).toBe('"e1"')
+
+    fireEvent.click(screen.getByRole('button', { name: 'reload' }))
+    expect(await screen.findByText('reloaded — deleting now removes the server version')).toBeInTheDocument()
+    expect(screen.queryByText(/version conflict/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'delete — sure?' }))
+    expect(await screen.findByText('select a key')).toBeInTheDocument()
+    expect(ifMatch).toBe('"e2"')
+  })
+
+  it('keeps the edited text after reload and sends the new ETag', async () => {
+    let etag = '"e1"'
+    let ifMatch: string | null | undefined
+    let putBody: string | undefined
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['k']))),
+      http.get(keyUrl('k'), () => new HttpResponse('server', { headers: { ETag: etag } })),
+      http.put(keyUrl('k'), async ({ request }) => {
+        ifMatch = request.headers.get('If-Match')
+        if (ifMatch !== etag) return HttpResponse.text('412', { status: 412 })
+        putBody = await request.text()
+        return new HttpResponse(null, { status: 200 })
+      }),
+    )
+    await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    await screen.findByLabelText('value editor')
+    etag = '"e2"'
+    const cm = EditorView.findFromDOM(document.querySelector('.cm-editor') as HTMLElement)
+    act(() => cm?.dispatch({ changes: { from: 0, to: 'server'.length, insert: 'mine' } }))
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+    expect(await screen.findByText(/version conflict/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'reload' }))
+    expect(await screen.findByText('reloaded — saving now overwrites the server version')).toBeInTheDocument()
+    expect(screen.getByLabelText('value editor')).toBeInTheDocument()
+    expect(document.querySelector('.cm-content')?.textContent).toBe('mine')
+
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+    await waitFor(() => expect(putBody).toBe('mine'))
+    expect(ifMatch).toBe('"e2"')
+    await waitFor(() => expect(screen.queryByText(/reloaded —/)).not.toBeInTheDocument())
+  })
+
+  it('passes the 428 text through', async () => {
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['k']))),
+      http.get(keyUrl('k'), () => new HttpResponse('v1', { headers: { ETag: '"e1"' } })),
+      http.put(keyUrl('k'), () => HttpResponse.text('428 Precondition Required: conditional header needed', { status: 428 })),
+    )
+    await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'save' }))
+
+    expect(await screen.findByText(/save failed: .*conditional header needed/)).toBeInTheDocument()
+    expect(screen.queryByText(/version conflict/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the ETag of the edit start when the value refetches meanwhile', async () => {
+    let etag = '"e1"'
+    let ifMatch: string | null | undefined
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['k']))),
+      http.get(keyUrl('k'), () => new HttpResponse('v1', { headers: { ETag: etag } })),
+      http.put(keyUrl('k'), ({ request }) => {
+        ifMatch = request.headers.get('If-Match')
+        return new HttpResponse(null, { status: 200 })
+      }),
+    )
+    const { queryClient } = await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    await screen.findByLabelText('value editor')
+    etag = '"e2"'
+    await act(() => queryClient.invalidateQueries({ queryKey: ['kv-value', DOMAIN, 'k'] }))
+    expect(queryClient.getQueryData<{ etag: string }>(['kv-value', DOMAIN, 'k'])?.etag).toBe('"e2"')
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+
+    await waitFor(() => expect(ifMatch).toBe('"e1"'))
   })
 
   it('requires a key name before creating', async () => {

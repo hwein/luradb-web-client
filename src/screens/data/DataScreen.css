@@ -1104,6 +1104,26 @@
   font-size: 11.5px;
 }
 
+.kv-detail__conflict {
+  color: var(--err);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.kv-detail__link {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--acc);
+  font-family: var(--font-mono);
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.kv-detail__link:hover {
+  text-decoration: underline;
+}
+
 .kv-detail__edit-actions {
   display: flex;
   align-items: center;

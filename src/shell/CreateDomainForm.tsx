@@ -11,10 +11,12 @@ interface CreateDomainFormProps {
 
 const NAME_PATTERN = /^[a-zA-Z0-9_-]+$/
 const ENGINE_ORDER: Engine[] = ['kv', 'json', 'rel']
-const CREATORS: Record<Engine, (apiClient: ApiClient, name: string) => Promise<void>> = {
-  kv: createKvDomain,
-  json: createJsonDomain,
-  rel: createRelDomain,
+function creatorsFor(requireConditionalWrites: boolean): Record<Engine, (apiClient: ApiClient, name: string) => Promise<void>> {
+  return {
+    kv: (apiClient, name) => createKvDomain(apiClient, name, requireConditionalWrites),
+    json: (apiClient, name) => createJsonDomain(apiClient, name, requireConditionalWrites),
+    rel: createRelDomain,
+  }
 }
 
 function requireApiClient(apiClient: ApiClient | undefined): ApiClient {
@@ -26,9 +28,10 @@ function requireApiClient(apiClient: ApiClient | undefined): ApiClient {
 export function CreateDomainForm({ apiClient, onClose }: CreateDomainFormProps) {
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
+  const [requireConditionalWrites, setRequireConditionalWrites] = useState(false)
 
   const createMutation = useMutation({
-    mutationFn: () => runEngineCascade(ENGINE_ORDER, requireApiClient(apiClient), name, CREATORS),
+    mutationFn: () => runEngineCascade(ENGINE_ORDER, requireApiClient(apiClient), name, creatorsFor(requireConditionalWrites)),
     onSuccess: (failures) => {
       void queryClient.invalidateQueries({ queryKey: KV_DOMAINS_KEY })
       void queryClient.invalidateQueries({ queryKey: JSON_DOMAINS_KEY })
@@ -56,6 +59,15 @@ export function CreateDomainForm({ apiClient, onClose }: CreateDomainFormProps) 
         pattern="[a-zA-Z0-9_\-]+"
         aria-label="domain name"
       />
+      <label className="explorer__create-check">
+        <input
+          type="checkbox"
+          checked={requireConditionalWrites}
+          onChange={(event) => setRequireConditionalWrites(event.target.checked)}
+        />
+        require conditional writes
+      </label>
+      <span className="explorer__create-hint mono-path">writes need If-Match / If-None-Match (428 otherwise)</span>
       <span className="explorer__create-hint mono-path">&quot;domains&quot; is reserved</span>
       {createMutation.data && createMutation.data.length > 0 && (
         <span className="explorer__create-error">{createMutation.data.join(' · ')}</span>

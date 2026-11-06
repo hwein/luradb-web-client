@@ -13,6 +13,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - KV key detail shows the remaining TTL and the last modification time.
 - KV watch feed shows key expiry as a `delete` event and refreshes the key list.
 - Status bar and Engines screen show server health (shards, disk, memory, I/O); write errors under overload or low resources name the server's retry delay.
+- KV writes in the data browser are conditional; domains can be created with require conditional writes and are tagged in the explorer.
 
 ### Changed
 
@@ -40,6 +41,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - KV watch reconnects resume from the last received event instead of losing the events of the gap.
 - KV watch no longer retries endlessly when the key has no permission for the stream (403).
 - KV watch detects a silently dropped connection within 45 s and reconnects instead of staying on "live".
+- Creating a KV key no longer overwrites an existing key.
 
 ### Changed
 

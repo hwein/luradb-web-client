@@ -107,8 +107,9 @@ export function invalidateKvKeys(queryClient: QueryClient, domain: string): void
 }
 
 /** Ergebnis eines Value-Reads: `not-found` deckt "nie existiert", "gelöscht" und "abgelaufen" ab (404); `null` ist der explizite
- *  Null-State (204, Contract 0.2.0) — anders als `not-found` bleibt der Key registriert und im Scan sichtbar. */
-export type KvValue = { state: 'found'; bytes: number; text: string } | { state: 'not-found' } | { state: 'null' }
+ *  Null-State (204, Contract 0.2.0) — anders als `not-found` bleibt der Key registriert und im Scan sichtbar.
+ *  `etag` is the opaque `ETag` header of 200/204 (undefined if absent). */
+export type KvValue = { state: 'found'; bytes: number; text: string; etag: string | undefined } | { state: 'not-found' } | { state: 'null'; etag: string | undefined }
 
 /** GET über `fetchRaw` (Roh-Body, kein JSON-Zwang) — 404 wird gefangen und als eigener Zustand modelliert statt als Query-Error;
  *  204 (expliziter Null-State) wird vor dem Body-Read abgefangen, da ein Null-Key sonst von einem Leer-Wert ununterscheidbar wäre. */
@@ -119,9 +120,10 @@ export function kvValueQueryOptions(apiClient: ApiClient | undefined, domain: st
       if (!apiClient || key === undefined) throw new Error('kv value query requires an active connection and key')
       try {
         const response = await apiClient.fetchRaw(kvKeyPath(domain, key))
-        if (response.status === 204) return { state: 'null' }
+        const etag = response.headers.get('etag') ?? undefined
+        if (response.status === 204) return { state: 'null', etag }
         const text = await response.text()
-        return { state: 'found', bytes: new TextEncoder().encode(text).length, text }
+        return { state: 'found', bytes: new TextEncoder().encode(text).length, text, etag }
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) return { state: 'not-found' }
         throw error
@@ -167,12 +169,24 @@ function withTtlQuery(path: string, ttlSeconds: number | undefined): string {
   return ttlSeconds === undefined ? path : `${path}?${new URLSearchParams({ ttl: String(ttlSeconds) }).toString()}`
 }
 
-/** PUT is an upsert; KV accepts If-Match/If-None-Match since 0.5.1 (412/428), but this client sends neither.
+export interface KvPutCondition {
+  etag?: string
+  createOnly?: boolean
+}
+
+/** `createOnly` wins over `etag`; no condition ⇒ no header (unconditional write). */
+function conditionHeaders(condition: KvPutCondition): Record<string, string> {
+  if (condition.createOnly) return { 'If-None-Match': '*' }
+  if (condition.etag !== undefined) return { 'If-Match': condition.etag }
+  return {}
+}
+
+/** PUT is an upsert unless conditional (If-Match / If-None-Match: *, since 0.5.1; 412/428 on mismatch).
  *  `ttlSeconds` hängt `?ttl=` nur bei Angabe an — jeder PUT ohne ttl macht einen befristeten Key wieder unbefristet (Probe-Fakt, spec data/005). */
-export async function putValue(apiClient: ApiClient, domain: string, key: string, value: string, ttlSeconds?: number): Promise<void> {
+export async function putValue(apiClient: ApiClient, domain: string, key: string, value: string, ttlSeconds?: number, condition: KvPutCondition = {}): Promise<void> {
   await apiClient.fetchRaw(withTtlQuery(kvKeyPath(domain, key), ttlSeconds), {
     method: 'PUT',
-    headers: { 'Content-Type': 'text/plain' },
+    headers: { 'Content-Type': 'text/plain', ...conditionHeaders(condition) },
     body: value,
   })
 }
@@ -187,12 +201,12 @@ export function parseTtlSeconds(text: string): TtlParseResult {
   return Number.isInteger(value) && value >= 1 ? { ok: true, seconds: value } : { ok: false, error: 'ttl must be a positive integer (seconds)' }
 }
 
-export async function setNullValue(apiClient: ApiClient, domain: string, key: string): Promise<void> {
-  await apiClient.fetchRaw(`${kvKeyPath(domain, key)}/null`, { method: 'PATCH' })
+export async function setNullValue(apiClient: ApiClient, domain: string, key: string, etag?: string): Promise<void> {
+  await apiClient.fetchRaw(`${kvKeyPath(domain, key)}/null`, { method: 'PATCH', headers: conditionHeaders({ etag }) })
 }
 
-export async function deleteValue(apiClient: ApiClient, domain: string, key: string): Promise<void> {
-  await apiClient.fetchRaw(kvKeyPath(domain, key), { method: 'DELETE' })
+export async function deleteValue(apiClient: ApiClient, domain: string, key: string, etag?: string): Promise<void> {
+  await apiClient.fetchRaw(kvKeyPath(domain, key), { method: 'DELETE', headers: conditionHeaders({ etag }) })
 }
 
 /** `undefined` heißt "kein gültiges JSON" — `JSON.parse` kann nie echtes `undefined` liefern, der Sentinel ist eindeutig. */

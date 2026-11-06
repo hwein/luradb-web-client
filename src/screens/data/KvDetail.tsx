@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { BASE_PATH, type ApiClient } from '../../api'
+import { useNavigate } from 'react-router'
+import { ApiError, BASE_PATH, type ApiClient } from '../../api'
 import { CodeEditor } from '../../lib'
+import { openDocs } from '../docs/openDocs'
 import {
   deleteValue,
   formatShortDuration,
@@ -13,6 +15,7 @@ import {
   setNullValue,
   tryParseJson,
   type KvMeta,
+  type KvValue,
 } from './kvEntries'
 
 export type KvDetailMode = { kind: 'empty' } | { kind: 'view'; key: string } | { kind: 'new' }
@@ -27,6 +30,14 @@ interface KvDetailProps {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'request failed'
+}
+
+function isPreconditionFailed(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 412
+}
+
+function etagOf(value: KvValue | undefined): string | undefined {
+  return value !== undefined && value.state !== 'not-found' ? value.etag : undefined
 }
 
 function formatBytes(bytes: number): string {
@@ -56,6 +67,7 @@ function metaSuffix(meta: KvMeta | null | undefined, withExpiry: boolean): strin
 /** Detail-Spalte (spec §3): Ansicht/Edit/Set-null/Delete eines Keys, "new key"-Formular, Raw-Pfad-Fuß. */
 export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDetailProps) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   const viewKey = mode.kind === 'view' ? mode.key : undefined
   const valueQuery = useQuery(kvValueQueryOptions(apiClient, domain, viewKey))
@@ -67,6 +79,9 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
   const [editTtlError, setEditTtlError] = useState<string | undefined>(undefined)
   const [deleteArmed, setDeleteArmed] = useState(false)
   const [nullArmed, setNullArmed] = useState(false)
+  // ETag of the state the user saw at edit start / arming click; a background refetch must not change it.
+  const [heldEtag, setHeldEtag] = useState<string | undefined>(undefined)
+  const [reloadedNote, setReloadedNote] = useState<string | undefined>(undefined)
 
   const [newKey, setNewKey] = useState('')
   const [newText, setNewText] = useState('')
@@ -78,6 +93,7 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
     setEditing(false)
     setDeleteArmed(false)
     setNullArmed(false)
+    setReloadedNote(undefined)
   }, [mode])
 
   // Jeder Write ändert `last_modified_at` und setzt/löscht die TTL — die Meta-Query zieht mit dem Value mit (spec data/012 §4).
@@ -87,34 +103,37 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
     invalidateKvKeys(queryClient, domain)
   }
 
-  const saveMutation = useMutation<void, unknown, { key: string; value: string; ttlSeconds: number | undefined }>({
-    mutationFn: async ({ key, value, ttlSeconds }) => {
+  const saveMutation = useMutation<void, unknown, { key: string; etag: string | undefined; value: string; ttlSeconds: number | undefined }>({
+    mutationFn: async ({ key, etag, value, ttlSeconds }) => {
       if (!apiClient) throw new Error('no active connection')
-      await putValue(apiClient, domain, key, value, ttlSeconds)
+      await putValue(apiClient, domain, key, value, ttlSeconds, { etag })
     },
     onSuccess: (_data, variables) => {
       setEditing(false)
+      setReloadedNote(undefined)
       invalidate(variables.key)
     },
   })
 
-  const setNullMutation = useMutation<void, unknown, string>({
-    mutationFn: async (key) => {
+  const setNullMutation = useMutation<void, unknown, { key: string; etag: string | undefined }>({
+    mutationFn: async ({ key, etag }) => {
       if (!apiClient) throw new Error('no active connection')
-      await setNullValue(apiClient, domain, key)
+      await setNullValue(apiClient, domain, key, etag)
     },
-    onSuccess: (_data, key) => {
+    onSuccess: (_data, { key }) => {
       setNullArmed(false)
+      setReloadedNote(undefined)
       invalidate(key)
     },
   })
 
-  const deleteMutation = useMutation<void, unknown, string>({
-    mutationFn: async (key) => {
+  const deleteMutation = useMutation<void, unknown, { key: string; etag: string | undefined }>({
+    mutationFn: async ({ key, etag }) => {
       if (!apiClient) throw new Error('no active connection')
-      await deleteValue(apiClient, domain, key)
+      await deleteValue(apiClient, domain, key, etag)
     },
-    onSuccess: (_data, key) => {
+    onSuccess: (_data, { key }) => {
+      setReloadedNote(undefined)
       queryClient.removeQueries({ queryKey: ['kv-value', domain, key] })
       queryClient.removeQueries({ queryKey: ['kv-meta', domain, key] })
       invalidateKvKeys(queryClient, domain)
@@ -126,7 +145,7 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
   const createMutation = useMutation<string, unknown, { key: string; value: string; ttlSeconds: number | undefined }>({
     mutationFn: async ({ key, value, ttlSeconds }) => {
       if (!apiClient) throw new Error('no active connection')
-      await putValue(apiClient, domain, key, value, ttlSeconds)
+      await putValue(apiClient, domain, key, value, ttlSeconds, { createOnly: true })
       return key
     },
     onSuccess: (createdKey) => {
@@ -149,6 +168,8 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
   function handleEditStart(): void {
     if (valueQuery.data === undefined) return
     setEditText(valueQuery.data.state === 'found' ? valueQuery.data.text : '')
+    setHeldEtag(etagOf(valueQuery.data))
+    setReloadedNote(undefined)
     setEditTtlText('')
     setEditTtlError(undefined)
     setDeleteArmed(false)
@@ -164,25 +185,61 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
       return
     }
     setEditTtlError(undefined)
-    saveMutation.mutate({ key: viewKey, value: editText, ttlSeconds: ttl.seconds })
+    setReloadedNote(undefined)
+    saveMutation.mutate({ key: viewKey, etag: heldEtag, value: editText, ttlSeconds: ttl.seconds })
+  }
+
+  function handleEditCancel(): void {
+    setEditing(false)
+    setReloadedNote(undefined)
   }
 
   function handleNullClick(): void {
     if (!nullArmed) {
       setNullArmed(true)
       setDeleteArmed(false)
+      setHeldEtag(etagOf(valueQuery.data))
+      setReloadedNote(undefined)
       return
     }
-    if (viewKey !== undefined) setNullMutation.mutate(viewKey)
+    setReloadedNote(undefined)
+    if (viewKey !== undefined) setNullMutation.mutate({ key: viewKey, etag: heldEtag })
   }
 
   function handleDeleteClick(): void {
     if (!deleteArmed) {
       setDeleteArmed(true)
       setNullArmed(false)
+      setHeldEtag(etagOf(valueQuery.data))
+      setReloadedNote(undefined)
       return
     }
-    if (viewKey !== undefined) deleteMutation.mutate(viewKey)
+    setReloadedNote(undefined)
+    if (viewKey !== undefined) deleteMutation.mutate({ key: viewKey, etag: heldEtag })
+  }
+
+  // Keeps editor text and armed state; only the held ETag moves to the freshly loaded one.
+  async function handleReload(): Promise<void> {
+    if (viewKey === undefined) return
+    const note = editing
+      ? 'reloaded — saving now overwrites the server version'
+      : nullArmed
+        ? 'reloaded — setting null now overwrites the server version'
+        : 'reloaded — deleting now removes the server version'
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['kv-value', domain, viewKey] }),
+      queryClient.invalidateQueries({ queryKey: ['kv-meta', domain, viewKey] }),
+    ])
+    setHeldEtag(etagOf(queryClient.getQueryData(kvValueQueryOptions(apiClient, domain, viewKey).queryKey)))
+    saveMutation.reset()
+    setNullMutation.reset()
+    deleteMutation.reset()
+    setReloadedNote(note)
+  }
+
+  function openConflictDocs(): void {
+    openDocs('errors-status-codes')
+    void navigate('/docs')
   }
 
   function handleCreate(): void {
@@ -236,7 +293,13 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
           <CodeEditor value={newText} onChange={setNewText} ariaLabel="new key value editor" placeholder="value" />
         </div>
         {newError !== undefined && <div className="kv-detail__error">{newError}</div>}
-        {createMutation.isError && <div className="kv-detail__error">create failed: {messageOf(createMutation.error)}</div>}
+        {createMutation.isError && (
+          <div className="kv-detail__error">
+            {createMutation.error instanceof ApiError && createMutation.error.status === 412
+              ? 'key already exists'
+              : `create failed: ${messageOf(createMutation.error)}`}
+          </div>
+        )}
         <div className="kv-detail__edit-actions">
           <button type="button" className="kv-detail__save" onClick={handleCreate} disabled={createMutation.isPending}>
             create
@@ -275,6 +338,10 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
 
   const value = valueQuery.data
   const key = mode.key
+  const conflict =
+    (saveMutation.isError && isPreconditionFailed(saveMutation.error)) ||
+    (setNullMutation.isError && isPreconditionFailed(setNullMutation.error)) ||
+    (deleteMutation.isError && isPreconditionFailed(deleteMutation.error))
 
   return (
     <div className="kv-detail">
@@ -286,7 +353,7 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
               save
             </button>{' '}
             ·{' '}
-            <button type="button" onClick={() => setEditing(false)}>
+            <button type="button" onClick={handleEditCancel}>
               cancel
             </button>
           </span>
@@ -337,9 +404,28 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
         </>
       )}
 
-      {saveMutation.isError && <div className="kv-detail__error">save failed: {messageOf(saveMutation.error)}</div>}
-      {setNullMutation.isError && <div className="kv-detail__error">set null failed: {messageOf(setNullMutation.error)}</div>}
-      {deleteMutation.isError && <div className="kv-detail__error">delete failed: {messageOf(deleteMutation.error)}</div>}
+      {conflict && (
+        <div className="kv-detail__conflict">
+          version conflict — the key changed on the server ·{' '}
+          <button type="button" className="kv-detail__link" onClick={() => void handleReload()}>
+            reload
+          </button>{' '}
+          ·{' '}
+          <button type="button" className="kv-detail__link" onClick={openConflictDocs}>
+            docs
+          </button>
+        </div>
+      )}
+      {reloadedNote !== undefined && <div className="kv-detail__conflict">{reloadedNote}</div>}
+      {saveMutation.isError && !isPreconditionFailed(saveMutation.error) && (
+        <div className="kv-detail__error">save failed: {messageOf(saveMutation.error)}</div>
+      )}
+      {setNullMutation.isError && !isPreconditionFailed(setNullMutation.error) && (
+        <div className="kv-detail__error">set null failed: {messageOf(setNullMutation.error)}</div>
+      )}
+      {deleteMutation.isError && !isPreconditionFailed(deleteMutation.error) && (
+        <div className="kv-detail__error">delete failed: {messageOf(deleteMutation.error)}</div>
+      )}
 
       <div className="kv-detail__raw-path mono-path">
         GET {BASE_PATH}/kv/{domain}/keys/{key}

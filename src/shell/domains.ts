@@ -15,6 +15,13 @@ export interface DomainSummary {
     json?: { state: string }
     rel?: { state: string }
   }
+  /** Engines whose registry entry has require_conditional_writes set. */
+  conditionalWrites?: Array<'kv' | 'json'>
+}
+
+/** Tooltip naming the engines that require conditional writes; undefined when none does. */
+export function conditionalWritesTitle(domain: DomainSummary): string | undefined {
+  return domain.conditionalWrites?.length ? `require_conditional_writes: ${domain.conditionalWrites.join(', ')}` : undefined
 }
 
 export const KV_DOMAINS_KEY = ['domains', 'kv'] as const
@@ -74,13 +81,21 @@ function mergeDomains(kv: KvDomain[] | undefined, json: JsonDomain[] | undefined
   function entryFor(name: string): DomainSummary {
     const existing = byName.get(name)
     if (existing) return existing
-    const created: DomainSummary = { name, engines: {} }
+    const created: DomainSummary = { name, engines: {}, conditionalWrites: [] }
     byName.set(name, created)
     return created
   }
 
-  for (const domain of kv ?? []) entryFor(domain.name).engines.kv = true
-  for (const domain of json ?? []) entryFor(domain.name).engines.json = { state: domain.state }
+  for (const domain of kv ?? []) {
+    const entry = entryFor(domain.name)
+    entry.engines.kv = true
+    if (domain.require_conditional_writes === true) entry.conditionalWrites?.push('kv')
+  }
+  for (const domain of json ?? []) {
+    const entry = entryFor(domain.name)
+    entry.engines.json = { state: domain.state }
+    if (domain.require_conditional_writes === true) entry.conditionalWrites?.push('json')
+  }
   for (const domain of rel ?? []) entryFor(domain.name).engines.rel = { state: domain.state }
 
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
@@ -114,13 +129,17 @@ function messageForDomainCreateError(status: number): string {
 
 // Drei getrennte Funktionen statt einer generischen (dynamische Pfade lassen sich mit openapi-fetch's
 // literalen Pfad-Overloads nicht sauber typisieren) — admin/001 kann sie direkt wiederverwenden.
-export async function createKvDomain(apiClient: ApiClient, name: string): Promise<void> {
-  const { response } = await apiClient.api.POST('/store-api/domains', { body: { name } })
+export async function createKvDomain(apiClient: ApiClient, name: string, requireConditionalWrites = false): Promise<void> {
+  const { response } = await apiClient.api.POST('/store-api/domains', {
+    body: requireConditionalWrites ? { name, require_conditional_writes: true } : { name },
+  })
   if (!response.ok) throw new ApiError(response.status, messageForDomainCreateError(response.status))
 }
 
-export async function createJsonDomain(apiClient: ApiClient, name: string): Promise<void> {
-  const { response } = await apiClient.api.POST('/store-api/json/domains', { body: { name } })
+export async function createJsonDomain(apiClient: ApiClient, name: string, requireConditionalWrites = false): Promise<void> {
+  const { response } = await apiClient.api.POST('/store-api/json/domains', {
+    body: requireConditionalWrites ? { name, require_conditional_writes: true } : { name },
+  })
   if (!response.ok) throw new ApiError(response.status, messageForDomainCreateError(response.status))
 }
 

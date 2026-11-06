@@ -319,7 +319,7 @@ describe('Explorer', () => {
     expect(screen.queryByText(/LINKS IN/)).not.toBeInTheDocument()
   })
 
-  it('creates a domain without checkboxes: a POST hits all three engines, a partial 409 failure keeps the form open with an inline error', async () => {
+  it('creates a domain without engine checkboxes: a POST hits all three engines, a partial 409 failure keeps the form open with an inline error', async () => {
     let kvCalls = 0
     let jsonCalls = 0
     let relCalls = 0
@@ -344,7 +344,7 @@ describe('Explorer', () => {
     await screen.findByText(expandedHeader('alpha'))
 
     fireEvent.click(screen.getByRole('button', { name: '+ create domain' }))
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'require conditional writes' })).not.toBeChecked()
     fireEvent.change(screen.getByLabelText('domain name'), { target: { value: 'shop2' } })
     fireEvent.click(screen.getByRole('button', { name: 'create' }))
 
@@ -354,6 +354,83 @@ describe('Explorer', () => {
     expect(relCalls).toBe(1)
     // Teilfehler -> Formular bleibt offen (spec shell/003 §1)
     expect(screen.getByLabelText('domain name')).toBeInTheDocument()
+  })
+
+  it('sends require_conditional_writes to kv and json', async () => {
+    const bodies: Record<string, unknown> = {}
+    const capture = (engine: string, status: object) => async ({ request }: { request: Request }) => {
+      bodies[engine] = await request.json()
+      return HttpResponse.json({ name: 'shop2', created_at: 1, ...status }, { status: 201 })
+    }
+    server.use(
+      ...domainListHandlers([{ name: 'alpha', created_at: 1 }], [], []),
+      kvCountHandler('alpha', 0),
+      http.post(`${ORIGIN}/store-api/domains`, capture('kv', {})),
+      http.post(`${ORIGIN}/store-api/json/domains`, capture('json', { state: 'active' })),
+      http.post(`${ORIGIN}/store-api/rel/domains`, capture('rel', { state: 'active' })),
+    )
+
+    await connectAndRender()
+    await screen.findByText(expandedHeader('alpha'))
+
+    fireEvent.click(screen.getByRole('button', { name: '+ create domain' }))
+    expect(screen.getByText('writes need If-Match / If-None-Match (428 otherwise)')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('domain name'), { target: { value: 'shop2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'create' }))
+    await waitFor(() => expect(screen.queryByLabelText('domain name')).not.toBeInTheDocument())
+    expect(bodies).toEqual({ kv: { name: 'shop2' }, json: { name: 'shop2' }, rel: { name: 'shop2' } })
+
+    fireEvent.click(screen.getByRole('button', { name: '+ create domain' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'require conditional writes' }))
+    fireEvent.change(screen.getByLabelText('domain name'), { target: { value: 'shop2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'create' }))
+    await waitFor(() => expect(screen.queryByLabelText('domain name')).not.toBeInTheDocument())
+    expect(bodies).toEqual({
+      kv: { name: 'shop2', require_conditional_writes: true },
+      json: { name: 'shop2', require_conditional_writes: true },
+      rel: { name: 'shop2' },
+    })
+  })
+
+  it('shows the conditional writes tag', async () => {
+    server.use(
+      ...domainListHandlers(
+        [
+          { name: 'alpha', created_at: 1, require_conditional_writes: true },
+          { name: 'beta', created_at: 1, require_conditional_writes: false },
+          { name: 'gamma', created_at: 1 },
+        ],
+        [
+          { name: 'beta', created_at: 1, state: 'active', require_conditional_writes: true },
+          { name: 'gamma', created_at: 1, state: 'active', require_conditional_writes: false },
+        ],
+        [],
+      ),
+      relTablesHandler('alpha', []),
+      relViewsHandler('alpha', []),
+      kvCountHandler('alpha', 0),
+      jsonDetailHandler('beta', 0),
+      jsonIndexesHandler('beta', 0),
+      kvCountHandler('beta', 0),
+      jsonDetailHandler('gamma', 0),
+      jsonIndexesHandler('gamma', 0),
+      kvCountHandler('gamma', 0),
+    )
+
+    await connectAndRender()
+
+    const expandedTag = await screen.findByText('conditional writes', { selector: '.explorer__domain-tag' })
+    expect(expandedTag).toHaveAttribute('title', 'require_conditional_writes: kv')
+    const collapsedRow = await screen.findByRole('button', { name: /▸ beta.*conditional writes/ })
+    expect(collapsedRow).toHaveAttribute('title', 'require_conditional_writes: json')
+    expect(collapsedRow).toHaveAccessibleDescription('require_conditional_writes: json')
+    expect(screen.getByText('conditional writes', { selector: '.explorer__engine-tags' })).not.toHaveAttribute('title')
+    expect(screen.getAllByText('conditional writes')).toHaveLength(2)
+
+    fireEvent.click(screen.getByRole('button', { name: /▸ gamma/ }))
+    await screen.findByText(expandedHeader('gamma'))
+    expect(screen.queryByText('conditional writes', { selector: '.explorer__domain-tag' })).not.toBeInTheDocument()
+    expect(screen.getAllByText('conditional writes', { selector: '.explorer__engine-tags' })).toHaveLength(2)
   })
 
   it('a fully successful create across all three engines closes the form and invalidates the domain lists', async () => {
