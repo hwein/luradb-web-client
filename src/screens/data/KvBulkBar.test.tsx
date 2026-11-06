@@ -56,7 +56,7 @@ function keysHandler(keys: string[], onRequest?: (url: URL) => void) {
 }
 
 async function renderBar(prefix = '', initialContains = '') {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })))
+  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })))
   await act(() => connect(makeConnection()))
 
   const queryClient = createAppQueryClient()

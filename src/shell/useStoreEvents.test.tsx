@@ -32,7 +32,7 @@ const userWhoami: HttpResponseResolver = () => HttpResponse.json({ name: 'alice'
 /** Verbindet und liefert den ApiClient der Sitzung — Aufhänger für den `openStream`-Spy. */
 async function connectSession(whoami: HttpResponseResolver = adminWhoami): Promise<ApiClient> {
   server.use(
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
     http.get(`${ORIGIN}/store-api/auth/whoami`, whoami),
   )
   await act(() => connect(makeConnection()))

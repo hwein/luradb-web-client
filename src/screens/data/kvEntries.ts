@@ -167,7 +167,7 @@ function withTtlQuery(path: string, ttlSeconds: number | undefined): string {
   return ttlSeconds === undefined ? path : `${path}?${new URLSearchParams({ ttl: String(ttlSeconds) }).toString()}`
 }
 
-/** PUT ist Upsert — Contract kennt kein ETag/If-Match für KV (kein Versionskonflikt möglich, anders als bei JSON).
+/** PUT is an upsert; KV accepts If-Match/If-None-Match since 0.5.1 (412/428), but this client sends neither.
  *  `ttlSeconds` hängt `?ttl=` nur bei Angabe an — jeder PUT ohne ttl macht einen befristeten Key wieder unbefristet (Probe-Fakt, spec data/005). */
 export async function putValue(apiClient: ApiClient, domain: string, key: string, value: string, ttlSeconds?: number): Promise<void> {
   await apiClient.fetchRaw(withTtlQuery(kvKeyPath(domain, key), ttlSeconds), {

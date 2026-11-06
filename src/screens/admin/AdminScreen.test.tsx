@@ -22,7 +22,7 @@ function makeConnection(): Connection {
 
 function baseHandlers(adminOk: boolean) {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
     http.get(`${ORIGIN}/store-api/auth/whoami`, () =>
       HttpResponse.json(adminOk ? { name: 'admin', role: 'Admin' } : { name: 'alice', role: 'User' }),
     ),
@@ -80,7 +80,7 @@ describe('AdminScreen', () => {
 
   it('shows "admin check failed" with the response detail instead of the role-gate hint on a whoami 500 (spec admin/005 §3)', async () => {
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
       http.get(`${ORIGIN}/store-api/auth/whoami`, () => new HttpResponse(null, { status: 500 })),
     )
     await act(() => connect(makeConnection()))
@@ -102,7 +102,7 @@ describe('AdminScreen', () => {
   it('shows no gate text and no cards while whoami is still pending — no false "admin role required" flash (spec admin/005 §3)', async () => {
     let releaseProbe: (() => void) | undefined
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
       http.get(`${ORIGIN}/store-api/auth/whoami`, async () => {
         await new Promise<void>((resolve) => {
           releaseProbe = resolve

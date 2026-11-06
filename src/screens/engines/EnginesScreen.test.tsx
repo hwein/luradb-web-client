@@ -43,7 +43,7 @@ function makeConnection(): Connection {
 
 function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
     http.get(`${ORIGIN}/store-api/domains`, () =>
       HttpResponse.json([
         { name: 'shop', created_at: 1 },

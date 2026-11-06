@@ -16,7 +16,7 @@ The client talks to LuraDB exclusively over its REST API — every store endpoin
 GET /version
 Authorization: Bearer $LURADB_KEY
 
-→ 200 { "server_version": "0.4.0", "api_version": "0.6.1" }
+→ 200 { "server_version": "0.5.1", "api_version": "0.14.2" }
 ```
 
 ---

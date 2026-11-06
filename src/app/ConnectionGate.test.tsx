@@ -65,7 +65,7 @@ describe('ConnectionGate', () => {
   })
 
   it('connects directly, without a dialog, when a key is already stored', async () => {
-    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })))
+    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })))
     render(<ConnectionGate />)
     createConnection('local', 'lura_secret')
 

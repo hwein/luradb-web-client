@@ -41,7 +41,7 @@ async function renderConnectedShell(path = '/sql', whoami: WhoamiMock = ADMIN_WH
       eventStreamOpens += 1
       return new HttpResponse(new ReadableStream<Uint8Array>({ start() {} }), { headers: { 'Content-Type': 'text/event-stream' } })
     }),
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
     http.get(`${ORIGIN}/store-api/auth/whoami`, () => {
       whoamiRequests += 1
       return whoami.body === undefined ? new HttpResponse(null, { status: whoami.status }) : HttpResponse.json(whoami.body, { status: whoami.status })
@@ -113,7 +113,7 @@ describe('AppShell', () => {
 
     expect(await screen.findByText('bearer ✓ admin')).toBeInTheDocument()
     expect(await screen.findByText('signed in as admin')).toBeInTheDocument()
-    expect(await screen.findByText('luradb 0.4.0')).toBeInTheDocument()
+    expect(await screen.findByText('luradb 0.5.1')).toBeInTheDocument()
     expect(await screen.findByText('up 1h 11m')).toBeInTheDocument()
     expect(screen.getByText(`${window.location.host} ${BASE_PATH}`)).toBeInTheDocument()
     expect(screen.getByTitle('disconnect')).toHaveTextContent('connected')

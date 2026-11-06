@@ -13,7 +13,13 @@ export interface paths {
         };
         /**
          * `GET /health` — public heartbeat endpoint.
-         * @description Returns a JSON snapshot of system vitals. No authentication required.
+         * @description Returns a JSON snapshot of system vitals, summed over the data shards, in
+         *     `shards` the status of each data shard: `ok` once it answered, `timeout`
+         *     when it did not within 250 ms, in `resources` the state of disk space
+         *     (the worst of all data volumes) and of the server's own memory, and in
+         *     `io`, while writes of a data file fail, their failures in a row. It names
+         *     no path and gives no size; `GET /store-api/metrics` does. No
+         *     authentication required.
          */
         get: operations["health"];
         put?: never;
@@ -35,7 +41,7 @@ export interface paths {
          * Returns all created users (admins and regular users) with their domain
          *     permission matrix. API keys are not included.
          * @description For `role == "Admin"`, `permissions` is meaningless for access control:
-         *     admins have unconditional access regardless of its contents (kv/012). It
+         *     admins have unconditional access regardless of its contents. It
          *     is usually empty for an admin but not guaranteed to be — e.g. a user
          *     promoted to admin via `luradb.toml` keeps any permissions set before the
          *     promotion. Never read an empty array as "no access" or a non-empty one as
@@ -155,7 +161,7 @@ export interface paths {
          *     tag, reachable by any authenticated caller — not admin-only (the
          *     `auth_layer` middleware whitelists this path, see `middleware.rs`).
          * @description Checked in order: `auth.enabled = false` → `Disabled`; a `TrustedPeer`
-         *     (UDS peer authenticated by the kernel, spec perf/001) → `TrustedPeer`;
+         *     (UDS peer authenticated by the kernel) → `TrustedPeer`;
          *     otherwise the Bearer key is resolved to its `UserRecord` → `Admin`/`User`.
          *     A `401` past the `auth_layer` middleware (which already validates the key)
          *     can only mean a middleware bug — fail-closed, analogous to `enforce_sql_level`.
@@ -182,7 +188,7 @@ export interface paths {
          */
         get: operations["list_backups"];
         put?: never;
-        /** Starts an on-demand backup job (spec general/006 scope syntax for `scope`). */
+        /** Starts an on-demand backup job. */
         post: operations["create_backup"];
         delete?: never;
         options?: never;
@@ -244,8 +250,46 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Streams the archive (`ServeFile`/tower-http `fs`) with HTTP Range support
-         *     for resumable downloads (spec general/006).
+         * Streams the archive with HTTP Range support for resumable downloads.
+         * @description The archive is NDJSON. Its first line is the manifest, format version 2:
+         *     `format_version`, `id`, `created_at`, `luradb_version`, `scope`,
+         *     `include_auth`, `encoding`, `schedule`, and
+         *     - `shards`: data shards of the server that wrote it. Informational only:
+         *       a restore places every domain by the shard count of the server it runs
+         *       on, so an archive restores into any shard count.
+         *     - `lsn_cut`: `{kv, json, rel}`, per engine a write-ahead-log position that
+         *       every write in the archive is at or below (a lower bound of the cut);
+         *       0 for an engine outside the scope. Positions keep growing across
+         *       restarts, so they compare across runs of the server.
+         *     - `kv_snapshot_ts`, `json_snapshot_ts`, `rel_snapshot_ts`: per engine,
+         *       the newest read-snapshot stamp among the data shards; 0 for an engine
+         *       outside the scope.
+         *
+         *     All shards of one engine are read at one consistent cut: an archive that
+         *     holds a write holds every write confirmed before it. The relational cut
+         *     is taken before the KV and JSON cuts. Domain lines carry their domain's
+         *     name; sections follow in the order KV, JSON, relational, auth; the last
+         *     line is the checksum.
+         *
+         *     A relational domain is a `rel-domain` line (`name`, `created_at`), then
+         *     its tables by creation, its views, and per table its rows and
+         *     AUTOINCREMENT state:
+         *     - `rel-table`: `domain`, `name`, `columns` (each `name`, `type` as SQL
+         *       type name, `nullable`, `primary_key`, `autoincrement`, `unique`, an
+         *       optional `default` of `{"kind": "null"}`, `{"kind":
+         *       "current_timestamp"}` or `{"kind": "literal", "value": …}`, an optional
+         *       `references` naming the target table) and `indexes` (`name`, `column`,
+         *       `unique`; every index under its stored name).
+         *     - `rel-view`: `domain`, `name`, `sql`, the stored SELECT text.
+         *     - `rel-row`: `domain`, `table`, `row`, every column by name, NULL as
+         *       `null`, KVREF/JSONREF links as stored.
+         *     - `rel-seq`: `domain`, `table`, `hw`: the next insert without a key gets
+         *       `hw + 1`.
+         *
+         *     Values are JSON numbers (INTEGER, REAL), booleans, strings (TEXT, KVREF,
+         *     JSONREF) and, for TIMESTAMP, integer milliseconds since the Unix epoch.
+         *     Archives of format version 1, which lack `shards` and `lsn_cut`, and
+         *     archives without relational lines remain restorable.
          */
         get: operations["download_backup"];
         put?: never;
@@ -288,10 +332,10 @@ export interface paths {
         /**
          * `GET /config` — effective configuration of the running process. Admin only.
          * @description The path carries no `{domain}` segment, so `extract_domain` returns `None`
-         *     and the auth layer's None-branch requires an admin role (spec
-         *     general/022). The admin API key never appears in the body — redaction
-         *     happens at the field level (`AdminEntry.api_key`'s `#[serde(skip_serializing)]`
-         *     in config.rs), not in this handler.
+         *     and the auth layer's None-branch requires an admin role. The admin API
+         *     key never appears in the body — redaction happens at the field level
+         *     (`AdminEntry.api_key`'s `#[serde(skip_serializing)]` in config.rs), not
+         *     in this handler.
          */
         get: operations["get_config"];
         put?: never;
@@ -309,12 +353,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Returns all active domains with their names and creation timestamps. */
+        /**
+         * Returns the active domains with their names and creation timestamps.
+         *     Admin keys see all of them; any other key sees only the domains it has a
+         *     permission on (an empty list without any).
+         */
         get: operations["list_domains"];
         put?: never;
         /**
          * Creates a new logical domain (isolated KV namespace).
          *     Domain names must be unique, max 50 chars, and match `[a-zA-Z0-9_-]`.
+         *     With `require_conditional_writes`, single-key writes over REST (PUT, DELETE, PATCH …/null) must
+         *     carry `If-Match` or `If-None-Match: *`; bulk operations and other write paths are not affected.
          */
         post: operations["create_domain"];
         delete?: never;
@@ -355,7 +405,7 @@ export interface paths {
          * Opens a Server-Sent Events stream of global lifecycle/DDL events: domains created, deleted and
          *     purged across all three engines, plus relational table/view/index DDL and JSON index DDL.
          *     Admin-only — the path carries no domain segment, so the standard auth middleware rejects any
-         *     non-admin caller (spec general/018 §3).
+         *     non-admin caller.
          * @description A `Last-Event-ID` (header or `?last_event_id=`, header wins) resumes gaplessly from an in-memory
          *     replay ring when possible; otherwise the server emits `event: reset` before continuing live. This
          *     stream has its own tag (`g`) and sequence, entirely independent of `GET /store-api/kv/{domain}/watch`'s
@@ -377,10 +427,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Returns all active JSON domains. */
+        /**
+         * Returns the active JSON domains. Admin keys see all of them; any other key
+         *     sees only the JSON domains it has a permission on (an empty list without any).
+         */
         get: operations["json_list_domains_1"];
         put?: never;
-        /** Creates a new JSON domain (isolated document namespace, separate from KV domains). */
+        /**
+         * Creates a new JSON domain (isolated document namespace, separate from KV domains).
+         *     With `require_conditional_writes`, single-document writes over REST (PUT, DELETE) must carry
+         *     `If-Match` or `If-None-Match: *`; bulk operations and other write paths are not affected.
+         */
         post: operations["json_create_domain_1"];
         delete?: never;
         options?: never;
@@ -397,7 +454,7 @@ export interface paths {
         };
         /**
          * Returns metadata for a single JSON domain, including its document count.
-         *     Domains in `deleting` state answer with 410 Gone.
+         *     Needs a permission on the domain (admin keys always pass). Domains in `deleting` state answer with 410 Gone.
          */
         get: operations["json_get_domain_1"];
         put?: never;
@@ -418,7 +475,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Imports documents from an NDJSON body in atomic batches. */
+        /**
+         * Imports documents from an NDJSON body in atomic batches; bulk writes take
+         *     no preconditions and are not subject to `require_conditional_writes`.
+         */
         post: operations["bulk_load"];
         delete?: never;
         options?: never;
@@ -470,21 +530,21 @@ export interface paths {
         };
         /**
          * Reads a document; `_key`/`_version` are top-level fields and an opaque
-         *     `ETag` is exposed for use with `If-Match` (json/011).
+         *     `ETag` is exposed for use with `If-Match`.
          */
         get: operations["get_document"];
         /**
          * Upserts a document. With an `If-Match: "<etag>"` header the write is a
-         *     conditional update that fails with 409 on a version mismatch. With
-         *     `If-None-Match: *` the write is create-only and fails with 412 if the
-         *     document already exists (json/014); the two headers are mutually
-         *     exclusive (400).
+         *     conditional update; with `If-None-Match: *` it is create-only. Both may
+         *     be combined and are evaluated in that order; a failed precondition
+         *     answers 412 with the current `ETag`.
          */
         put: operations["put_document"];
         post?: never;
         /**
          * Deletes a document and its index entries. Supports conditional delete via
-         *     `If-Match: "<etag>"`.
+         *     `If-Match: "<etag>"`; a failed precondition answers 412 with the current
+         *     `ETag`.
          */
         delete: operations["delete_document"];
         options?: never;
@@ -501,7 +561,7 @@ export interface paths {
         };
         /**
          * Streams all documents of a domain as NDJSON without full buffering. A
-         *     document written before json/017 that still carries a top-level
+         *     legacy document that still carries a top-level
          *     `_key`/`_version`/`_content` field exports lossy, same as before — no
          *     migration reshapes existing data.
          */
@@ -664,15 +724,21 @@ export interface paths {
         /**
          * Retrieves the raw byte value for a key. Returns 204 for a key in the null state and 404 if the key does not exist or has expired.
          *     When the key has a TTL, the response carries an `X-Expires-At` header with the absolute Unix-seconds expiry.
+         *     200 and 204 carry an `ETag` identifying the version read, for a later conditional write.
          */
         get: operations["get_key"];
         /**
          * Inserts or updates a value for the given key (upsert semantics).
          *     The optional `ttl` query parameter sets an expiry in seconds; omitting it stores the key indefinitely.
+         *     `If-Match` (an ETag from a prior read) or `If-None-Match: *` (create only) make the write conditional;
+         *     without them the last writer wins.
          */
         put: operations["put_key"];
         post?: never;
-        /** Permanently removes a key from the domain. The operation is idempotent; deleting a non-existent key still returns 204. */
+        /**
+         * Permanently removes a key from the domain. The operation is idempotent; deleting a non-existent key still returns 204.
+         *     `If-Match` makes the delete conditional on the version read.
+         */
         delete: operations["delete_key"];
         options?: never;
         head?: never;
@@ -715,7 +781,8 @@ export interface paths {
         head?: never;
         /**
          * Sets the key to an explicit null value (upsert): the key stays registered and appears in scans,
-         *     but carries no data — GET answers 204. A write like any other; it resets a previously set TTL.
+         *     but carries no data — GET answers 204. A write like any other; it resets a previously set TTL,
+         *     and takes the same `If-Match` / `If-None-Match: *` preconditions as PUT.
          */
         patch: operations["set_null"];
         trace?: never;
@@ -730,7 +797,7 @@ export interface paths {
         /**
          * Opens a Server-Sent Events stream that delivers real-time change events (`set` / `delete`) for keys matching the optional prefix.
          *     The connection stays open until the client disconnects; a keep-alive ping is sent automatically.
-         * @description A `Last-Event-ID` (header or `?last_event_id=`, spec kv/024) resumes gaplessly from an in-memory
+         * @description A `Last-Event-ID` (header or `?last_event_id=`) resumes gaplessly from an in-memory
          *     replay ring when possible; otherwise the server emits `event: reset` before continuing live. A
          *     client that ignores `id:`/`reset` behaves exactly as before this was added.
          */
@@ -750,7 +817,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Reads the last N lines of a log file (spec general/005). */
+        /** Reads the last N lines of a log file. */
         get: operations["get_logs"];
         put?: never;
         post?: never;
@@ -768,7 +835,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Lists every `luradb.log*` file in the log directory (spec general/005).
+         * Lists every `luradb.log*` file in the log directory.
          *     `files[0]` is exactly the file `GET /logs` reads without a `file` param.
          */
         get: operations["list_files"];
@@ -789,7 +856,7 @@ export interface paths {
         };
         /**
          * `GET /metrics` — system + all domain metrics. Admin only.
-         * @description `engines` (spec general/019) is an additive block, one entry per storage
+         * @description `engines` is an additive block, one entry per storage
          *     engine (`kv`/`json`/`rel`), each with the same nine fields: `read_ops`,
          *     `write_ops`, `read_latency_us_p50/p95/p99`, `write_latency_us_p50/p95/p99`,
          *     `window_secs`. Clients compute `read_ops / window_secs` for ops/s — the
@@ -798,6 +865,19 @@ export interface paths {
          *     second is excluded). A disabled engine still gets its block, all zero —
          *     `0` for a latency percentile means no op landed in the window, not an
          *     unmeasurably fast one.
+         *
+         *     `shm` covers the shared-memory snapshot publisher, all zero while SHM is
+         *     off: `snapshot_publishes_total`, `snapshot_publish_skips_total` (a client
+         *     was still reading the buffer due for overwriting),
+         *     `snapshot_consecutive_skips` (the current run of skips; above 0 the snapshot
+         *     is not being updated) and `clients_kicked_total` (clients disconnected after
+         *     `shm.kick_blocking_client_after_secs`).
+         *
+         *     `resources` is the full disk and memory report, of which `GET /health`
+         *     gives the states only: per data volume `path`, `size_bytes`, `free_bytes`
+         *     and `state`, and for the memory `rss_anon_bytes`, `budget_bytes` and
+         *     `state`. `io` appears only while writes of a data file fail: the file
+         *     with the most failures in a row, `path` and `failures`.
          */
         get: operations["get_metrics"];
         put?: never;
@@ -832,7 +912,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Returns all active relational domains. */
+        /**
+         * Returns the active relational domains. Admin keys see all of them; any
+         *     other key sees only the relational domains it has a permission on (an empty
+         *     list without any).
+         */
         get: operations["rel_list_domains_2"];
         put?: never;
         /**
@@ -854,15 +938,16 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Returns metadata for a single relational domain. A domain in `deleting`
-         *     state answers 410 Gone (rel/013 finishes the physical purge).
+         * Returns metadata for a single relational domain. Needs a permission on the
+         *     domain (admin keys always pass). A domain in `deleting` state answers 410
+         *     Gone (a background purge removes the data later).
          */
         get: operations["rel_get_domain_2"];
         put?: never;
         post?: never;
         /**
          * Marks a relational domain as deleting. Its tables/views become
-         *     inaccessible immediately; physical cleanup follows in rel/013.
+         *     inaccessible immediately; physical cleanup follows in the background.
          */
         delete: operations["rel_delete_domain_2"];
         options?: never;
@@ -919,10 +1004,10 @@ export interface paths {
         put?: never;
         /**
          * Creates a relational table from an uploaded CSV/TSV file: infers one
-         *     LuraDB type per column (spec §5.1), then imports every row through the
+         *     LuraDB type per column, then imports every row through the
          *     existing DML write path -- a row that fails is logged, the import
-         *     continues (spec §5.2). Requires DDL access, enforced the same way the
-         *     `/sql` handler enforces a DDL statement (rel/011 pattern).
+         *     continues. Requires DDL access, enforced the same way the
+         *     `/sql` handler enforces a DDL statement.
          */
         post: operations["create_table_from_file"];
         delete?: never;
@@ -989,8 +1074,8 @@ export interface paths {
         put?: never;
         /**
          * Inserts one row from a JSON object body (`{column: value, …}`). An omitted
-         *     AUTOINCREMENT primary key is assigned the next sequence value (rel/005
-         *     §9); this compiles onto the exact same bound INSERT plan `/sql` would use.
+         *     AUTOINCREMENT primary key is assigned the next sequence value; this
+         *     compiles onto the exact same bound INSERT plan `/sql` would use.
          */
         post: operations["insert_row"];
         delete?: never;
@@ -1013,14 +1098,14 @@ export interface paths {
         get: operations["get_row"];
         /**
          * Partially updates a row by primary key: only the columns named in the
-         *     body are set, everything else stays unchanged (spec §5). Not an upsert —
+         *     body are set, everything else stays unchanged. Not an upsert —
          *     a PK the table doesn't have answers 404, never a create.
          */
         put: operations["update_row"];
         post?: never;
         /**
          * Deletes a row by primary key. Hanging REFERENCES from other tables are
-         *     not blocked by this (rel/005 §11) — they resolve to `null` afterwards.
+         *     not blocked by this — they resolve to `null` afterwards.
          */
         delete: operations["delete_row"];
         options?: never;
@@ -1053,7 +1138,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Live status of a restore job. Lives in RAM only (spec general/006) — gone
+         * Live status of a restore job. Lives in RAM only — gone
          *     after a restart; the outcome is also in the log.
          */
         get: operations["get_restore_status"];
@@ -1091,7 +1176,7 @@ export interface components {
             state: string;
         };
         /**
-         * @description Manifest fields + state + size (spec general/006 GET /backups/{id} and
+         * @description Manifest fields + state + size (GET /backups/{id} and
          *     POST /backups/upload). Everything but `id`/`state`/`scope` is optional:
          *     the currently-running-job shape (`running`) only fills `started_at`; the
          *     complete/incomplete shape fills the rest instead.
@@ -1104,13 +1189,33 @@ export interface components {
             format_version?: number | null;
             id: string;
             include_auth?: boolean | null;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description The newest read-snapshot stamp of the JSON engine among the data shards.
+             */
             json_snapshot_ts?: number | null;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description The newest read-snapshot stamp of the KV engine among the data shards.
+             */
             kv_snapshot_ts?: number | null;
+            lsn_cut?: components["schemas"]["LsnCutResponse"] | null;
             luradb_version?: string | null;
+            /**
+             * Format: int64
+             * @description The newest read-snapshot stamp of the relational engine among the
+             *     data shards.
+             */
+            rel_snapshot_ts?: number | null;
             schedule?: string | null;
             scope: string;
+            /**
+             * Format: int32
+             * @description Data shards of the server that wrote the archive; 0 for format
+             *     version 1. Informational: a restore places every domain by the shard
+             *     count of the server it runs on.
+             */
+            shards?: number | null;
             /** Format: int64 */
             size_bytes?: number | null;
             /** Format: int64 */
@@ -1119,7 +1224,7 @@ export interface components {
         };
         BackupListResponse: {
             backups: components["schemas"]["BackupSummaryResponse"][];
-            running?: null | components["schemas"]["RunningBackupInfo"];
+            running?: components["schemas"]["RunningBackupInfo"] | null;
         };
         BackupSummaryResponse: {
             /** Format: int64 */
@@ -1150,7 +1255,7 @@ export interface components {
         };
         ColumnInfo: {
             autoincrement: boolean;
-            default?: Record<string, never>;
+            default?: unknown;
             name: string;
             nullable: boolean;
             primary_key: boolean;
@@ -1160,7 +1265,7 @@ export interface components {
         };
         /**
          * @description Generic `{"count": N}` response, shared by JSON's `count_documents`, KV's
-         *     `count_keys`, and rel's `count_rows` (spec general/017) — one schema
+         *     `count_keys`, and rel's `count_rows` — one schema
          *     instead of three identical ones.
          */
         CountResponse: {
@@ -1171,14 +1276,21 @@ export interface components {
             /** @description Only effective for `all`/`kv` scopes (auth records live in the KV instance). */
             include_auth?: boolean;
             /**
-             * @description `all` | `kv` | `json` | `kv:<domain>` | `json:<domain>` | `domain:<name>`.
-             *     Covers the KV and JSON engines only — relational data is never included.
+             * @description `all` | `kv` | `json` | `rel` | `kv:<domain>` | `json:<domain>` |
+             *     `rel:<domain>` | `domain:<name>`. `all` covers every enabled engine;
+             *     `domain:<name>` covers the domain of that name in each engine that has
+             *     it. Relational domains go in with schema, rows and AUTOINCREMENT state.
              */
             scope: string;
         };
         CreateDomainRequest: {
             /** @description User-visible domain name (max 50 chars, [a-zA-Z0-9_-]). */
             name: string;
+            /**
+             * @description When true, PUT, DELETE and PATCH …/null on single keys need `If-Match` or
+             *     `If-None-Match: *` and answer 428 without. Fixed at creation; default false.
+             */
+            require_conditional_writes?: boolean;
         };
         CreateFromFileColumn: {
             name: string;
@@ -1209,6 +1321,11 @@ export interface components {
         CreateJsonDomainRequest: {
             /** @description User-visible domain name (max 50 chars, [a-zA-Z0-9_-]). */
             name: string;
+            /**
+             * @description When true, PUT and DELETE on documents need `If-Match` or
+             *     `If-None-Match: *` and answer 428 without. Fixed at creation; default false.
+             */
+            require_conditional_writes?: boolean;
         };
         CreateRelDomainRequest: {
             /** @description Domain name (max 50 chars, `[a-zA-Z0-9_-]`; `"domains"` is reserved). */
@@ -1259,6 +1376,30 @@ export interface components {
             created_at: number;
             /** @description User-visible domain name. */
             name: string;
+            /** @description Whether single-key writes need `If-Match` or `If-None-Match: *` (else 428). */
+            require_conditional_writes: boolean;
+        };
+        HeartbeatMetrics: {
+            domain_count: number;
+            /** Format: int64 */
+            estimated_memtable_keys: number;
+            io?: components["schemas"]["IoState"] | null;
+            l0_sstable_count: number;
+            /** @description Whether disk space and the server's own memory are short. */
+            resources: components["schemas"]["ResourceState"];
+            /** @description Every data shard, by id. */
+            shards: components["schemas"]["ShardHealth"][];
+            /**
+             * @description `ok`, or `degraded` while a data shard does not answer, disk space
+             *     or memory runs short (`resources`) or writes of a data file fail
+             *     (`io`).
+             */
+            status: string;
+            /** Format: int64 */
+            uptime_secs: number;
+            version: string;
+            /** Format: int64 */
+            vlog_size_bytes: number;
         };
         IndexInfo: {
             column: string;
@@ -1270,6 +1411,14 @@ export interface components {
             created_at: number;
             field: string;
             type: string;
+        };
+        /** @description `io` of `GET /health`: the failed writes in a row, without the file. */
+        IoState: {
+            /**
+             * Format: int32
+             * @description Failed writes in a row of the data file with the most.
+             */
+            failures: number;
         };
         JsonDomainResponse: {
             /**
@@ -1283,6 +1432,8 @@ export interface components {
              */
             document_count?: number | null;
             name: string;
+            /** @description Whether document PUT and DELETE need `If-Match` or `If-None-Match: *` (else 428). */
+            require_conditional_writes: boolean;
             /** @description Lifecycle state: "active" or "deleting" (background purge running). */
             state: string;
         };
@@ -1347,6 +1498,20 @@ export interface components {
             truncated: boolean;
         };
         /**
+         * @description Per engine, a write-ahead-log position that every write in the archive is
+         *     at or below; 0 for an engine outside the scope and for format version 1.
+         *     Positions keep growing across restarts, so they compare across runs of
+         *     the server.
+         */
+        LsnCutResponse: {
+            /** Format: int64 */
+            json: number;
+            /** Format: int64 */
+            kv: number;
+            /** Format: int64 */
+            rel: number;
+        };
+        /**
          * @description One entry of a user's domain permission matrix. `store_type`/`access` are
          *     lowercase and match the write-endpoint vocabulary exactly (`parse_store_type`,
          *     `access` parsing in `set_permission`) — usable as-is in a follow-up request.
@@ -1373,10 +1538,22 @@ export interface components {
             created_at: number;
             name: string;
             /**
-             * @description Lifecycle state: "active" or "deleting" (background purge running, rel/013).
-             *     Always present — so rel/013's later `list_domains` visibility change
+             * @description Lifecycle state: "active" or "deleting" (background purge running).
+             *     Always present — so a later `list_domains` visibility change
              *     (surfacing `Deleting` domains too) needs no REST-contract change.
              */
+            state: string;
+        };
+        /**
+         * @description `resources` of `GET /health`: the states of the report, without volumes,
+         *     paths or numbers.
+         */
+        ResourceState: {
+            /** @description The worst state of the data volumes: `ok`, `warning` or `blocked`. */
+            disk_state: string;
+            /** @description `ok`, `warning` or `blocked`. */
+            memory_state: string;
+            /** @description `ok`, `warning` (below a warn threshold) or `blocked` (writes refused). */
             state: string;
         };
         RestoreAcceptedResponse: {
@@ -1392,7 +1569,9 @@ export interface components {
             include_auth?: boolean;
             /**
              * @description Only legal when the archive contains exactly one domain name
-             *     (`kv:*`/`json:*`/`domain:*` scopes).
+             *     (`kv:*`/`json:*`/`rel:*`/`domain:*` scopes). Links of relational
+             *     tables (KVREF/JSONREF) then point to the KV and JSON domain of the new
+             *     name.
              */
             into_domain?: string | null;
             /** @description `"fail_if_exists"` (default) or `"replace"`. */
@@ -1429,7 +1608,7 @@ export interface components {
             /**
              * @description One JSON object per row (catalog column order in principle; `serde_json`'s
              *     default map is unordered/alphabetical here, see rel_browse.rs module docs),
-             *     with an optional `_expanded` block (spec §6).
+             *     with an optional `_expanded` block.
              */
             rows: Record<string, never>[];
         };
@@ -1458,25 +1637,34 @@ export interface components {
             total: number;
         };
         SetPermissionRequest: {
-            /** @description Access level: `"read"`, `"write"` or `"ddl"` (spec rel/011). */
+            /** @description Access level: `"read"`, `"write"` or `"ddl"`. */
             access: string;
             /** @description Domain name. */
             domain: string;
-            /** @description Store type of the domain: `"kv"` (default), `"json"` (spec json/012) or `"rel"` (spec rel/011). */
+            /** @description Store type of the domain: `"kv"` (default), `"json"` or `"rel"`. */
             store_type?: string | null;
+        };
+        /**
+         * @description A data shard as `GET /health` reports it: `ok` once it answered its
+         *     ping, `timeout` otherwise.
+         */
+        ShardHealth: {
+            /** Format: int32 */
+            id: number;
+            status: string;
         };
         SqlRequest: {
             /**
              * @description REFERENCES columns to resolve into embedded objects, or `["*"]` for
-             *     all of them (§5). Only valid for SELECT; non-empty on DML/DDL → 400.
+             *     all of them. Only valid for SELECT; non-empty on DML/DDL → 400.
              */
             expand?: string[];
             /**
-             * @description Positional parameters (JSON array), bound to the `?` placeholders
-             *     (rel/004/005). Omitted ⇒ empty array.
+             * @description Positional parameters (JSON array), bound to the `?` placeholders.
+             *     Omitted ⇒ empty array.
              */
             params?: Record<string, never>[];
-            /** @description Exactly one LuraSQL statement (more → 400 `MultipleStatements`, rel/004). */
+            /** @description Exactly one LuraSQL statement (more → 400 `MultipleStatements`). */
             sql: string;
         };
         TableDetail: {
@@ -1524,7 +1712,7 @@ export interface components {
             name?: string | null;
             /**
              * @description `"Admin"`, `"User"`, or a pseudo-role: `"TrustedPeer"` (UDS peer
-             *     authenticated by the kernel, spec perf/001) or `"Disabled"`
+             *     authenticated by the kernel) or `"Disabled"`
              *     (`auth.enabled = false`).
              */
             role: string;
@@ -1547,12 +1735,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description System is healthy */
+            /** @description Every data shard answered. Status `ok`, or `degraded` while disk space or memory runs short: below a warn threshold (`warning`), or below a block threshold (`blocked`), while writes answer 507 and reads go on; `resources` gives the state of the disk space and of the memory, without volume, path or number. Also `degraded` while writes of a data file fail; `io` gives their failures in a row, without the file (the server stops at the third, or at the first on a read-only file system) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HeartbeatMetrics"];
+                };
+            };
+            /** @description A data shard did not answer within 250 ms; the full report with status `degraded`; its `shards` list names the shard with status `timeout` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartbeatMetrics"];
+                };
             };
         };
     };
@@ -1868,9 +2067,19 @@ export interface operations {
                     "text/plain": string;
                 };
             };
-            /** @description Backup is disabled, or scope requires the JSON engine, which is disabled */
+            /** @description Backup is disabled, or scope requires the JSON or relational engine, which is disabled */
             503: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1914,6 +2123,16 @@ export interface operations {
             /** @description Backup is disabled */
             503: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2158,6 +2377,16 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     get_config: {
@@ -2207,7 +2436,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of active domains */
+            /** @description List of the active domains the key may access */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2252,6 +2481,16 @@ export interface operations {
             /** @description Domain already exists */
             409: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2320,6 +2559,16 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     get_events: {
@@ -2375,7 +2624,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of active JSON domains */
+            /** @description List of the active JSON domains the key may access */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2444,6 +2693,16 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     json_get_domain_1: {
@@ -2465,6 +2724,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JsonDomainResponse"];
+                };
+            };
+            /** @description Forbidden — no permission on the domain (also when it does not exist) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
             /** @description Domain not found */
@@ -2533,6 +2801,16 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     bulk_load: {
@@ -2582,6 +2860,16 @@ export interface operations {
             /** @description JSON engine disabled */
             503: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2717,6 +3005,16 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     count_documents: {
@@ -2827,9 +3125,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Opaque ETag from a prior read: conditional write, 409 on version mismatch */
+                /** @description Opaque ETag from a prior read: write only if it is still the document's current version, else 412 */
                 "If-Match"?: string | null;
-                /** @description Only `*` is supported: create-only write, 412 if the document exists */
+                /** @description Only `*` is supported: create-only write, 412 if the document exists. Evaluated after If-Match */
                 "If-None-Match"?: string | null;
             };
             path: {
@@ -2864,7 +3162,7 @@ export interface operations {
                     "application/json": components["schemas"]["DocumentResponse"];
                 };
             };
-            /** @description Invalid key, reserved top-level field (_key, _version, _content), invalid If-Match or If-None-Match header, or both headers set together */
+            /** @description Invalid key, reserved top-level field (_key, _version, _content), or invalid If-Match or If-None-Match header */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2873,17 +3171,8 @@ export interface operations {
                     "text/plain": string;
                 };
             };
-            /** @description Domain not found, or If-Match on missing document */
+            /** @description Domain not found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/plain": string;
-                };
-            };
-            /** @description Version conflict (If-Match mismatch) */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2900,9 +3189,22 @@ export interface operations {
                     "text/plain": string;
                 };
             };
-            /** @description Document already exists (If-None-Match: *) */
+            /** @description If-Match or If-None-Match does not hold (version mismatch, missing document, or document already exists); nothing was written */
             412: {
                 headers: {
+                    /** @description ETag of the document's current version; absent when the document does not exist */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description The domain requires conditional writes and neither If-Match nor If-None-Match is set */
+            428: {
+                headers: {
+                    /** @description no-store */
+                    "Cache-Control"?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2918,14 +3220,26 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     delete_document: {
         parameters: {
             query?: never;
             header?: {
-                /** @description Opaque ETag from a prior read: conditional write, 409 on version mismatch */
+                /** @description Opaque ETag from a prior read: delete only if it is still the document's current version, else 412 */
                 "If-Match"?: string | null;
+                /** @description Only `*` is supported: 412 if the document exists. Evaluated after If-Match */
+                "If-None-Match"?: string | null;
             };
             path: {
                 /** @description JSON domain */
@@ -2944,8 +3258,8 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Document or domain not found */
-            404: {
+            /** @description Invalid key, or invalid If-Match or If-None-Match header */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2953,8 +3267,8 @@ export interface operations {
                     "text/plain": string;
                 };
             };
-            /** @description Version conflict (If-Match mismatch) */
-            409: {
+            /** @description Document or domain not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2971,9 +3285,41 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            /** @description If-Match or If-None-Match does not hold (version mismatch, missing document, or document exists); nothing was deleted */
+            412: {
+                headers: {
+                    /** @description ETag of the document's current version; absent when the document does not exist */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description The domain requires conditional writes and neither If-Match nor If-None-Match is set */
+            428: {
+                headers: {
+                    /** @description no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
             /** @description JSON engine disabled */
             503: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3143,6 +3489,16 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     delete_index: {
@@ -3187,6 +3543,16 @@ export interface operations {
             /** @description JSON engine disabled */
             503: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3260,6 +3626,16 @@ export interface operations {
             /** @description JSON engine disabled */
             503: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3540,6 +3916,16 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     get_key: {
@@ -3559,6 +3945,8 @@ export interface operations {
             /** @description Value (raw bytes; an empty value yields an empty body). The `X-Expires-At` header (absolute Unix seconds) is present only when the key has a TTL. */
             200: {
                 headers: {
+                    /** @description Strong, opaque version tag for If-Match / If-None-Match */
+                    ETag?: string;
                     "X-Expires-At"?: number;
                     [name: string]: unknown;
                 };
@@ -3569,6 +3957,8 @@ export interface operations {
             /** @description Key exists in the explicit null state (set via PATCH …/null) */
             204: {
                 headers: {
+                    /** @description Strong, opaque version tag for If-Match / If-None-Match */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -3618,7 +4008,12 @@ export interface operations {
                 /** @description TTL in seconds (optional) */
                 ttl?: number;
             };
-            header?: never;
+            header?: {
+                /** @description ETag from a prior read: write only if it is still the key's current version, else 412 */
+                "If-Match"?: string | null;
+                /** @description Only `*`: write only if the key does not exist, else 412. Evaluated after If-Match */
+                "If-None-Match"?: string | null;
+            };
             path: {
                 /** @description Domain name */
                 domain: string;
@@ -3640,7 +4035,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid key */
+            /** @description Invalid key, or invalid If-Match / If-None-Match header */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3667,8 +4062,40 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            /** @description If-Match or If-None-Match does not hold; nothing was written */
+            412: {
+                headers: {
+                    /** @description ETag of the key's current version; absent when the key does not exist */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description The domain requires conditional writes and neither If-Match nor If-None-Match is set */
+            428: {
+                headers: {
+                    /** @description no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
             /** @description Rate limit exceeded */
             429: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
                 headers: {
                     "Retry-After"?: number;
                     [name: string]: unknown;
@@ -3682,7 +4109,12 @@ export interface operations {
     delete_key: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description ETag from a prior read: delete only if it is still the key's current version, else 412 */
+                "If-Match"?: string | null;
+                /** @description Only `*`: delete only if the key does not exist, else 412. Evaluated after If-Match */
+                "If-None-Match"?: string | null;
+            };
             path: {
                 /** @description Domain name */
                 domain: string;
@@ -3700,7 +4132,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid key */
+            /** @description Invalid key, or invalid If-Match / If-None-Match header */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3718,8 +4150,40 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            /** @description If-Match or If-None-Match does not hold; nothing was deleted */
+            412: {
+                headers: {
+                    /** @description ETag of the key's current version; absent when the key does not exist */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description The domain requires conditional writes and neither If-Match nor If-None-Match is set */
+            428: {
+                headers: {
+                    /** @description no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
             /** @description Rate limit exceeded */
             429: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
                 headers: {
                     "Retry-After"?: number;
                     [name: string]: unknown;
@@ -3795,7 +4259,12 @@ export interface operations {
     set_null: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description ETag from a prior read: write only if it is still the key's current version, else 412 */
+                "If-Match"?: string | null;
+                /** @description Only `*`: write only if the key does not exist, else 412. Evaluated after If-Match */
+                "If-None-Match"?: string | null;
+            };
             path: {
                 /** @description Domain name */
                 domain: string;
@@ -3813,7 +4282,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid key */
+            /** @description Invalid key, or invalid If-Match / If-None-Match header */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3831,8 +4300,40 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            /** @description If-Match or If-None-Match does not hold; nothing was written */
+            412: {
+                headers: {
+                    /** @description ETag of the key's current version; absent when the key does not exist */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description The domain requires conditional writes and neither If-Match nor If-None-Match is set */
+            428: {
+                headers: {
+                    /** @description no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
             /** @description Rate limit exceeded */
             429: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
                 headers: {
                     "Retry-After"?: number;
                     [name: string]: unknown;
@@ -4018,6 +4519,15 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            /** @description A data shard is not running */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     get_domain_metrics: {
@@ -4075,7 +4585,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of active relational domains */
+            /** @description List of the active relational domains the key may access */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4144,6 +4654,16 @@ export interface operations {
                     "text/plain": string;
                 };
             };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
         };
     };
     rel_get_domain_2: {
@@ -4165,6 +4685,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RelDomainResponse"];
+                };
+            };
+            /** @description Forbidden — no permission on the domain (also when it does not exist) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
             /** @description Domain not found */
@@ -4208,7 +4737,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deletion accepted — background purge follows (rel/013) */
+            /** @description Deletion accepted — background purge follows */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -4236,6 +4765,16 @@ export interface operations {
             /** @description Relational engine disabled */
             503: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4278,7 +4817,7 @@ export interface operations {
                     "text/plain": string;
                 };
             };
-            /** @description Access level too low for this statement (rel/011) */
+            /** @description Access level too low for this statement */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4335,6 +4874,16 @@ export interface operations {
             /** @description Relational engine disabled */
             503: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4503,6 +5052,16 @@ export interface operations {
             /** @description Relational engine disabled */
             503: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4755,7 +5314,7 @@ export interface operations {
                     "text/plain": string;
                 };
             };
-            /** @description Missing read access to a linked KV/JSON domain (rel/016) */
+            /** @description Missing read access to a linked KV/JSON domain */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4803,6 +5362,16 @@ export interface operations {
             /** @description Relational engine disabled */
             503: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -4933,7 +5502,7 @@ export interface operations {
                     "text/plain": string;
                 };
             };
-            /** @description Missing read access to a linked KV/JSON domain (rel/016) */
+            /** @description Missing read access to a linked KV/JSON domain */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4981,6 +5550,16 @@ export interface operations {
             /** @description Relational engine disabled */
             503: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5053,6 +5632,16 @@ export interface operations {
             /** @description Relational engine disabled */
             503: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {

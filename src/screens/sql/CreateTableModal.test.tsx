@@ -67,7 +67,7 @@ function Harness({ domain, onClose }: { domain: DomainSummary; onClose: () => vo
 }
 
 async function renderForm(domain: DomainSummary, onClose: () => void = () => {}) {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.6.1', server_version: '0.4.0' })))
+  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })))
   await act(() => connect(makeConnection()))
 
   const queryClient = createAppQueryClient()

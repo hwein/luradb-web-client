@@ -205,7 +205,7 @@ export async function assertKeyAvailable(apiClient: ApiClient, domain: string, k
   throw new KeyExistsError()
 }
 
-/** Server antwortet auf ein If-Match-Mismatch mit 409 (live geprüft); 412 wäre die HTTP-übliche Alternative — beide gelten als Konflikt. */
+/** 412 is the conflict code for a stale If-Match on PUT and DELETE; 409 is also accepted as conflict. */
 export function isConflict(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 409 || error.status === 412)
 }
