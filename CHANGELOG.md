@@ -21,6 +21,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - KV bulk delete with a prefix runs as a single server-side operation; a selection over the server cap is rejected as a whole (413).
 - The explorer now updates from a live server event stream instead of waiting for the next poll.
 - Status bar shows the signed-in user; the role now comes from /auth/whoami.
+- JSON browser: deleting a JSON document fails on a version conflict if it changed since it was loaded.
 
 ### Removed
 
@@ -42,6 +43,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - KV watch no longer retries endlessly when the key has no permission for the stream (403).
 - KV watch detects a silently dropped connection within 45 s and reconnects instead of staying on "live".
 - Creating a KV key no longer overwrites an existing key.
+- Creating a JSON document under a chosen key can no longer overwrite an existing one.
 
 ### Changed
 

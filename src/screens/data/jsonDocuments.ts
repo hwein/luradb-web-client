@@ -179,8 +179,11 @@ export async function createDocument(apiClient: ApiClient, domain: string, field
   return body._key
 }
 
-export async function deleteDocument(apiClient: ApiClient, domain: string, key: string): Promise<void> {
-  await apiClient.fetchRaw(documentPath(domain, key), { method: 'DELETE' })
+/** Without an ETag the DELETE stays unconditional. */
+export async function deleteDocument(apiClient: ApiClient, domain: string, key: string, etag: string | undefined): Promise<void> {
+  const headers: Record<string, string> = {}
+  if (etag !== undefined) headers['If-Match'] = etag
+  await apiClient.fetchRaw(documentPath(domain, key), { method: 'DELETE', headers })
 }
 
 export class KeyExistsError extends Error {
@@ -190,22 +193,21 @@ export class KeyExistsError extends Error {
   }
 }
 
-/**
- * Kollisions-Precheck vor einem PUT auf einen selbstgewählten Key (spec 004 §1): der Server überschreibt
- * existente Dokumente kommentarlos (Probe-Fakt), also prüft der Client per GET vor. Race zwischen diesem
- * Check und dem folgenden PUT bleibt bestehen (keine Server-Precondition) — bewusst in Kauf genommen.
- */
-export async function assertKeyAvailable(apiClient: ApiClient, domain: string, key: string): Promise<void> {
+/** Create-only PUT: the server rejects an existing key with 412. */
+export async function createDocumentWithKey(apiClient: ApiClient, domain: string, key: string, fields: unknown): Promise<void> {
   try {
-    await apiClient.fetchRaw(documentPath(domain, key))
+    await apiClient.fetchRaw(documentPath(domain, key), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'If-None-Match': '*' },
+      body: JSON.stringify(fields),
+    })
   } catch (error) {
-    if (error instanceof ApiError && error.status === 404) return
+    if (error instanceof ApiError && error.status === 412) throw new KeyExistsError()
     throw error
   }
-  throw new KeyExistsError()
 }
 
-/** 412 is the conflict code for a stale If-Match on PUT and DELETE; 409 is also accepted as conflict. */
+/** 412 is the precondition-failed code for If-Match / If-None-Match; the caller decides what it means. */
 export function isConflict(error: unknown): boolean {
-  return error instanceof ApiError && (error.status === 409 || error.status === 412)
+  return error instanceof ApiError && error.status === 412
 }

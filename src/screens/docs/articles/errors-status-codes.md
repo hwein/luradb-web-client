@@ -20,10 +20,10 @@ Every endpoint across all three engines maps its failures onto the same small se
 
 ```
 PUT /store-api/json/shop/documents/cus_8102
-If-Match: "3"
+If-Match: "eef7848e9811168e-1"
 { "name": "M. Keller", "city": "Bochum" }
 
-→ 409 Conflict — version mismatch (current ETag is "4")
+→ 412 Precondition Failed — the stored version differs (current ETag: "eef7848e9811168e-2")
 ```
 
 ---
