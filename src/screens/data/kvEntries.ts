@@ -1,6 +1,7 @@
 import { infiniteQueryOptions, queryOptions, type QueryClient } from '@tanstack/react-query'
 import { ApiError, BASE_PATH, withCall, type ApiClient, type CallMeta } from '../../api'
 import type { components } from '../../api/schema'
+import { kvCountKey } from '../../shell/domainDetails'
 
 /** Echtes Request-`limit` der Browser-Seiten — der Server blättert über `offset`/`limit` (Contract 0.6.1, spec data/011). */
 export const KV_KEYS_PAGE_SIZE = 100
@@ -103,7 +104,7 @@ export function kvBulkKeysQueryOptions(apiClient: ApiClient | undefined, domain:
 export function invalidateKvKeys(queryClient: QueryClient, domain: string): void {
   void queryClient.invalidateQueries({ queryKey: ['kv-keys', domain] })
   void queryClient.invalidateQueries({ queryKey: ['kv-keys-bulk', domain] })
-  void queryClient.invalidateQueries({ queryKey: ['kv-count', domain] })
+  void queryClient.invalidateQueries({ queryKey: kvCountKey(domain) })
 }
 
 /** Ergebnis eines Value-Reads: `not-found` deckt "nie existiert", "gelöscht" und "abgelaufen" ab (404); `null` ist der explizite

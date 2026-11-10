@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { BASE_PATH, type ApiClient } from '../../api'
 import type { components } from '../../api/schema'
+import { jsonIndexesKey } from '../../shell/domainDetails'
 import { startReindex, type StartReindexOutcome } from '../engines/reindexStart'
 import { createIndex, deleteIndex, formatIndexCreatedAt, INDEX_TYPES, type CreateIndexOutcome, type DeleteIndexOutcome, type IndexType } from './jsonIndexes'
 
@@ -23,7 +24,7 @@ export function IndexPanel({ domain, apiClient, indexes, loading }: IndexPanelPr
   const [justCreatedField, setJustCreatedField] = useState<string | undefined>(undefined)
 
   function invalidateIndexes(): void {
-    void queryClient.invalidateQueries({ queryKey: ['json-indexes', domain] })
+    void queryClient.invalidateQueries({ queryKey: jsonIndexesKey(domain) })
   }
 
   const createMutation = useMutation<CreateIndexOutcome, Error, { field: string; type: IndexType }>({

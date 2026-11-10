@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { BASE_PATH, type ApiClient } from '../../api'
 import { CodeEditor } from '../../lib'
+import { jsonCountKey } from '../../shell/domainDetails'
 import { openDocs } from '../docs/openDocs'
 import {
   createDocument,
@@ -79,7 +80,7 @@ export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOp
     onSuccess: (_data, { key }) => {
       queryClient.removeQueries({ queryKey: ['json-document', domain, key] })
       void queryClient.invalidateQueries({ queryKey: ['json-documents', domain] })
-      void queryClient.invalidateQueries({ queryKey: ['json-count', domain] })
+      void queryClient.invalidateQueries({ queryKey: jsonCountKey(domain) })
       setDeleteArmed(false)
       setReloadedNote(undefined)
       onClear()
@@ -107,7 +108,7 @@ export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOp
     },
     onSuccess: (createdKey) => {
       void queryClient.invalidateQueries({ queryKey: ['json-documents', domain] })
-      void queryClient.invalidateQueries({ queryKey: ['json-count', domain] })
+      void queryClient.invalidateQueries({ queryKey: jsonCountKey(domain) })
       setNewKey('')
       setNewText(NEW_DOCUMENT_TEXT)
       onSelectKey(createdKey)

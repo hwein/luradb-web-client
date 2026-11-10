@@ -7,6 +7,7 @@ import type { ApiClient } from '../../api'
 import { useSession } from '../../app/session'
 import { CodeEditor } from '../../lib'
 import { useSelectedDomain } from '../../shell'
+import { relTableCountDomainPrefix, relTablesKey, relViewsKey } from '../../shell/domainDetails'
 import { useDomainSummaries } from '../../shell/domains'
 import './SqlScreen.css'
 import { SqlDocsSplit } from './SqlDocsSplit'
@@ -91,12 +92,12 @@ export function SqlScreen() {
       if (outcome.status !== 'ok') return
       // Schema-Änderungen (u. a. save-as-view) frisch in den Explorer spiegeln (spec §6).
       if (outcome.result.kind === 'ddl') {
-        void queryClient.invalidateQueries({ queryKey: ['rel-tables', variables.domain] })
-        void queryClient.invalidateQueries({ queryKey: ['rel-views', variables.domain] })
+        void queryClient.invalidateQueries({ queryKey: relTablesKey(variables.domain) })
+        void queryClient.invalidateQueries({ queryKey: relViewsKey(variables.domain) })
       }
       // Row-Counts der Domäne (spec shell/010 §9) — das Ergebnis nennt die betroffene Tabelle nicht, daher Präfix über alle.
       if (outcome.result.kind === 'ddl' || outcome.result.kind === 'dml') {
-        void queryClient.invalidateQueries({ queryKey: ['rel-table-count', variables.domain] })
+        void queryClient.invalidateQueries({ queryKey: relTableCountDomainPrefix(variables.domain) })
       }
     },
   })

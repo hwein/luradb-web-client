@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import { useState } from 'react'
 import type { ApiClient } from '../../api'
 import type { components } from '../../api/schema'
+import { relTableCountKey } from '../../shell/domainDetails'
 import { jsonDocumentsQueryOptions } from './jsonDocuments'
 import { EMPTY_KV_KEY_FILTER, kvKeysQueryOptions } from './kvEntries'
 import {
@@ -239,7 +240,7 @@ export function RelRowDetail({ domain, apiClient, table, columns, mode, row, onC
   function invalidateRows(): void {
     void queryClient.invalidateQueries({ queryKey: ['rel-rows', domain, table] })
     void queryClient.invalidateQueries({ queryKey: ['rel-rows-filtered', domain, table] })
-    void queryClient.invalidateQueries({ queryKey: ['rel-table-count', domain, table] })
+    void queryClient.invalidateQueries({ queryKey: relTableCountKey(domain, table) })
   }
 
   const insertMutation = useMutation<{ affected: number; lastPk: unknown }, unknown, Record<string, unknown>>({

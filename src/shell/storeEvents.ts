@@ -1,5 +1,6 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
 import type { SseEvent } from '../lib/sse'
+import { JSON_INDEXES_PREFIX, jsonIndexesKey, REL_TABLES_PREFIX, REL_VIEWS_PREFIX, relTablesKey, relViewsKey } from './domainDetails'
 import { DOMAINS_KEY } from './domains'
 
 export interface StoreEvent {
@@ -47,20 +48,20 @@ export function invalidationTargetsFor(event: StoreEvent): QueryKey[] {
       return [DOMAINS_KEY]
     case 'table_created':
     case 'table_dropped':
-      return [['rel-tables', event.domain]]
+      return [relTablesKey(event.domain)]
     case 'view_created':
     case 'view_dropped':
-      return [['rel-views', event.domain]]
+      return [relViewsKey(event.domain)]
     case 'index_created':
     case 'index_dropped':
-      return event.engine === 'json' ? [['json-indexes', event.domain]] : []
+      return event.engine === 'json' ? [jsonIndexesKey(event.domain)] : []
     default:
       return []
   }
 }
 
 /** Alle stream-abhängigen Explorer-Queries (spec shell/009 §5) — benannte Liste statt globalem Invalidieren. */
-const ALL_STORE_KEYS: QueryKey[] = [DOMAINS_KEY, ['rel-tables'], ['rel-views'], ['json-indexes']]
+const ALL_STORE_KEYS: QueryKey[] = [DOMAINS_KEY, REL_TABLES_PREFIX, REL_VIEWS_PREFIX, JSON_INDEXES_PREFIX]
 
 /** Voll-Resync nach `reset` oder Wiederverbindung: was der Stream trägt, wird neu gelesen — sonst nichts. */
 export function invalidateAllStoreQueries(queryClient: QueryClient): void {

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import type { ApiClient } from '../../api'
+import { jsonCountKey } from '../../shell/domainDetails'
 import { countNonEmptyLines, runBulkImport, type BulkImportResult } from './jsonBulkImport'
 
 function messageOf(error: unknown): string {
@@ -26,7 +27,7 @@ export function BulkImportForm({ domain, apiClient, onClose }: BulkImportFormPro
     onSuccess: (result) => {
       if (result.imported > 0) {
         void queryClient.invalidateQueries({ queryKey: ['json-documents', domain] })
-        void queryClient.invalidateQueries({ queryKey: ['json-count', domain] })
+        void queryClient.invalidateQueries({ queryKey: jsonCountKey(domain) })
       }
     },
   })

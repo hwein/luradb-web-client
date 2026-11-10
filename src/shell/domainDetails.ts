@@ -23,10 +23,16 @@ function engineSilentRecord(context: Pick<QueryFunctionContext, 'client' | 'quer
   return pollSilentRecord(context) || (context.client.getQueryState(context.queryKey)?.errorUpdatedAt ?? 0) > 0
 }
 
+export const REL_TABLES_PREFIX = ['rel-tables'] as const
+
+export function relTablesKey(domain: string) {
+  return [...REL_TABLES_PREFIX, domain] as const
+}
+
 /** Detail queries of a domain (spec shell/002 §3/§5) — active only when `enabled`. */
 export function relTablesQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
-    queryKey: ['rel-tables', domain] as const,
+    queryKey: relTablesKey(domain),
     queryFn: async (context): Promise<TableSummary[]> => {
       if (!apiClient) throw new Error('rel tables query requires an active connection')
       const { data, response } = await apiClient.api.GET('/store-api/rel/{domain}/tables', {
@@ -40,9 +46,15 @@ export function relTablesQueryOptions(apiClient: ApiClient | undefined, domain: 
   })
 }
 
+export const REL_VIEWS_PREFIX = ['rel-views'] as const
+
+export function relViewsKey(domain: string) {
+  return [...REL_VIEWS_PREFIX, domain] as const
+}
+
 export function relViewsQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
-    queryKey: ['rel-views', domain] as const,
+    queryKey: relViewsKey(domain),
     queryFn: async (context): Promise<ViewSummary[]> => {
       if (!apiClient) throw new Error('rel views query requires an active connection')
       const { data, response } = await apiClient.api.GET('/store-api/rel/{domain}/views', {
@@ -70,9 +82,13 @@ export function relTableDetailQueryOptions(apiClient: ApiClient | undefined, dom
   })
 }
 
+export function jsonCountKey(domain: string) {
+  return ['json-count', domain] as const
+}
+
 export function jsonDocumentCountQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
-    queryKey: ['json-count', domain] as const,
+    queryKey: jsonCountKey(domain),
     queryFn: async (context): Promise<number> => {
       if (!apiClient) throw new Error('json count query requires an active connection')
       const { data, response } = await apiClient.api.GET('/store-api/json/{domain}/documents/count', {
@@ -86,9 +102,15 @@ export function jsonDocumentCountQueryOptions(apiClient: ApiClient | undefined, 
   })
 }
 
+export const JSON_INDEXES_PREFIX = ['json-indexes'] as const
+
+export function jsonIndexesKey(domain: string) {
+  return [...JSON_INDEXES_PREFIX, domain] as const
+}
+
 export function jsonIndexesQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
-    queryKey: ['json-indexes', domain] as const,
+    queryKey: jsonIndexesKey(domain),
     queryFn: async (context): Promise<IndexResponse[]> => {
       if (!apiClient) throw new Error('json indexes query requires an active connection')
       const { data, response } = await apiClient.api.GET('/store-api/json/{domain}/indexes', {
@@ -102,6 +124,10 @@ export function jsonIndexesQueryOptions(apiClient: ApiClient | undefined, domain
   })
 }
 
+export function kvCountKey(domain: string) {
+  return ['kv-count', domain] as const
+}
+
 /**
  * Domänen-Key-Zähler für die Aktivitäts-Ableitung (spec shell/004 §1) über `GET …/kv/{domain}/count` (Contract 0.6.1,
  * spec shell/010 §1) — ohne `prefix`, ohne Key-Transfer. Erst-Load aufgezeichnet, Folge-Ticks still (general/012);
@@ -109,7 +135,7 @@ export function jsonIndexesQueryOptions(apiClient: ApiClient | undefined, domain
  */
 export function kvKeyCountQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
-    queryKey: ['kv-count', domain] as const,
+    queryKey: kvCountKey(domain),
     queryFn: async (context): Promise<number> => {
       if (!apiClient) throw new Error('kv count query requires an active connection')
       const { data, response } = await apiClient.api.GET('/store-api/kv/{domain}/count', {
@@ -123,10 +149,20 @@ export function kvKeyCountQueryOptions(apiClient: ApiClient | undefined, domain:
   })
 }
 
+const REL_TABLE_COUNT_PREFIX = ['rel-table-count'] as const
+
+export function relTableCountDomainPrefix(domain: string) {
+  return [...REL_TABLE_COUNT_PREFIX, domain] as const
+}
+
+export function relTableCountKey(domain: string, table: string) {
+  return [...REL_TABLE_COUNT_PREFIX, domain, table] as const
+}
+
 /** Row-Count je Tabelle (spec shell/010 §4) — nur die Tabellenzeilen der expandierten Domäne halten diese Query. */
 export function relTableRowCountQueryOptions(apiClient: ApiClient | undefined, domain: string, table: string) {
   return queryOptions({
-    queryKey: ['rel-table-count', domain, table] as const,
+    queryKey: relTableCountKey(domain, table),
     queryFn: async (context): Promise<number> => {
       if (!apiClient) throw new Error('rel table count query requires an active connection')
       const { data, response } = await apiClient.api.GET('/store-api/rel/{domain}/tables/{table}/count', {
