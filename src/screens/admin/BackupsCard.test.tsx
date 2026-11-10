@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect, useSession } from '../../app/session'
-import { server } from '../../test/msw'
+import { domainResponse, server } from '../../test/msw'
 import { clearRestoreEntry, noteRestoreStarted, type BackupSummary } from './backups'
 import { BackupsCard } from './BackupsCard'
 
@@ -29,10 +29,10 @@ function ConnectedBackupsCard() {
 
 function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
-    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1 }])),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([{ name: 'logs', created_at: 1 }])),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
+    http.get(`${ORIGIN}/store-api/domains`, () =>
+      HttpResponse.json([domainResponse('shop'), domainResponse('logs')]),
+    ),
   ]
 }
 
@@ -145,7 +145,7 @@ describe('BackupsCard list', () => {
     server.use(...baseHandlers(), http.get(BACKUPS_URL, () => HttpResponse.text('404 Not Found', { status: 404 })))
     await renderConnected()
 
-    expect(await screen.findByText('requires LuraDB ≥ 0.3.0 (server is 0.5.1)')).toBeInTheDocument()
+    expect(await screen.findByText('requires LuraDB ≥ 0.3.0 (server is 0.7.1)')).toBeInTheDocument()
   })
 })
 
@@ -178,7 +178,7 @@ describe('BackupsCard run backup now', () => {
     await waitFor(() => expect(bodies).toEqual([{ scope: 'kv:shop' }]))
   })
 
-  it('offers only the engine domains for kv/json and the union for domain scope', async () => {
+  it('offers every domain of the domain list for the json and the domain scope', async () => {
     const bodies: unknown[] = []
     server.use(
       ...baseHandlers(),
@@ -193,7 +193,7 @@ describe('BackupsCard run backup now', () => {
     fireEvent.click(await screen.findByRole('button', { name: '▶ run backup now' }))
     fireEvent.click(screen.getByRole('button', { name: 'json' }))
     await waitFor(() => expect(screen.getByRole('option', { name: 'logs' })).toBeInTheDocument())
-    expect(screen.queryByRole('option', { name: 'shop' })).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'shop' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'domain' }))
     await waitFor(() => expect(screen.getByRole('option', { name: 'shop' })).toBeInTheDocument())
@@ -260,13 +260,11 @@ describe('BackupsCard run backup now', () => {
   it('refreshes the domain lists when the scope target vanished (404)', async () => {
     let domainCalls = 0
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
       http.get(`${ORIGIN}/store-api/domains`, () => {
         domainCalls += 1
-        return HttpResponse.json([{ name: 'shop', created_at: 1 }])
+        return HttpResponse.json([domainResponse('shop')])
       }),
-      http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
-      http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
       http.get(BACKUPS_URL, () => HttpResponse.json({ backups: [], running: null })),
       http.post(BACKUPS_URL, () => HttpResponse.text("404 Not Found: domain 'shop' no longer exists", { status: 404 })),
     )
@@ -514,9 +512,7 @@ describe('BackupsCard restore row', () => {
     const spy = vi.spyOn(queryClient, 'invalidateQueries')
 
     expect(await screen.findByText('restore · complete')).toBeInTheDocument()
-    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ['domains', 'kv'] }))
-    expect(spy).toHaveBeenCalledWith({ queryKey: ['domains', 'json'] })
-    expect(spy).toHaveBeenCalledWith({ queryKey: ['domains', 'rel'] })
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ['domains'] }))
     expect(spy).not.toHaveBeenCalledWith({ queryKey: ['auth', 'users'] })
 
     fireEvent.click(screen.getByRole('button', { name: '×' }))
@@ -546,7 +542,7 @@ describe('BackupsCard restore row', () => {
     const spy = vi.spyOn(queryClient, 'invalidateQueries')
 
     expect(await screen.findByText('restore · status lost')).toBeInTheDocument()
-    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ['domains', 'kv'] }))
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ['domains'] }))
     expect(screen.getByRole('button', { name: '▶ run backup now' })).toBeEnabled()
   })
 })

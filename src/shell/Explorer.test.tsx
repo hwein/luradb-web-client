@@ -2,12 +2,12 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Connection } from '../app/connections'
 import { createAppQueryClient } from '../app/queryClient'
 import { connect, disconnect } from '../app/session'
 import { resetSqlState, useSqlState } from '../screens/sql/sqlStore'
-import { server } from '../test/msw'
+import { domainResponse, server } from '../test/msw'
 import { Explorer } from './Explorer'
 import { SelectedDomainProvider } from './SelectedDomainContext'
 
@@ -41,11 +41,18 @@ function makeConnection(): Connection {
   }
 }
 
-function domainListHandlers(kv: unknown[], json: unknown[], rel: unknown[]) {
+function domainsHandler(domains: ReturnType<typeof domainResponse>[]) {
+  return http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json(domains))
+}
+
+/** Empty answers for the per-engine probes of every domain; a test's own handlers are registered later and win. */
+function emptyEngineHandlers() {
   return [
-    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json(kv)),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json(json)),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json(rel)),
+    http.get(`${ORIGIN}/store-api/rel/:domain/tables`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/store-api/rel/:domain/views`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/store-api/json/:domain/documents/count`, () => HttpResponse.json({ count: 0 })),
+    http.get(`${ORIGIN}/store-api/json/:domain/indexes`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/store-api/kv/:domain/count`, () => HttpResponse.json({ count: 0 })),
   ]
 }
 
@@ -76,10 +83,8 @@ function relTableDetailHandler(domain: string, table: string, columns: ReturnTyp
   )
 }
 
-function jsonDetailHandler(domain: string, documentCount: number) {
-  return http.get(`${ORIGIN}/store-api/json/domains/${domain}`, () =>
-    HttpResponse.json({ name: domain, created_at: 1, state: 'active', document_count: documentCount }),
-  )
+function jsonCountHandler(domain: string, count: number) {
+  return http.get(`${ORIGIN}/store-api/json/${domain}/documents/count`, () => HttpResponse.json({ count }))
 }
 
 function jsonIndexesHandler(domain: string, count: number) {
@@ -132,11 +137,11 @@ function SqlRouteProbe() {
 }
 
 async function connectAndRender() {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })))
+  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })))
   await act(() => connect(makeConnection()))
 
   const queryClient = createAppQueryClient()
-  return render(
+  const rendered = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={['/sql']}>
         <SelectedDomainProvider>
@@ -150,7 +155,12 @@ async function connectAndRender() {
       </MemoryRouter>
     </QueryClientProvider>,
   )
+  return { ...rendered, queryClient }
 }
+
+beforeEach(() => {
+  server.use(...emptyEngineHandlers())
+})
 
 afterEach(() => {
   act(() => disconnect())
@@ -159,27 +169,11 @@ afterEach(() => {
 })
 
 describe('Explorer', () => {
-  it('unions engines per domain: expands the alphabetically first domain, tags the collapsed ones', async () => {
+  it('expands the alphabetically first domain and tags the collapsed ones by activity', async () => {
     server.use(
-      ...domainListHandlers(
-        [
-          { name: 'alpha', created_at: 1 },
-          { name: 'beta', created_at: 1 },
-          { name: 'gamma', created_at: 1 },
-        ],
-        [
-          { name: 'alpha', created_at: 1, state: 'active' },
-          { name: 'beta', created_at: 1, state: 'active' },
-        ],
-        [{ name: 'alpha', created_at: 1, state: 'active' }],
-      ),
-      relTablesHandler('alpha', []),
-      relViewsHandler('alpha', []),
-      jsonDetailHandler('alpha', 0),
-      jsonIndexesHandler('alpha', 0),
-      kvCountHandler('alpha', 0),
-      // beta/gamma sind collapsed -> ihr Tag hängt an echter Aktivität, nicht an bloßer Registry-Zugehörigkeit.
-      jsonDetailHandler('beta', 1),
+      domainsHandler([domainResponse('alpha'), domainResponse('beta'), domainResponse('gamma')]),
+      // beta/gamma are collapsed -> their tags follow actual activity.
+      jsonCountHandler('beta', 1),
       jsonIndexesHandler('beta', 0),
       kvCountHandler('beta', 1),
       kvCountHandler('gamma', 1),
@@ -198,21 +192,105 @@ describe('Explorer', () => {
     expect(await screen.findByText('kv')).toBeInTheDocument()
   })
 
+  it('shows all three engine sections for every domain', async () => {
+    server.use(domainsHandler([domainResponse('alpha'), domainResponse('beta')]))
+
+    await connectAndRender()
+
+    expect(await screen.findByText(expandedHeader('alpha'))).toBeInTheDocument()
+    expect(screen.getByText('RELATIONAL')).toBeInTheDocument()
+    expect(screen.getByText('JSON')).toBeInTheDocument()
+    expect(screen.getByText('KEY-VALUE')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /▸ beta/ }))
+
+    expect(await screen.findByText(expandedHeader('beta'))).toBeInTheDocument()
+    expect(screen.getByText('RELATIONAL')).toBeInTheDocument()
+    expect(screen.getByText('JSON')).toBeInTheDocument()
+    expect(screen.getByText('KEY-VALUE')).toBeInTheDocument()
+  })
+
+  it('hides the section of an engine whose endpoints answer 503 on first load', async () => {
+    server.use(
+      domainsHandler([domainResponse('alpha')]),
+      http.get(`${ORIGIN}/store-api/rel/:domain/tables`, () => HttpResponse.text('Relational engine disabled', { status: 503 })),
+      http.get(`${ORIGIN}/store-api/json/:domain/indexes`, () => HttpResponse.text('JSON engine disabled', { status: 503 })),
+      kvCountHandler('alpha', 1),
+    )
+
+    await connectAndRender()
+
+    expect(await screen.findByText(expandedHeader('alpha'))).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('RELATIONAL')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText('JSON')).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'new table' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'new document' })).not.toBeInTheDocument()
+    expect(screen.getByText('KEY-VALUE')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /^K keys/ })).toBeInTheDocument()
+  })
+
+  it('keeps the section when an engine endpoint fails with another status', async () => {
+    let releaseJson: (() => void) | undefined
+    const relAnswered = new Promise<void>((resolve) => {
+      releaseJson = resolve
+    })
+    server.use(
+      domainsHandler([domainResponse('alpha')]),
+      http.get(`${ORIGIN}/store-api/rel/alpha/tables`, () => {
+        releaseJson?.()
+        return HttpResponse.text('internal error', { status: 500 })
+      }),
+      // answers only after the 500: once JSON is gone, the rel failure has settled too
+      http.get(`${ORIGIN}/store-api/json/alpha/documents/count`, async () => {
+        await relAnswered
+        return HttpResponse.text('JSON engine disabled', { status: 503 })
+      }),
+    )
+
+    await connectAndRender()
+
+    expect(await screen.findByText(expandedHeader('alpha'))).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('JSON')).not.toBeInTheDocument())
+    expect(screen.getByText('RELATIONAL')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'new table' })).toBeInTheDocument()
+    expect(screen.getByText('KEY-VALUE')).toBeInTheDocument()
+  })
+
+  it('keeps the section when an engine endpoint answers 503 after an earlier success', async () => {
+    let relDisabled = false
+    let relDisabledAnswers = 0
+    server.use(
+      domainsHandler([domainResponse('alpha')]),
+      http.get(`${ORIGIN}/store-api/rel/alpha/tables`, () => {
+        if (!relDisabled) return HttpResponse.json([{ name: 'orders', _links: { self: '', rows: '' } }])
+        relDisabledAnswers += 1
+        return HttpResponse.text('Relational engine disabled', { status: 503 })
+      }),
+      relTableCountHandler('alpha', 'orders', 3),
+      relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER')]),
+    )
+
+    const { queryClient } = await connectAndRender()
+
+    expect(await screen.findByRole('button', { name: /T orders/ })).toBeInTheDocument()
+
+    relDisabled = true
+    await act(() => queryClient.invalidateQueries({ queryKey: ['rel-tables', 'alpha'] }))
+    await waitFor(() => expect(relDisabledAnswers).toBeGreaterThan(0))
+    await waitFor(() => expect(queryClient.getQueryState(['rel-tables', 'alpha'])?.status).toBe('error'))
+
+    expect(screen.getByText('RELATIONAL')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'new table' })).toBeInTheDocument()
+  })
+
   it('loads the sections of the expanded domain and switches expansion on click', async () => {
     server.use(
-      ...domainListHandlers(
-        [
-          { name: 'alpha', created_at: 1 },
-          { name: 'beta', created_at: 1 },
-        ],
-        [{ name: 'alpha', created_at: 1, state: 'active' }],
-        [{ name: 'alpha', created_at: 1, state: 'active' }],
-      ),
+      domainsHandler([domainResponse('alpha'), domainResponse('beta')]),
       relTablesHandler('alpha', ['orders']),
       relTableCountHandler('alpha', 'orders', 3),
       relViewsHandler('alpha', ['v_paid']),
       relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER')]),
-      jsonDetailHandler('alpha', 3),
+      jsonCountHandler('alpha', 3),
       jsonIndexesHandler('alpha', 1),
       kvCountHandler('alpha', 0),
       kvCountHandler('beta', 0),
@@ -231,21 +309,17 @@ describe('Explorer', () => {
 
     expect(await screen.findByText(expandedHeader('beta'))).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /▸ alpha/ })).toBeInTheDocument()
-    expect(screen.queryByText('RELATIONAL')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /T orders/ })).not.toBeInTheDocument()
   })
 
   it('navigates to /data with the engine and table as query params on object-row clicks', async () => {
     server.use(
-      ...domainListHandlers(
-        [{ name: 'alpha', created_at: 1 }],
-        [{ name: 'alpha', created_at: 1, state: 'active' }],
-        [{ name: 'alpha', created_at: 1, state: 'active' }],
-      ),
+      domainsHandler([domainResponse('alpha')]),
       relTablesHandler('alpha', ['orders']),
       relTableCountHandler('alpha', 'orders', 3),
       relViewsHandler('alpha', []),
       relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER')]),
-      jsonDetailHandler('alpha', 1),
+      jsonCountHandler('alpha', 1),
       jsonIndexesHandler('alpha', 0),
       kvCountHandler('alpha', 2),
     )
@@ -266,18 +340,7 @@ describe('Explorer', () => {
   })
 
   it('a view click opens the SQL console with a new LIMIT-50 select tab instead of the rel browser (no rows endpoint for views)', async () => {
-    server.use(
-      ...domainListHandlers(
-        [{ name: 'alpha', created_at: 1 }],
-        [{ name: 'alpha', created_at: 1, state: 'active' }],
-        [{ name: 'alpha', created_at: 1, state: 'active' }],
-      ),
-      relTablesHandler('alpha', []),
-      relViewsHandler('alpha', ['v_paid']),
-      jsonDetailHandler('alpha', 0),
-      jsonIndexesHandler('alpha', 0),
-      kvCountHandler('alpha', 0),
-    )
+    server.use(domainsHandler([domainResponse('alpha')]), relViewsHandler('alpha', ['v_paid']))
 
     await connectAndRender()
 
@@ -288,7 +351,7 @@ describe('Explorer', () => {
 
   it('shows the KVREF/JSONREF columns of the expanded domain in the links panel, and hides it when there are none', async () => {
     server.use(
-      ...domainListHandlers([], [], [{ name: 'alpha', created_at: 1, state: 'active' }]),
+      domainsHandler([domainResponse('alpha')]),
       relTablesHandler('alpha', ['orders']),
       relTableCountHandler('alpha', 'orders', 3),
       relViewsHandler('alpha', []),
@@ -306,7 +369,7 @@ describe('Explorer', () => {
 
   it('omits the links panel when the domain has no KVREF/JSONREF columns', async () => {
     server.use(
-      ...domainListHandlers([], [], [{ name: 'alpha', created_at: 1, state: 'active' }]),
+      domainsHandler([domainResponse('alpha')]),
       relTablesHandler('alpha', ['orders']),
       relTableCountHandler('alpha', 'orders', 3),
       relViewsHandler('alpha', []),
@@ -319,25 +382,10 @@ describe('Explorer', () => {
     expect(screen.queryByText(/LINKS IN/)).not.toBeInTheDocument()
   })
 
-  it('creates a domain without engine checkboxes: a POST hits all three engines, a partial 409 failure keeps the form open with an inline error', async () => {
-    let kvCalls = 0
-    let jsonCalls = 0
-    let relCalls = 0
+  it('shows a failed create as status and message and keeps the form open', async () => {
     server.use(
-      ...domainListHandlers([{ name: 'alpha', created_at: 1 }], [], []),
-      kvCountHandler('alpha', 0),
-      http.post(`${ORIGIN}/store-api/domains`, () => {
-        kvCalls += 1
-        return HttpResponse.json({ name: 'shop2', created_at: 1 }, { status: 201 })
-      }),
-      http.post(`${ORIGIN}/store-api/json/domains`, () => {
-        jsonCalls += 1
-        return new HttpResponse(null, { status: 409 })
-      }),
-      http.post(`${ORIGIN}/store-api/rel/domains`, () => {
-        relCalls += 1
-        return HttpResponse.json({ name: 'shop2', created_at: 1, state: 'active' }, { status: 201 })
-      }),
+      domainsHandler([domainResponse('alpha')]),
+      http.post(`${ORIGIN}/store-api/domains`, () => new HttpResponse(null, { status: 409 })),
     )
 
     await connectAndRender()
@@ -348,26 +396,18 @@ describe('Explorer', () => {
     fireEvent.change(screen.getByLabelText('domain name'), { target: { value: 'shop2' } })
     fireEvent.click(screen.getByRole('button', { name: 'create' }))
 
-    expect(await screen.findByText(/json: 409/)).toBeInTheDocument()
-    expect(kvCalls).toBe(1)
-    expect(jsonCalls).toBe(1)
-    expect(relCalls).toBe(1)
-    // Teilfehler -> Formular bleibt offen (spec shell/003 §1)
+    expect(await screen.findByText('409 domain already exists')).toBeInTheDocument()
     expect(screen.getByLabelText('domain name')).toBeInTheDocument()
   })
 
-  it('sends require_conditional_writes to kv and json', async () => {
-    const bodies: Record<string, unknown> = {}
-    const capture = (engine: string, status: object) => async ({ request }: { request: Request }) => {
-      bodies[engine] = await request.json()
-      return HttpResponse.json({ name: 'shop2', created_at: 1, ...status }, { status: 201 })
-    }
+  it('sends require_conditional_writes as an object for kv and json', async () => {
+    const bodies: unknown[] = []
     server.use(
-      ...domainListHandlers([{ name: 'alpha', created_at: 1 }], [], []),
-      kvCountHandler('alpha', 0),
-      http.post(`${ORIGIN}/store-api/domains`, capture('kv', {})),
-      http.post(`${ORIGIN}/store-api/json/domains`, capture('json', { state: 'active' })),
-      http.post(`${ORIGIN}/store-api/rel/domains`, capture('rel', { state: 'active' })),
+      domainsHandler([domainResponse('alpha')]),
+      http.post(`${ORIGIN}/store-api/domains`, async ({ request }) => {
+        bodies.push(await request.json())
+        return HttpResponse.json(domainResponse('shop2'), { status: 201 })
+      }),
     )
 
     await connectAndRender()
@@ -378,43 +418,23 @@ describe('Explorer', () => {
     fireEvent.change(screen.getByLabelText('domain name'), { target: { value: 'shop2' } })
     fireEvent.click(screen.getByRole('button', { name: 'create' }))
     await waitFor(() => expect(screen.queryByLabelText('domain name')).not.toBeInTheDocument())
-    expect(bodies).toEqual({ kv: { name: 'shop2' }, json: { name: 'shop2' }, rel: { name: 'shop2' } })
+    expect(bodies).toEqual([{ name: 'shop2' }])
 
     fireEvent.click(screen.getByRole('button', { name: '+ create domain' }))
     fireEvent.click(screen.getByRole('checkbox', { name: 'require conditional writes' }))
     fireEvent.change(screen.getByLabelText('domain name'), { target: { value: 'shop2' } })
     fireEvent.click(screen.getByRole('button', { name: 'create' }))
     await waitFor(() => expect(screen.queryByLabelText('domain name')).not.toBeInTheDocument())
-    expect(bodies).toEqual({
-      kv: { name: 'shop2', require_conditional_writes: true },
-      json: { name: 'shop2', require_conditional_writes: true },
-      rel: { name: 'shop2' },
-    })
+    expect(bodies).toEqual([{ name: 'shop2' }, { name: 'shop2', require_conditional_writes: { kv: true, json: true } }])
   })
 
   it('shows the conditional writes tag', async () => {
     server.use(
-      ...domainListHandlers(
-        [
-          { name: 'alpha', created_at: 1, require_conditional_writes: true },
-          { name: 'beta', created_at: 1, require_conditional_writes: false },
-          { name: 'gamma', created_at: 1 },
-        ],
-        [
-          { name: 'beta', created_at: 1, state: 'active', require_conditional_writes: true },
-          { name: 'gamma', created_at: 1, state: 'active', require_conditional_writes: false },
-        ],
-        [],
-      ),
-      relTablesHandler('alpha', []),
-      relViewsHandler('alpha', []),
-      kvCountHandler('alpha', 0),
-      jsonDetailHandler('beta', 0),
-      jsonIndexesHandler('beta', 0),
-      kvCountHandler('beta', 0),
-      jsonDetailHandler('gamma', 0),
-      jsonIndexesHandler('gamma', 0),
-      kvCountHandler('gamma', 0),
+      domainsHandler([
+        domainResponse('alpha', { require_conditional_writes: { kv: true, json: false } }),
+        domainResponse('beta', { require_conditional_writes: { kv: false, json: true } }),
+        domainResponse('gamma'),
+      ]),
     )
 
     await connectAndRender()
@@ -433,13 +453,18 @@ describe('Explorer', () => {
     expect(screen.getAllByText('conditional writes', { selector: '.explorer__engine-tags' })).toHaveLength(2)
   })
 
-  it('a fully successful create across all three engines closes the form and invalidates the domain lists', async () => {
+  it('creates a domain with a single POST and closes the form', async () => {
+    let created = false
+    let posts = 0
     server.use(
-      ...domainListHandlers([{ name: 'alpha', created_at: 1 }], [], []),
-      kvCountHandler('alpha', 0),
-      http.post(`${ORIGIN}/store-api/domains`, () => HttpResponse.json({ name: 'shop2', created_at: 1 }, { status: 201 })),
-      http.post(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json({ name: 'shop2', created_at: 1, state: 'active' }, { status: 201 })),
-      http.post(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json({ name: 'shop2', created_at: 1, state: 'active' }, { status: 201 })),
+      http.get(`${ORIGIN}/store-api/domains`, () =>
+        HttpResponse.json(created ? [domainResponse('alpha'), domainResponse('shop2')] : [domainResponse('alpha')]),
+      ),
+      http.post(`${ORIGIN}/store-api/domains`, () => {
+        posts += 1
+        created = true
+        return HttpResponse.json(domainResponse('shop2'), { status: 201 })
+      }),
     )
 
     await connectAndRender()
@@ -451,27 +476,27 @@ describe('Explorer', () => {
 
     await waitFor(() => expect(screen.queryByLabelText('domain name')).not.toBeInTheDocument())
     expect(screen.getByRole('button', { name: '+ create domain' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /▸ shop2/ })).toBeInTheDocument()
+    expect(posts).toBe(1)
   })
 
-  it('shows the empty-state hint only once all three domain lists have settled empty, never while one is still pending', async () => {
-    let releaseKv: (() => void) | undefined
-    const kvGate = new Promise<void>((resolve) => {
-      releaseKv = resolve
+  it('shows the empty-state hint only once the domain list has settled empty, never while it is still pending', async () => {
+    let releaseList: (() => void) | undefined
+    const listGate = new Promise<void>((resolve) => {
+      releaseList = resolve
     })
     server.use(
       http.get(`${ORIGIN}/store-api/domains`, async () => {
-        await kvGate
+        await listGate
         return HttpResponse.json([])
       }),
-      http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
-      http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
     )
 
     await connectAndRender()
 
     expect(screen.queryByText('no domains yet')).not.toBeInTheDocument()
 
-    releaseKv?.()
+    releaseList?.()
 
     expect(await screen.findByText('no domains yet')).toBeInTheDocument()
     expect(screen.getByText('create one to get started')).toBeInTheDocument()
@@ -485,11 +510,7 @@ describe('Explorer', () => {
     HTMLDialogElement.prototype.showModal = function showModalStub(this: HTMLDialogElement) {
       this.setAttribute('open', '')
     }
-    server.use(
-      ...domainListHandlers([], [], [{ name: 'alpha', created_at: 1, state: 'active' }]),
-      relTablesHandler('alpha', []),
-      relViewsHandler('alpha', []),
-    )
+    server.use(domainsHandler([domainResponse('alpha')]))
 
     await connectAndRender()
 
@@ -504,7 +525,7 @@ describe('Explorer', () => {
 
   it('keeps the label "+" available once the rel section already has tables, not just in the empty state', async () => {
     server.use(
-      ...domainListHandlers([], [], [{ name: 'alpha', created_at: 1, state: 'active' }]),
+      domainsHandler([domainResponse('alpha')]),
       relTablesHandler('alpha', ['orders']),
       relTableCountHandler('alpha', 'orders', 3),
       relViewsHandler('alpha', []),
@@ -518,12 +539,7 @@ describe('Explorer', () => {
   })
 
   it('renders only the label row for empty json/kv sections; their "+" navigates to /data with the right engine', async () => {
-    server.use(
-      ...domainListHandlers([{ name: 'alpha', created_at: 1 }], [{ name: 'alpha', created_at: 1, state: 'active' }], []),
-      jsonDetailHandler('alpha', 0),
-      jsonIndexesHandler('alpha', 0),
-      kvCountHandler('alpha', 0),
-    )
+    server.use(domainsHandler([domainResponse('alpha')]))
 
     await connectAndRender()
 
@@ -540,8 +556,8 @@ describe('Explorer', () => {
 
   it('shows the label "+" action alongside the object row once a json/kv section is active', async () => {
     server.use(
-      ...domainListHandlers([{ name: 'alpha', created_at: 1 }], [{ name: 'alpha', created_at: 1, state: 'active' }], []),
-      jsonDetailHandler('alpha', 2),
+      domainsHandler([domainResponse('alpha')]),
+      jsonCountHandler('alpha', 2),
       jsonIndexesHandler('alpha', 0),
       kvCountHandler('alpha', 1),
     )
@@ -555,41 +571,8 @@ describe('Explorer', () => {
     expect(screen.getByRole('button', { name: 'new key' })).toBeInTheDocument()
   })
 
-  it('keeps the "(deleting)" tag on a collapsed row even though the engine holds no more objects', async () => {
-    server.use(
-      ...domainListHandlers(
-        [],
-        [
-          { name: 'first', created_at: 1, state: 'active' },
-          { name: 'shop', created_at: 1, state: 'deleting' },
-        ],
-        [],
-      ),
-      jsonDetailHandler('first', 0),
-      jsonIndexesHandler('first', 0),
-      jsonDetailHandler('shop', 0),
-      jsonIndexesHandler('shop', 0),
-    )
-
-    await connectAndRender()
-
-    expect(await screen.findByText(expandedHeader('first'))).toBeInTheDocument()
-    expect(await screen.findByText('json (deleting)')).toBeInTheDocument()
-  })
-
   it('persists the selected domain across remounts and defaults to the alphabetically first domain otherwise', async () => {
-    server.use(
-      ...domainListHandlers(
-        [
-          { name: 'alpha', created_at: 1 },
-          { name: 'beta', created_at: 1 },
-        ],
-        [],
-        [],
-      ),
-      kvCountHandler('alpha', 0),
-      kvCountHandler('beta', 0),
-    )
+    server.use(domainsHandler([domainResponse('alpha'), domainResponse('beta')]))
 
     const { unmount } = await connectAndRender()
     expect(await screen.findByText(expandedHeader('alpha'))).toBeInTheDocument()
@@ -609,7 +592,7 @@ describe('object counts via the count endpoints (spec shell/010)', () => {
   it('shows the row count on table rows, leaves views without a number and never requests a view count', async () => {
     const countRequests: string[] = []
     server.use(
-      ...domainListHandlers([], [], [{ name: 'alpha', created_at: 1, state: 'active' }]),
+      domainsHandler([domainResponse('alpha')]),
       relTablesHandler('alpha', ['orders', 'order_items']),
       relViewsHandler('alpha', ['v_paid_orders']),
       relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER')]),
@@ -638,7 +621,7 @@ describe('object counts via the count endpoints (spec shell/010)', () => {
 
   it('renders the table row without a number when the count endpoint fails (no 0 on suspicion, no error text)', async () => {
     server.use(
-      ...domainListHandlers([], [], [{ name: 'alpha', created_at: 1, state: 'active' }]),
+      domainsHandler([domainResponse('alpha')]),
       relTablesHandler('alpha', ['orders']),
       relViewsHandler('alpha', []),
       relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER')]),
@@ -657,14 +640,7 @@ describe('object counts via the count endpoints (spec shell/010)', () => {
   it('derives the kv activity from GET …/count (0 => empty, N => active with the count) and never lists keys for it', async () => {
     let keyScans = 0
     server.use(
-      ...domainListHandlers(
-        [
-          { name: 'alpha', created_at: 1 },
-          { name: 'beta', created_at: 1 },
-        ],
-        [],
-        [],
-      ),
+      domainsHandler([domainResponse('alpha'), domainResponse('beta')]),
       http.get(`${ORIGIN}/store-api/kv/:domain/keys`, () => {
         keyScans += 1
         return HttpResponse.json({ keys: ['leak'], total: 1, offset: 0, limit: 1000 })
@@ -684,7 +660,7 @@ describe('object counts via the count endpoints (spec shell/010)', () => {
 
   it('treats a failing kv count as pending: no dot, no tag, no keys row', async () => {
     server.use(
-      ...domainListHandlers([{ name: 'alpha', created_at: 1 }], [], []),
+      domainsHandler([domainResponse('alpha')]),
       http.get(`${ORIGIN}/store-api/kv/alpha/count`, () => HttpResponse.text('Domain not found', { status: 404 })),
     )
 
@@ -701,30 +677,17 @@ describe('polling intervals (spec shell/007)', () => {
   it('gives ExpandedDomain a 30s refetchInterval and useEngineActivity a 60s refetchInterval on their detail/probe queries', async () => {
     useQuerySpy.mockClear()
     server.use(
-      ...domainListHandlers(
-        [
-          { name: 'alpha', created_at: 1 },
-          { name: 'beta', created_at: 1 },
-        ],
-        [
-          { name: 'alpha', created_at: 1, state: 'active' },
-          { name: 'beta', created_at: 1, state: 'active' },
-        ],
-        [
-          { name: 'alpha', created_at: 1, state: 'active' },
-          { name: 'beta', created_at: 1, state: 'active' },
-        ],
-      ),
+      domainsHandler([domainResponse('alpha'), domainResponse('beta')]),
       relTablesHandler('alpha', ['orders']),
       relViewsHandler('alpha', []),
       relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER')]),
       relTableCountHandler('alpha', 'orders', 5),
-      jsonDetailHandler('alpha', 0),
+      jsonCountHandler('alpha', 0),
       jsonIndexesHandler('alpha', 0),
       kvCountHandler('alpha', 0),
       relTablesHandler('beta', []),
       relViewsHandler('beta', []),
-      jsonDetailHandler('beta', 0),
+      jsonCountHandler('beta', 0),
       jsonIndexesHandler('beta', 0),
       kvCountHandler('beta', 0),
     )
@@ -745,7 +708,7 @@ describe('polling intervals (spec shell/007)', () => {
     for (const key of [
       ['rel-tables', 'alpha'],
       ['rel-views', 'alpha'],
-      ['json-domain-detail', 'alpha'],
+      ['json-count', 'alpha'],
       ['json-indexes', 'alpha'],
     ]) {
       const intervals = refetchIntervalsFor(key)
@@ -767,7 +730,7 @@ describe('polling intervals (spec shell/007)', () => {
     for (const key of [
       ['rel-tables', 'beta'],
       ['rel-views', 'beta'],
-      ['json-domain-detail', 'beta'],
+      ['json-count', 'beta'],
       ['json-indexes', 'beta'],
       ['kv-count', 'beta'],
     ]) {

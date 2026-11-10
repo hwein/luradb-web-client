@@ -1,40 +1,48 @@
 import { useQueries } from '@tanstack/react-query'
 import type { ApiClient } from '../../api'
-import { jsonDomainDetailQueryOptions, jsonIndexesQueryOptions, relTablesQueryOptions, relViewsQueryOptions } from '../../shell/domainDetails'
+import {
+  isEngineOff,
+  jsonDocumentCountQueryOptions,
+  jsonIndexesQueryOptions,
+  relTablesQueryOptions,
+  relViewsQueryOptions,
+} from '../../shell/domainDetails'
 
 export interface JsonEngineTotals {
   documentCount: number
   indexCount: number
   loaded: boolean
+  off: boolean
 }
 
 export interface RelEngineTotals {
   tableCount: number
   viewCount: number
   loaded: boolean
+  off: boolean
 }
 
 /**
- * Summiert `document_count`/Index-Anzahl über alle JSON-Domänen (spec engines/001 §3) via den
- * bestehenden Explorer-Query-Options — ein Cache mit shell/domainDetails.ts. Ein Fan-out-Query je
- * Domäne ist O(n); auf der lokalen Instanz mit wenigen Domänen akzeptabel (Orchestrator-Hinweis 3).
+ * Sums document and index counts over all domains (spec engines/001 §3) via the Explorer's
+ * query options — one cache with shell/domainDetails.ts. One fan-out query per domain is O(n).
  */
 export function useJsonEngineTotals(apiClient: ApiClient | undefined, domains: string[]): JsonEngineTotals {
-  const detailQueries = useQueries({
-    queries: domains.map((domain) => jsonDomainDetailQueryOptions(apiClient, domain, true)),
+  const countQueries = useQueries({
+    queries: domains.map((domain) => jsonDocumentCountQueryOptions(apiClient, domain, true)),
   })
   const indexQueries = useQueries({
     queries: domains.map((domain) => jsonIndexesQueryOptions(apiClient, domain, true)),
   })
 
   return {
-    documentCount: detailQueries.reduce((sum, query) => sum + (query.data?.document_count ?? 0), 0),
+    documentCount: countQueries.reduce((sum, query) => sum + (query.data ?? 0), 0),
     indexCount: indexQueries.reduce((sum, query) => sum + (query.data?.length ?? 0), 0),
-    loaded: detailQueries.every((query) => query.isSuccess) && indexQueries.every((query) => query.isSuccess),
+    loaded: countQueries.every((query) => query.isSuccess) && indexQueries.every((query) => query.isSuccess),
+    off: isEngineOff([...countQueries, ...indexQueries]),
   }
 }
 
-/** Summiert Tabellen-/View-Anzahl über alle REL-Domänen (spec engines/001 §3) — selbes Fan-out-Muster wie oben. */
+/** Sums table and view counts over all domains (spec engines/001 §3) — same fan-out pattern as above. */
 export function useRelEngineTotals(apiClient: ApiClient | undefined, domains: string[]): RelEngineTotals {
   const tableQueries = useQueries({
     queries: domains.map((domain) => relTablesQueryOptions(apiClient, domain, true)),
@@ -47,5 +55,6 @@ export function useRelEngineTotals(apiClient: ApiClient | undefined, domains: st
     tableCount: tableQueries.reduce((sum, query) => sum + (query.data?.length ?? 0), 0),
     viewCount: viewQueries.reduce((sum, query) => sum + (query.data?.length ?? 0), 0),
     loaded: tableQueries.every((query) => query.isSuccess) && viewQueries.every((query) => query.isSuccess),
+    off: isEngineOff([...tableQueries, ...viewQueries]),
   }
 }

@@ -43,14 +43,12 @@ async function renderConnectedShell(path = '/sql', whoami: WhoamiMock = ADMIN_WH
       eventStreamOpens += 1
       return new HttpResponse(new ReadableStream<Uint8Array>({ start() {} }), { headers: { 'Content-Type': 'text/event-stream' } })
     }),
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
     http.get(`${ORIGIN}/store-api/auth/whoami`, () => {
       whoamiRequests += 1
       return whoami.body === undefined ? new HttpResponse(null, { status: whoami.status }) : HttpResponse.json(whoami.body, { status: whoami.status })
     }),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/backups`, () => HttpResponse.json({ backups: [], running: null })),
     http.get(`${ORIGIN}/health`, () => HttpResponse.json(health)),
     http.get(`${ORIGIN}/store-api/logs`, () => HttpResponse.text('503 Service Unavailable: log access is disabled (log.http_access = false)', { status: 503 })),
@@ -115,7 +113,7 @@ describe('AppShell', () => {
 
     expect(await screen.findByText('bearer ✓ admin')).toBeInTheDocument()
     expect(await screen.findByText('signed in as admin')).toBeInTheDocument()
-    expect(await screen.findByText('luradb 0.5.1')).toBeInTheDocument()
+    expect(await screen.findByText('luradb 0.7.1')).toBeInTheDocument()
     expect(await screen.findByText('up 1h 11m')).toBeInTheDocument()
     expect(screen.getByText(`${window.location.host} ${BASE_PATH}`)).toBeInTheDocument()
     expect(screen.getByTitle('disconnect')).toHaveTextContent('connected')

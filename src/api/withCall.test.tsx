@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { CallLine, StatusCode } from '../lib'
-import { server } from '../test/msw'
+import { domainResponse, server } from '../test/msw'
 import { createApi } from './client'
 import { withCall } from './withCall'
 
@@ -14,12 +14,12 @@ function makeApi() {
 
 describe('withCall', () => {
   it('resolves the typed data alongside method/path/status/ms call metadata', async () => {
-    server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1700000000 }])))
+    server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([domainResponse('shop')])))
     const { api } = makeApi()
 
     const { data, call } = await withCall('GET', () => api.GET('/store-api/domains'))
 
-    expect(data).toEqual([{ name: 'shop', created_at: 1700000000 }])
+    expect(data).toEqual([domainResponse('shop')])
     expect(call.method).toBe('GET')
     expect(call.path).toBe('/store-api/domains')
     expect(call.status).toBe(200)

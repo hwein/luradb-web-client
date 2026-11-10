@@ -39,8 +39,8 @@ export function RelBrowser({ domain, apiClient, table, filterCol, filterVal }: R
   const [mode, setMode] = useState<RelDetailMode>({ kind: 'empty' })
   const [alterModalOpen, setAlterModalOpen] = useState(false)
 
-  // Gecachte Liste (Explorer nutzt denselben Query-Key) — nur für die KVREF/JSONREF-Engine-Führung im Alter-Table-Assistenten (spec sql/004 §3).
-  const domainSummary = useDomainSummaries(apiClient).find((entry) => entry.name === domain) ?? { name: domain, engines: {} }
+  // Cached list (same query key as the Explorer) for the alter-table assistant (spec sql/004 §3).
+  const domainSummary = useDomainSummaries(apiClient).find((entry) => entry.name === domain) ?? { name: domain, conditionalWrites: [] }
 
   const schemaQuery = useQuery(relTableDetailQueryOptions(apiClient, domain, table, apiClient !== undefined))
   const rowsQuery = useInfiniteQuery(relRowsQueryOptions(apiClient, domain, table, expandOn, !filterActive))

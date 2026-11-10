@@ -10,7 +10,7 @@ import { connect, disconnect } from '../../app/session'
 import { noteReindexStart, resetReindexTasks } from '../../lib'
 import { useSelectedDomain } from '../../shell'
 import { SelectedDomainProvider } from '../../shell/SelectedDomainContext'
-import { server } from '../../test/msw'
+import { domainResponse, server } from '../../test/msw'
 import { resetDocsState, useDocsState } from '../docs/docsStore'
 import { EnginesScreen } from './EnginesScreen'
 
@@ -43,21 +43,12 @@ function makeConnection(): Connection {
 
 function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
-    http.get(`${ORIGIN}/store-api/domains`, () =>
-      HttpResponse.json([
-        { name: 'shop', created_at: 1 },
-        { name: 'sessions', created_at: 2 },
-      ]),
-    ),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1, state: 'active' }])),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1, state: 'active' }])),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
+    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([domainResponse('shop'), domainResponse('sessions', { created_at: 2 })])),
     http.get(`${ORIGIN}/store-api/auth/whoami`, () => HttpResponse.json({ name: 'admin', role: 'Admin' })),
     http.get(`${ORIGIN}/health`, () => HttpResponse.json(HEALTH)),
     http.get(`${ORIGIN}/store-api/metrics`, () => HttpResponse.json(METRICS)),
-    http.get(`${ORIGIN}/store-api/json/domains/shop`, () =>
-      HttpResponse.json({ name: 'shop', created_at: 1, state: 'active', document_count: 42 }),
-    ),
+    http.get(`${ORIGIN}/store-api/json/shop/documents/count`, () => HttpResponse.json({ count: 42 })),
     http.get(`${ORIGIN}/store-api/json/shop/indexes`, () =>
       HttpResponse.json([
         { created_at: 1, field: 'city', type: 'string' },
@@ -71,6 +62,10 @@ function baseHandlers() {
       ]),
     ),
     http.get(`${ORIGIN}/store-api/rel/shop/views`, () => HttpResponse.json([{ name: 'v_paid', created_at: 1, sql: 'SELECT 1' }])),
+    http.get(`${ORIGIN}/store-api/json/sessions/documents/count`, () => HttpResponse.json({ count: 0 })),
+    http.get(`${ORIGIN}/store-api/json/sessions/indexes`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/store-api/rel/sessions/tables`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/store-api/rel/sessions/views`, () => HttpResponse.json([])),
   ]
 }
 
@@ -150,6 +145,21 @@ describe('EnginesScreen', () => {
     expect(document.querySelector('.engines__card--rel .engines__dot--ok')).toBeInTheDocument()
   })
 
+  it('turns the status dot of an engine off when its endpoints answer 503', async () => {
+    await connectAndRender('/engines', [
+      http.get(`${ORIGIN}/store-api/json/:domain/documents/count`, () => HttpResponse.text('JSON engine disabled', { status: 503 })),
+      http.get(`${ORIGIN}/store-api/json/:domain/indexes`, () => HttpResponse.text('JSON engine disabled', { status: 503 })),
+      http.get(`${ORIGIN}/store-api/rel/:domain/tables`, () => HttpResponse.text('Relational engine disabled', { status: 503 })),
+      http.get(`${ORIGIN}/store-api/rel/:domain/views`, () => HttpResponse.text('Relational engine disabled', { status: 503 })),
+    ])
+
+    // the kv dot is on once the domain list has loaded; from then on a json/rel dot goes off only through the 503
+    await waitFor(() => expect(document.querySelector('.engines__card--kv .engines__dot--ok')).toBeInTheDocument())
+    await waitFor(() => expect(document.querySelector('.engines__card--json .engines__dot--ok')).not.toBeInTheDocument())
+    await waitFor(() => expect(document.querySelector('.engines__card--rel .engines__dot--ok')).not.toBeInTheDocument())
+    expect(document.querySelector('.engines__card--kv .engines__dot--ok')).toBeInTheDocument()
+  })
+
   it('"open in: <domain>" selects the domain and navigates into the matching data-browser engine mode', async () => {
     await connectAndRender()
     await waitFor(() => expect(cardText('json')).toContain('42'))
@@ -198,35 +208,23 @@ describe('EnginesScreen', () => {
   )
 
   describe('reindex trigger (spec engines/002)', () => {
-    it('disables the reindex trigger with a reason when there are no JSON domains', async () => {
-      await connectAndRender('/engines', [http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([]))])
+    it('disables the reindex trigger with a reason when there are no domains', async () => {
+      await connectAndRender('/engines', [http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([]))])
 
       const toggle = await screen.findByRole('button', { name: '▶ reindex…' })
       await waitFor(() => expect(toggle).toBeDisabled())
-      expect(toggle).toHaveAttribute('title', 'no JSON domains to reindex')
+      expect(toggle).toHaveAttribute('title', 'no domains to reindex')
     })
 
-    it('excludes deleting JSON domains from the domain dropdown and sources fields from the shared index cache', async () => {
-      await connectAndRender('/engines', [
-        http.get(`${ORIGIN}/store-api/json/domains`, () =>
-          HttpResponse.json([
-            { name: 'shop', created_at: 1, state: 'active' },
-            { name: 'archive', created_at: 2, state: 'deleting' },
-          ]),
-        ),
-        // Die JSON-ENGINE-Karte summiert document_count/Indexe über alle JSON-Domänen (auch deleting) — ohne
-        // Handler hierfür bliebe der Request unhandled und ginge auf das echte Netzwerk (hängt, verhungert
-        // den Connection-Pool nachfolgender Tests).
-        http.get(`${ORIGIN}/store-api/json/domains/archive`, () => HttpResponse.json({ name: 'archive', created_at: 2, state: 'deleting' })),
-        http.get(`${ORIGIN}/store-api/json/archive/indexes`, () => HttpResponse.json([])),
-      ])
+    it('offers every domain of the domain list in the domain dropdown and sources fields from the shared index cache', async () => {
+      await connectAndRender()
 
       const toggle = await screen.findByRole('button', { name: '▶ reindex…' })
       await waitFor(() => expect(toggle).toBeEnabled())
       fireEvent.click(toggle)
 
       const domainSelect = await screen.findByLabelText('reindex domain')
-      expect(within(domainSelect).getAllByRole('option').map((option) => option.textContent)).toEqual(['shop'])
+      expect(within(domainSelect).getAllByRole('option').map((option) => option.textContent)).toEqual(['shop', 'sessions'])
 
       const fieldSelect = screen.getByLabelText('reindex field')
       await waitFor(() =>

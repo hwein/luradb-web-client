@@ -27,8 +27,8 @@ function makeConnection(): Connection {
   }
 }
 
-function makeDomain(overrides?: Partial<DomainSummary['engines']>): DomainSummary {
-  return { name: DOMAIN, engines: { kv: true, json: { state: 'active' }, rel: { state: 'active' }, ...overrides } }
+function makeDomain(): DomainSummary {
+  return { name: DOMAIN, conditionalWrites: [] }
 }
 
 /** id (PK, INTEGER) · total (REAL, plain) · label (TEXT, uniquely indexed — not droppable). */
@@ -98,7 +98,7 @@ function Harness({
 }
 
 async function renderForm(domain: DomainSummary, table: string, tableSchema: TableDetail, onClose: () => void = () => {}) {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })))
+  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })))
   await act(() => connect(makeConnection()))
 
   const queryClient = createAppQueryClient()
@@ -187,18 +187,12 @@ describe('AlterTableForm', () => {
     )
   })
 
-  it('add column: shows the KVREF hint with a docs link, and disables JSONREF (reason names ADD COLUMN) when the domain has no json engine', async () => {
+  it('add column: shows the KVREF hint with a docs link', async () => {
     server.use(tablesHandler([]), viewsHandler([]))
-    await renderForm(makeDomain({ json: undefined }), TABLE, schema())
+    await renderForm(makeDomain(), TABLE, schema())
 
     fireEvent.change(screen.getByLabelText('type'), { target: { value: 'KVREF' } })
     expect(await screen.findByText(/points to a kv key in this domain/)).toBeInTheDocument()
-
-    const typeSelect = screen.getByLabelText('type')
-    const jsonOption = within(typeSelect).getByRole('option', { name: 'JSONREF' })
-    expect(jsonOption).toBeDisabled()
-    expect(jsonOption.getAttribute('title')).toMatch(/json engine not enabled/)
-    expect(jsonOption.getAttribute('title')).toMatch(/ADD COLUMN would fail with 409/)
 
     fireEvent.click(screen.getByRole('button', { name: 'docs' }))
     expect(await screen.findByTestId('docs-route-state')).toHaveTextContent('/docs')

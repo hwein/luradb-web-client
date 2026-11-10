@@ -71,7 +71,7 @@ export function SqlScreen() {
   const queryClient = useQueryClient()
   const { selected } = useSelectedDomain()
   const domains = useDomainSummaries(apiClient)
-  const hasRel = domains.find((domain) => domain.name === selected)?.engines.rel !== undefined
+  const domainListed = domains.some((domain) => domain.name === selected)
 
   const { tabs, activeId } = useSqlState()
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0]
@@ -107,7 +107,7 @@ export function SqlScreen() {
 
   // Eine Quelle für Button-disabled UND Klick-Guard — sonst verpufft ein Klick im Fenster zwischen
   // Domänen-Query und Default-Selektion still (Button schon enabled, selected noch null).
-  const canRun = hasRel && apiClient !== undefined && selected !== null && activeTab !== undefined && paramsError === undefined && !run.isPending
+  const canRun = domainListed && apiClient !== undefined && selected !== null && activeTab !== undefined && paramsError === undefined && !run.isPending
 
   // Live-Handler in Refs, damit die (stabile) CodeMirror-Keymap immer den aktuellen Tab-Stand nutzt.
   const runRef = useRef<() => void>(() => {})
@@ -117,7 +117,7 @@ export function SqlScreen() {
     run.mutate({ apiClient, domain: selected, sql: activeTab.text, expand: activeTab.expand, params: paramsResult.params })
   }
   saveRef.current = () => {
-    if (!hasRel || activeTab === undefined) return
+    if (!domainListed || activeTab === undefined) return
     setSavingView(true)
   }
 
@@ -197,7 +197,7 @@ export function SqlScreen() {
         <SqlToolbar
           apiClient={apiClient}
           domainName={selected}
-          hasRel={hasRel}
+          domainListed={domainListed}
           runDisabled={!canRun}
           expand={activeTab.expand}
           onExpandChange={(expand) => setTabExpand(activeTab.id, expand)}

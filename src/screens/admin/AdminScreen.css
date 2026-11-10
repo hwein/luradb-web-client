@@ -116,10 +116,6 @@
   font-size: 12px;
 }
 
-.admin-domains__row--muted {
-  color: var(--mut);
-}
-
 .admin-domains__name {
   min-width: 0;
   overflow: hidden;

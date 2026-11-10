@@ -8,7 +8,7 @@ import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect } from '../../app/session'
 import { resetReindexTasks, useReindexTasks } from '../../lib'
 import { SelectedDomainProvider } from '../../shell/SelectedDomainContext'
-import { server } from '../../test/msw'
+import { domainResponse, server } from '../../test/msw'
 import { RestScreen } from './RestScreen'
 
 const ORIGIN = window.location.origin
@@ -24,10 +24,8 @@ function makeConnection(): Connection {
 
 function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
-    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: 'default', created_at: 1 }])),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
+    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([domainResponse('default')])),
   ]
 }
 

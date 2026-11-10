@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { http, HttpResponse } from 'msw'
-import { server } from '../test/msw'
+import { domainResponse, server } from '../test/msw'
 import { createApi, type CallInfo } from './client'
 import { ApiError } from './errors'
 
@@ -16,7 +16,7 @@ describe('createApi', () => {
     server.use(
       http.get(`${BASE_URL}/store-api/domains`, ({ request }) => {
         receivedAuth = request.headers.get('Authorization')
-        return HttpResponse.json([{ name: 'shop', created_at: 1700000000 }])
+        return HttpResponse.json([domainResponse('shop')])
       }),
     )
 
@@ -25,7 +25,7 @@ describe('createApi', () => {
 
     expect(receivedAuth).toBe('Bearer test-key')
     expect(error).toBeUndefined()
-    expect(data).toEqual([{ name: 'shop', created_at: 1700000000 }])
+    expect(data).toEqual([domainResponse('shop')])
   })
 
   it('skips the Authorization header when getAuthHeader returns undefined', async () => {

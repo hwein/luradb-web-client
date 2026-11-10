@@ -26,7 +26,7 @@ describe('healthQueryOptions snapshot', () => {
       http.get(`${BASE_URL}/health`, () =>
         HttpResponse.json({
           status: 'ok',
-          version: '0.5.1',
+          version: '0.7.1',
           shards: [{ id: 0, status: 'ok' }],
           resources: { state: 'ok', disk_state: 'ok', memory_state: 'ok' },
           io: { failures: 2 },
@@ -37,7 +37,7 @@ describe('healthQueryOptions snapshot', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(result.current.data).toMatchObject({
       status: 'ok',
-      version: '0.5.1',
+      version: '0.7.1',
       shards: [{ id: '0', status: 'ok' }],
       resources: { state: 'ok', diskState: 'ok', memoryState: 'ok' },
       ioFailures: 2,

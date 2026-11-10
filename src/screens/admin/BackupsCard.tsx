@@ -4,7 +4,7 @@ import { ApiError, type ApiClient } from '../../api'
 import { WHOAMI_KEY } from '../../app/capabilities'
 import { useConnectedSession } from '../../app/session'
 import { formatBytes } from '../../lib'
-import { jsonDomainsQueryOptions, kvDomainsQueryOptions } from '../../shell/domains'
+import { useDomainSummaries } from '../../shell/domains'
 import {
   BACKUPS_KEY,
   backupsQueryOptions,
@@ -206,11 +206,7 @@ function RunForm({ apiClient, onDone }: RunFormProps) {
   const [kind, setKind] = useState<ScopeKind>('all')
   const [domain, setDomain] = useState(ENTIRE_ENGINE)
   const [includeAuth, setIncludeAuth] = useState(false)
-  const kvDomains = useQuery(kvDomainsQueryOptions(apiClient)).data ?? []
-  const jsonDomains = useQuery(jsonDomainsQueryOptions(apiClient)).data ?? []
-
-  const engineDomains = (kind === 'json' ? jsonDomains : kvDomains).map((entry) => entry.name)
-  const allDomains = [...new Set([...kvDomains.map((entry) => entry.name), ...jsonDomains.map((entry) => entry.name)])].sort()
+  const domainNames = useDomainSummaries(apiClient).map((entry) => entry.name)
   const scope = kind === 'all' ? 'all' : domain === ENTIRE_ENGINE ? kind : `${kind}:${domain}`
   const authAllowed = scope === 'all' || scope === 'kv'
   const effectiveAuth = includeAuth && authAllowed
@@ -253,7 +249,7 @@ function RunForm({ apiClient, onDone }: RunFormProps) {
           >
             {kind !== 'domain' && <option value={ENTIRE_ENGINE}>entire engine</option>}
             {kind === 'domain' && <option value={ENTIRE_ENGINE}>select a domain</option>}
-            {(kind === 'domain' ? allDomains : engineDomains).map((name) => (
+            {domainNames.map((name) => (
               <option key={name} value={name}>
                 {name}
               </option>

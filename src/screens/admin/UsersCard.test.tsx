@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect, useSession } from '../../app/session'
-import { server } from '../../test/msw'
+import { DOMAINS_KEY } from '../../shell/domains'
+import { domainResponse, server } from '../../test/msw'
 import { UsersCard } from './UsersCard'
 
 const ORIGIN = window.location.origin
@@ -34,17 +35,15 @@ function renderConnected() {
   )
 }
 
-/** Ein einzelner kv-Domain "shop" für jeden Test — reicht für Spalten- und Zell-Zyklus-Assertions. */
+/** A single domain "shop" for every test — enough for the column and cell-cycle assertions. */
 function domainHandlers() {
   return [
-    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1 }])),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([domainResponse('shop')])),
   ]
 }
 
 function versionHandler() {
-  return http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' }))
+  return http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' }))
 }
 
 afterEach(() => {
@@ -80,7 +79,7 @@ describe('UsersCard', () => {
   })
 
   it('cycles a cell read → read+write → — → read, one POST/DELETE per click, committing the chip only on success', async () => {
-    const calls: { method: string; body?: unknown; storeType?: string | null }[] = []
+    const calls: { method: string; body?: unknown; query?: string }[] = []
     server.use(
       versionHandler(),
       ...domainHandlers(),
@@ -90,7 +89,7 @@ describe('UsersCard', () => {
         return new HttpResponse(null, { status: 200 })
       }),
       http.delete(`${ORIGIN}/store-api/auth/users/shop-svc/permissions/shop`, ({ request }) => {
-        calls.push({ method: 'DELETE', storeType: new URL(request.url).searchParams.get('store_type') })
+        calls.push({ method: 'DELETE', query: new URL(request.url).search })
         return new HttpResponse(null, { status: 204 })
       }),
     )
@@ -103,19 +102,48 @@ describe('UsersCard', () => {
 
     fireEvent.click(cell)
     await waitFor(() => expect(cell.textContent).toBe('read'))
-    expect(calls[0]).toEqual({ method: 'POST', body: { domain: 'shop', access: 'read', store_type: 'kv' } })
+    expect(calls[0]).toEqual({ method: 'POST', body: { domain: 'shop', access: 'read' } })
 
     fireEvent.click(cell)
     await waitFor(() => expect(cell.textContent).toBe('read+write'))
-    expect(calls[1]).toEqual({ method: 'POST', body: { domain: 'shop', access: 'write', store_type: 'kv' } })
+    expect(calls[1]).toEqual({ method: 'POST', body: { domain: 'shop', access: 'write' } })
 
     fireEvent.click(cell)
     await waitFor(() => expect(cell.textContent).toBe('—'))
-    expect(calls[2]).toEqual({ method: 'DELETE', storeType: 'kv' })
+    expect(calls[2]).toEqual({ method: 'DELETE', query: '' })
 
     fireEvent.click(cell)
     await waitFor(() => expect(cell.textContent).toBe('read'))
-    expect(calls[3]).toEqual({ method: 'POST', body: { domain: 'shop', access: 'read', store_type: 'kv' } })
+    expect(calls[3]).toEqual({ method: 'POST', body: { domain: 'shop', access: 'read' } })
+  })
+
+  it('forgets a remembered cell once its domain has left the domain list', async () => {
+    let domains = [domainResponse('shop')]
+    server.use(
+      versionHandler(),
+      http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json(domains)),
+      http.get(`${ORIGIN}/store-api/auth/users`, () => HttpResponse.json([{ name: 'shop-svc', role: 'User', created_at: 1 }])),
+      http.post(`${ORIGIN}/store-api/auth/users/shop-svc/permissions`, () => new HttpResponse(null, { status: 200 })),
+    )
+    await act(() => connect(makeConnection()))
+    const queryClient = createAppQueryClient()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConnectedUsersCard />
+      </QueryClientProvider>,
+    )
+
+    const row = (await screen.findByText('shop-svc')).closest('.admin-users__item') as HTMLElement
+    fireEvent.click(row.querySelector('.admin-users__cell') as HTMLButtonElement)
+    await waitFor(() => expect(row.querySelector('.admin-users__cell')?.textContent).toBe('read'))
+
+    domains = []
+    await act(() => queryClient.invalidateQueries({ queryKey: DOMAINS_KEY }))
+    await waitFor(() => expect(row.querySelector('.admin-users__cell')).not.toBeInTheDocument())
+
+    domains = [domainResponse('shop')]
+    await act(() => queryClient.invalidateQueries({ queryKey: DOMAINS_KEY }))
+    await waitFor(() => expect(row.querySelector('.admin-users__cell')?.textContent).toBe('?'))
   })
 
   it('a failed permission POST leaves the cell at its previous value and shows a red inline error', async () => {

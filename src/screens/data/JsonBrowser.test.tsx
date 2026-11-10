@@ -2,13 +2,13 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect } from '../../app/session'
 import { resetReindexTasks } from '../../lib'
 import { SelectedDomainProvider } from '../../shell/SelectedDomainContext'
-import { server } from '../../test/msw'
+import { domainResponse, server } from '../../test/msw'
 import { resetDocsState, useDocsState } from '../docs/docsStore'
 import { DataScreen } from './DataScreen'
 
@@ -27,14 +27,10 @@ function makeConnection(): Connection {
   }
 }
 
-function baseHandlers(relDomain: boolean) {
+function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
-    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([{ name: DOMAIN, created_at: 1, state: 'active' }])),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () =>
-      HttpResponse.json(relDomain ? [{ name: DOMAIN, created_at: 1, state: 'active' }] : []),
-    ),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
+    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([domainResponse(DOMAIN)])),
     http.get(`${ORIGIN}/store-api/json/${DOMAIN}/indexes`, () => HttpResponse.json([])),
   ]
 }
@@ -52,8 +48,8 @@ function DocsRouteProbe() {
 
 // `extraHandlers` kommen vor den Basis-Handlern in denselben `server.use()`-Aufruf (MSW: pro Aufruf gewinnt die
 // zuerst gelistete Route) — sonst würde `baseHandlers`' fixe `GET …/indexes → []` jeden Test-Override verdecken.
-async function connectAndRender(relDomain = false, extraHandlers: Parameters<typeof server.use> = [], initialPath = '/data') {
-  server.use(...extraHandlers, ...baseHandlers(relDomain))
+async function connectAndRender(extraHandlers: Parameters<typeof server.use> = [], initialPath = '/data') {
+  server.use(...extraHandlers, ...baseHandlers())
   await act(() => connect(makeConnection()))
   const queryClient = createAppQueryClient()
   const view = render(
@@ -75,6 +71,11 @@ function footerText(): string {
   return document.querySelector('.data__footer')?.textContent ?? ''
 }
 
+// Referenced-by probes the rel tables of every domain; a test's own handler is registered later and wins.
+beforeEach(() => {
+  server.use(http.get(`${ORIGIN}/store-api/rel/${DOMAIN}/tables`, () => HttpResponse.json([])))
+})
+
 afterEach(() => {
   act(() => disconnect())
   resetDocsState()
@@ -90,7 +91,6 @@ async function openIndexPanel(): Promise<void> {
 describe('JsonBrowser', () => {
   it('arrives with ?key= (cross-engine jump from the rel row detail): selects that document initially, loaded independently of the listed page (spec data/009 §5)', async () => {
     await connectAndRender(
-      false,
       [
         http.get(DOCS_URL, () =>
           HttpResponse.json({
@@ -112,7 +112,7 @@ describe('JsonBrowser', () => {
 
   it('keeps the ?key= arrival selection when the document list is already in the query cache (nachtrag data/009: auto-select overwrote it)', async () => {
     // Erster Besuch ohne ?key= füllt den Query-Cache (Auto-Select auf das erste Dokument), dann Ankunft per Jump.
-    const { queryClient, unmount } = await connectAndRender(false, [
+    const { queryClient, unmount } = await connectAndRender([
       http.get(DOCS_URL, () =>
         HttpResponse.json({
           documents: [{ _key: 'cus_1', _version: 1, name: 'first' }],
@@ -499,7 +499,7 @@ describe('JsonBrowser', () => {
         HttpResponse.json({ columns: [{ name: 'COUNT(*)', type: 'INTEGER' }], rows: [[3]], row_count: 1, limit_applied: false }),
       ),
     )
-    await connectAndRender(true)
+    await connectAndRender()
 
     expect(await screen.findByText('entrances.door_id · 3 rows')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'delete' }))
@@ -644,7 +644,7 @@ describe('JsonBrowser', () => {
         })
       }),
     )
-    await connectAndRender(true)
+    await connectAndRender()
 
     expect(await screen.findByText('orders.customer_ref · 6 rows')).toBeInTheDocument()
 
@@ -685,7 +685,7 @@ describe('JsonBrowser', () => {
         HttpResponse.json({ columns: [{ name: 'COUNT(*)', type: 'INTEGER' }], rows: [[0]], row_count: 1, limit_applied: false }),
       ),
     )
-    await connectAndRender(true)
+    await connectAndRender()
 
     expect(await screen.findByText('orders.customer_ref · 0 rows')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /orders\.customer_ref/ })).toBeDisabled()
@@ -724,7 +724,7 @@ describe('JsonBrowser', () => {
         HttpResponse.json({ columns: [{ name: 'COUNT(*)', type: 'INTEGER' }], rows: [[3]], row_count: 1, limit_applied: false }),
       ),
     )
-    await connectAndRender(true)
+    await connectAndRender()
 
     expect(await screen.findByText('entrances.door_id · 3 rows')).toBeInTheDocument()
 
@@ -806,7 +806,7 @@ describe('JsonBrowser', () => {
     const emptyDocs = http.get(DOCS_URL, () => HttpResponse.json({ documents: [], keys: [], total: 0, offset: 0, limit: 50 }))
 
     it('toggles the idx pill open and renders the index list in contract form (field · type · created)', async () => {
-      await connectAndRender(false, [emptyDocs, http.get(INDEXES_URL, () => HttpResponse.json([{ field: 'city', type: 'string', created_at: 1 }]))])
+      await connectAndRender([emptyDocs, http.get(INDEXES_URL, () => HttpResponse.json([{ field: 'city', type: 'string', created_at: 1 }]))])
 
       await openIndexPanel()
 
@@ -817,7 +817,7 @@ describe('JsonBrowser', () => {
     it('create success invalidates the shared cache (pill text updates) and shows the reindex hint', async () => {
       let created = false
       let requestBody: unknown
-      await connectAndRender(false, [
+      await connectAndRender([
         emptyDocs,
         http.get(INDEXES_URL, () => HttpResponse.json(created ? [{ field: 'city', type: 'string', created_at: 1 }] : [])),
         http.post(INDEXES_URL, async ({ request }) => {
@@ -839,7 +839,7 @@ describe('JsonBrowser', () => {
     })
 
     it('create 409 shows the original server error text inline', async () => {
-      await connectAndRender(false, [
+      await connectAndRender([
         emptyDocs,
         http.get(INDEXES_URL, () => HttpResponse.json([])),
         http.post(INDEXES_URL, () => HttpResponse.text("index on field 'city' already exists in domain 'shop'", { status: 409 })),
@@ -854,7 +854,7 @@ describe('JsonBrowser', () => {
 
     it('delete removes the row from the (invalidated) list', async () => {
       let deleted = false
-      await connectAndRender(false, [
+      await connectAndRender([
         emptyDocs,
         http.get(INDEXES_URL, () => HttpResponse.json(deleted ? [] : [{ field: 'city', type: 'string', created_at: 1 }])),
         http.delete(`${INDEXES_URL}/city`, () => {
@@ -873,7 +873,7 @@ describe('JsonBrowser', () => {
 
     it('"reindex now" calls startReindex with domain + the newly created field', async () => {
       let reindexBody: unknown
-      await connectAndRender(false, [
+      await connectAndRender([
         emptyDocs,
         http.get(INDEXES_URL, () => HttpResponse.json([])),
         http.post(INDEXES_URL, () => HttpResponse.json({ field: 'city', type: 'string', created_at: 1 }, { status: 201 })),

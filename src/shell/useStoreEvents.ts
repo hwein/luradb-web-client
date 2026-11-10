@@ -6,7 +6,7 @@ import { disconnect, useConnectedSession } from '../app/session'
 import { sseStream } from '../lib/sse'
 import { invalidateAllStoreQueries, invalidationTargetsFor, parseStoreEvent } from './storeEvents'
 
-/** Präzedenz: `INVALIDATE_DEBOUNCE_MS` im KV-Watch-Feed. Eine Domänen-Kaskade sind bis zu sechs Frames in Millisekunden. */
+/** Precedent: `INVALIDATE_DEBOUNCE_MS` in the KV watch feed. A resume replay delivers many frames within milliseconds. */
 const INVALIDATE_DEBOUNCE_MS = 300
 
 /**

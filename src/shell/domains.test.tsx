@@ -5,17 +5,8 @@ import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
 import { createApi, type ApiClient, type CallInfo } from '../api'
 import { createAppQueryClient } from '../app/queryClient'
-import { server } from '../test/msw'
-import {
-  createJsonDomain,
-  createKvDomain,
-  createRelDomain,
-  jsonDomainsQueryOptions,
-  kvDomainsQueryOptions,
-  relDomainsQueryOptions,
-  useDomainsPending,
-  useDomainSummaries,
-} from './domains'
+import { domainResponse, server } from '../test/msw'
+import { createDomain, deleteDomain, domainsQueryOptions, useDomainsPending, useDomainSummaries } from './domains'
 
 const BASE_URL = 'http://127.0.0.1:3000'
 
@@ -29,9 +20,7 @@ function DomainsProbe({ apiClient }: { apiClient: ApiClient }) {
     <ul>
       {domains.map((domain) => (
         <li key={domain.name} data-testid={`domain-${domain.name}`}>
-          {[domain.engines.kv && 'kv', domain.engines.json && `json:${domain.engines.json.state}`, domain.engines.rel && `rel:${domain.engines.rel.state}`]
-            .filter(Boolean)
-            .join(',')}
+          {domain.conditionalWrites.join(',')}
         </li>
       ))}
     </ul>
@@ -47,15 +36,11 @@ function renderProbe(apiClient: ApiClient) {
   )
 }
 
-describe('kvDomainsQueryOptions / jsonDomainsQueryOptions / relDomainsQueryOptions', () => {
-  it('poll every 30s so foreign changes to the domain lists surface without user action (spec shell/007 §1)', () => {
-    expect(kvDomainsQueryOptions(undefined).refetchInterval).toBe(30_000)
-    expect(jsonDomainsQueryOptions(undefined).refetchInterval).toBe(30_000)
-    expect(relDomainsQueryOptions(undefined).refetchInterval).toBe(30_000)
+describe('domainsQueryOptions', () => {
+  it('polls every 30s so foreign changes to the domain list surface without user action (spec shell/007 §1)', () => {
+    expect(domainsQueryOptions(undefined).refetchInterval).toBe(30_000)
   })
-})
 
-describe('kvDomainsQueryOptions recorder behaviour (general/012)', () => {
   it('records the first load (Erst-Load), then stays silent on a refetch once the query already has cached data', async () => {
     let requests = 0
     server.use(
@@ -70,7 +55,7 @@ describe('kvDomainsQueryOptions recorder behaviour (general/012)', () => {
     const queryClient = createAppQueryClient()
     const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 
-    const { result } = renderHook(() => useQuery(kvDomainsQueryOptions(apiClient)), { wrapper })
+    const { result } = renderHook(() => useQuery(domainsQueryOptions(apiClient)), { wrapper })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(requests).toBe(1)
@@ -83,45 +68,24 @@ describe('kvDomainsQueryOptions recorder behaviour (general/012)', () => {
 })
 
 describe('useDomainSummaries', () => {
-  it('unions domains present in one, two, or three engines, sorted alphabetically', async () => {
+  it('lists domains from GET /store-api/domains, sorted alphabetically', async () => {
     server.use(
       http.get(`${BASE_URL}/store-api/domains`, () =>
         HttpResponse.json([
-          { name: 'only-kv', created_at: 1 },
-          { name: 'kv-json', created_at: 1 },
-          { name: 'all-three', created_at: 1 },
+          domainResponse('shop'),
+          domainResponse('audit', { require_conditional_writes: { kv: true, json: true } }),
+          domainResponse('logs'),
         ]),
       ),
-      http.get(`${BASE_URL}/store-api/json/domains`, () =>
-        HttpResponse.json([
-          { name: 'kv-json', created_at: 1, state: 'active' },
-          { name: 'all-three', created_at: 1, state: 'active' },
-        ]),
-      ),
-      http.get(`${BASE_URL}/store-api/rel/domains`, () => HttpResponse.json([{ name: 'all-three', created_at: 1, state: 'active' }])),
     )
 
     renderProbe(makeApiClient())
 
-    await waitFor(() => expect(screen.getByTestId('domain-all-three')).toHaveTextContent('kv,json:active,rel:active'))
-    expect(screen.getByTestId('domain-kv-json')).toHaveTextContent('kv,json:active')
-    expect(screen.getByTestId('domain-only-kv')).toHaveTextContent('kv')
-
+    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(3))
     const items = screen.getAllByRole('listitem')
-    expect(items.map((item) => item.dataset.testid)).toEqual(['domain-all-three', 'domain-kv-json', 'domain-only-kv'])
-  })
-
-  it('treats an unreachable engine list as down and still unions the reachable ones', async () => {
-    server.use(
-      http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1 }])),
-      http.get(`${BASE_URL}/store-api/json/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1, state: 'active' }])),
-      http.get(`${BASE_URL}/store-api/rel/domains`, () => new HttpResponse(null, { status: 500 })),
-    )
-
-    renderProbe(makeApiClient())
-
-    await waitFor(() => expect(screen.getByTestId('domain-shop')).toHaveTextContent('kv,json:active'))
-    expect(screen.getByTestId('domain-shop')).not.toHaveTextContent('rel:')
+    expect(items.map((item) => item.dataset.testid)).toEqual(['domain-audit', 'domain-logs', 'domain-shop'])
+    expect(screen.getByTestId('domain-audit')).toHaveTextContent('kv,json')
+    expect(screen.getByTestId('domain-shop')).toHaveTextContent('')
   })
 })
 
@@ -140,12 +104,8 @@ function renderPendingProbe(apiClient: ApiClient | undefined) {
 }
 
 describe('useDomainsPending', () => {
-  it('is true until all three list queries have settled, then false', async () => {
-    server.use(
-      http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([])),
-      http.get(`${BASE_URL}/store-api/json/domains`, () => HttpResponse.json([])),
-      http.get(`${BASE_URL}/store-api/rel/domains`, () => HttpResponse.json([])),
-    )
+  it('is true until the domain list has settled, then false', async () => {
+    server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([])))
 
     renderPendingProbe(makeApiClient())
 
@@ -160,19 +120,42 @@ describe('useDomainsPending', () => {
   })
 })
 
-describe('createKvDomain / createJsonDomain / createRelDomain', () => {
-  it('resolves on success', async () => {
-    server.use(http.post(`${BASE_URL}/store-api/domains`, () => HttpResponse.json({ name: 'shop', created_at: 1 }, { status: 201 })))
-    await expect(createKvDomain(makeApiClient(), 'shop')).resolves.toBeUndefined()
+describe('createDomain', () => {
+  it('creates a domain with one POST /store-api/domains', async () => {
+    const bodies: unknown[] = []
+    server.use(
+      http.post(`${BASE_URL}/store-api/domains`, async ({ request }) => {
+        bodies.push(await request.json())
+        return HttpResponse.json(domainResponse('shop'), { status: 201 })
+      }),
+    )
+
+    await expect(createDomain(makeApiClient(), 'shop')).resolves.toBeUndefined()
+    expect(bodies).toEqual([{ name: 'shop' }])
   })
 
   it('throws an ApiError with a dedicated message on 409', async () => {
-    server.use(http.post(`${BASE_URL}/store-api/json/domains`, () => new HttpResponse(null, { status: 409 })))
-    await expect(createJsonDomain(makeApiClient(), 'shop')).rejects.toMatchObject({ status: 409, message: 'domain already exists' })
+    server.use(http.post(`${BASE_URL}/store-api/domains`, () => new HttpResponse(null, { status: 409 })))
+    await expect(createDomain(makeApiClient(), 'shop')).rejects.toMatchObject({ status: 409, message: 'domain already exists' })
   })
 
   it('throws an ApiError carrying the status on other failures', async () => {
-    server.use(http.post(`${BASE_URL}/store-api/rel/domains`, () => new HttpResponse(null, { status: 400 })))
-    await expect(createRelDomain(makeApiClient(), 'bad name')).rejects.toMatchObject({ status: 400 })
+    server.use(http.post(`${BASE_URL}/store-api/domains`, () => new HttpResponse(null, { status: 400 })))
+    await expect(createDomain(makeApiClient(), 'bad name')).rejects.toMatchObject({ status: 400 })
+  })
+})
+
+describe('deleteDomain', () => {
+  it('deletes a domain with one DELETE /store-api/domains/{name}', async () => {
+    const paths: string[] = []
+    server.use(
+      http.delete(`${BASE_URL}/store-api/domains/:name`, ({ request }) => {
+        paths.push(new URL(request.url).pathname)
+        return new HttpResponse(null, { status: 202 })
+      }),
+    )
+
+    await expect(deleteDomain(makeApiClient(), 'shop')).resolves.toBeUndefined()
+    expect(paths).toEqual(['/store-api/domains/shop'])
   })
 })

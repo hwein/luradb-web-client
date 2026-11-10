@@ -8,12 +8,12 @@ import type { Connection } from '../app/connections'
 import { createAppQueryClient } from '../app/queryClient'
 import { connect, disconnect, useSession } from '../app/session'
 import { server } from '../test/msw'
-import { JSON_DOMAINS_KEY, KV_DOMAINS_KEY, REL_DOMAINS_KEY } from './domains'
+import { DOMAINS_KEY } from './domains'
 import { useStoreEvents } from './useStoreEvents'
 
 const ORIGIN = window.location.origin
 const encoder = new TextEncoder()
-const ALL_STORE_KEYS = [KV_DOMAINS_KEY, JSON_DOMAINS_KEY, REL_DOMAINS_KEY, ['rel-tables'], ['rel-views'], ['json-indexes']]
+const ALL_STORE_KEYS = [DOMAINS_KEY, ['rel-tables'], ['rel-views'], ['json-indexes']]
 /** Mehrfaches Debounce-Fenster des Hooks (300 ms) — danach hätte ein gelesener Frame längst invalidiert. */
 const PAST_DEBOUNCE_MS = 900
 
@@ -32,7 +32,7 @@ const userWhoami: HttpResponseResolver = () => HttpResponse.json({ name: 'alice'
 /** Verbindet und liefert den ApiClient der Sitzung — Aufhänger für den `openStream`-Spy. */
 async function connectSession(whoami: HttpResponseResolver = adminWhoami): Promise<ApiClient> {
   server.use(
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
     http.get(`${ORIGIN}/store-api/auth/whoami`, whoami),
   )
   await act(() => connect(makeConnection()))
@@ -71,7 +71,7 @@ function reconnectingStream() {
   })
 }
 
-function storeFrame(id: string, type: string, payload: { engine: string; domain: string; object?: string }): string {
+function storeFrame(id: string, type: string, payload: { engine?: string; domain: string; object?: string }): string {
   return `id: ${id}\nevent: ${type}\ndata: ${JSON.stringify({ ...payload, type, ts: 1788007646 })}\n\n`
 }
 
@@ -174,10 +174,10 @@ describe('useStoreEvents', () => {
     await connectSession()
     server.use(
       eventStream([
-        storeFrame('g-a-1', 'domain_created', { engine: 'kv', domain: 'probe' }),
-        storeFrame('g-a-2', 'domain_created', { engine: 'json', domain: 'probe' }),
-        storeFrame('g-a-3', 'domain_created', { engine: 'rel', domain: 'probe' }),
-        storeFrame('g-a-4', 'domain_created', { engine: 'kv', domain: 'probe' }),
+        storeFrame('g-a-1', 'domain_created', { domain: 'probe' }),
+        storeFrame('g-a-2', 'table_created', { engine: 'rel', domain: 'probe', object: 't1' }),
+        storeFrame('g-a-3', 'domain_deleted', { domain: 'other' }),
+        storeFrame('g-a-4', 'table_created', { engine: 'rel', domain: 'probe', object: 't2' }),
       ]),
     )
     const { queryClient, invalidate } = probeQueryClient()
@@ -185,7 +185,7 @@ describe('useStoreEvents', () => {
     renderProbe(queryClient)
 
     await waitFor(() => expect(invalidate).toHaveBeenCalled())
-    expect(invalidatedKeys(invalidate)).toEqual([KV_DOMAINS_KEY, JSON_DOMAINS_KEY, REL_DOMAINS_KEY])
+    expect(invalidatedKeys(invalidate)).toEqual([DOMAINS_KEY, ['rel-tables', 'probe']])
   })
 
   it('ignores frames without a mapped target', async () => {

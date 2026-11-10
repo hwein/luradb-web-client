@@ -7,7 +7,7 @@ import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect } from '../../app/session'
 import { SelectedDomainProvider } from '../../shell/SelectedDomainContext'
-import { server } from '../../test/msw'
+import { domainResponse, server } from '../../test/msw'
 import { SqlScreen } from './SqlScreen'
 import { resetSqlState } from './sqlStore'
 
@@ -25,10 +25,8 @@ function makeConnection(): Connection {
 
 function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
-    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([{ name: 'shop', state: 'active', created_at: 1 }])),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
+    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([domainResponse('shop')])),
     http.get(`${ORIGIN}/store-api/rel/shop/tables`, () => HttpResponse.json([{ name: 'orders', _links: { self: '', rows: '' } }])),
     http.get(`${ORIGIN}/store-api/rel/shop/tables/orders`, () =>
       HttpResponse.json({

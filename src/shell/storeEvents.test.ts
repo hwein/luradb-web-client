@@ -1,7 +1,7 @@
 import { QueryClient, type QueryKey } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import type { SseEvent } from '../lib/sse'
-import { JSON_DOMAINS_KEY, KV_DOMAINS_KEY, REL_DOMAINS_KEY } from './domains'
+import { DOMAINS_KEY } from './domains'
 import { invalidateAllStoreQueries, invalidationTargetsFor, parseStoreEvent, type StoreEvent } from './storeEvents'
 import { jsonIndexesQueryOptions, relTablesQueryOptions, relViewsQueryOptions } from './domainDetails'
 
@@ -21,9 +21,8 @@ describe('parseStoreEvent', () => {
     expect(parsed).toEqual({ engine: 'rel', type: 'table_created', domain: 'probe', object: 't1', ts: 1788007646 })
   })
 
-  it('reads a domain frame without an object field', () => {
-    expect(parseStoreEvent(frame('{"engine":"kv","type":"domain_created","domain":"probe","ts":17}', 'domain_created'))).toEqual({
-      engine: 'kv',
+  it('reads a domain frame without an engine or object field', () => {
+    expect(parseStoreEvent(frame('{"type":"domain_created","domain":"probe","ts":17}', 'domain_created'))).toEqual({
       type: 'domain_created',
       domain: 'probe',
       ts: 17,
@@ -34,7 +33,6 @@ describe('parseStoreEvent', () => {
     ['broken json', 'not json at all'],
     ['a json non-object', '"just a string"'],
     ['a missing domain', '{"engine":"rel","type":"table_created","ts":17}'],
-    ['a missing engine', '{"type":"table_created","domain":"probe","ts":17}'],
     ['an unknown engine', '{"engine":"graph","type":"table_created","domain":"probe","ts":17}'],
   ])('returns undefined for %s — without throwing or logging', (_case, data) => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -50,16 +48,19 @@ describe('parseStoreEvent', () => {
 })
 
 function event(engine: StoreEvent['engine'], type: string, object?: string): StoreEvent {
-  return { engine, type, domain: 'probe', ...(object === undefined ? {} : { object }), ts: 17 }
+  return { ...(engine === undefined ? {} : { engine }), type, domain: 'probe', ...(object === undefined ? {} : { object }), ts: 17 }
 }
 
 describe('invalidationTargetsFor', () => {
+  it('invalidates the domain list for a domain event without an engine field', () => {
+    const parsed = parseStoreEvent(frame('{"type":"domain_created","domain":"probe","ts":17}', 'domain_created'))
+
+    expect(parsed && invalidationTargetsFor(parsed)).toEqual([DOMAINS_KEY])
+  })
+
   it.each<[string, StoreEvent, QueryKey[]]>([
-    ['domain_created (kv) invalidates the kv domain list', event('kv', 'domain_created'), [KV_DOMAINS_KEY]],
-    ['domain_created (json) invalidates the json domain list', event('json', 'domain_created'), [JSON_DOMAINS_KEY]],
-    ['domain_created (rel) invalidates the rel domain list', event('rel', 'domain_created'), [REL_DOMAINS_KEY]],
-    ['domain_deleted invalidates the list of its engine', event('json', 'domain_deleted'), [JSON_DOMAINS_KEY]],
-    ['domain_purged invalidates the list of its engine', event('rel', 'domain_purged'), [REL_DOMAINS_KEY]],
+    ['domain_deleted invalidates the domain list', event(undefined, 'domain_deleted'), [DOMAINS_KEY]],
+    ['domain_purged invalidates the domain list', event(undefined, 'domain_purged'), [DOMAINS_KEY]],
     ['table_created invalidates the table list', event('rel', 'table_created', 't1'), [REL_TABLES_KEY]],
     ['table_dropped invalidates the table list', event('rel', 'table_dropped', 't1'), [REL_TABLES_KEY]],
     ['view_created invalidates the view list', event('rel', 'view_created', 'v1'), [REL_VIEWS_KEY]],
@@ -76,16 +77,14 @@ describe('invalidationTargetsFor', () => {
 })
 
 describe('invalidateAllStoreQueries', () => {
-  it('invalidates the six explorer prefixes and nothing else', () => {
+  it('invalidates the four explorer prefixes and nothing else', () => {
     const queryClient = new QueryClient()
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
 
     invalidateAllStoreQueries(queryClient)
 
     expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
-      KV_DOMAINS_KEY,
-      JSON_DOMAINS_KEY,
-      REL_DOMAINS_KEY,
+      DOMAINS_KEY,
       ['rel-tables'],
       ['rel-views'],
       ['json-indexes'],

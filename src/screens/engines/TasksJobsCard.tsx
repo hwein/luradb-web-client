@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import type { ApiClient } from '../../api'
 import { updateReindexTaskStatus, useReindexTasks, type ReindexTask } from '../../lib/tasks'
 import { jsonIndexesQueryOptions } from '../../shell/domainDetails'
-import { jsonDomainsQueryOptions } from '../../shell/domains'
+import { domainsQueryOptions } from '../../shell/domains'
 import { formatNumber } from '../../lib'
 import type { SystemMetrics } from './metrics'
 import { reindexStatusQueryOptions } from './reindexPoll'
@@ -138,8 +138,7 @@ function ReindexTriggerForm({ apiClient, domains, onClose }: { apiClient: ApiCli
 export function TasksJobsCard({ apiClient, system }: TasksJobsCardProps) {
   const tasks = useReindexTasks()
   const [formOpen, setFormOpen] = useState(false)
-  const jsonDomainsQuery = useQuery(jsonDomainsQueryOptions(apiClient))
-  const domains = (jsonDomainsQuery.data ?? []).filter((domain) => domain.state !== 'deleting').map((domain) => domain.name)
+  const domains = (useQuery(domainsQueryOptions(apiClient)).data ?? []).map((domain) => domain.name)
   const triggerDisabled = domains.length === 0
 
   return (
@@ -150,7 +149,7 @@ export function TasksJobsCard({ apiClient, system }: TasksJobsCardProps) {
           type="button"
           className="engines__reindex-toggle"
           disabled={triggerDisabled}
-          title={triggerDisabled ? 'no JSON domains to reindex' : undefined}
+          title={triggerDisabled ? 'no domains to reindex' : undefined}
           onClick={() => setFormOpen((open) => !open)}
         >
           ▶ reindex…

@@ -100,10 +100,9 @@ function messageOf(error: unknown): string {
 }
 
 /**
- * UI-freier Fanout-Kern (spec §5): `concurrency` parallele Worker ziehen von derselben Key-Liste,
- * `allSettled`-Semantik wie die Löschkaskade (engineCascade.ts) — ein Fehlschlag bricht die übrigen
- * Keys nicht ab. `executeOp` ist injiziert, damit Tests die Parallelitäts-Schranke ohne Fake-Timer
- * über gezielt aufgelöste Promises prüfen können (spec §7).
+ * UI-free fan-out core (spec §5): `concurrency` parallel workers pull from the same key list with
+ * `allSettled` semantics — one failure does not stop the remaining keys. `executeOp` is injected so tests
+ * can check the concurrency limit without fake timers via deliberately resolved promises (spec §7).
  */
 export async function runKvBulk(
   keys: string[],

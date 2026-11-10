@@ -76,24 +76,6 @@ export const REF_HINTS: Partial<Record<ColumnType, string>> = {
   JSONREF: 'points to a json document key in this domain — insert validates it exists (409 if missing).',
 }
 
-/**
- * Fehlt die Ziel-Engine der Domäne oder ist sie deleting, würde das Statement mit 409 scheitern (spec sql/002 §5,
- * wiederverwendet von sql/004 §3 für ADD COLUMN) — Option deaktiviert, Grund im title. `statement` benennt das
- * scheiternde Statement in der Begründung (`CREATE` bzw. `ADD COLUMN`).
- */
-export function refEngineUnavailableReason(type: ColumnType, domain: DomainSummary, statement: string): string | undefined {
-  if (type === 'KVREF') {
-    return domain.engines.kv === undefined ? `kv engine not enabled for this domain — ${statement} would fail with 409` : undefined
-  }
-  if (type === 'JSONREF') {
-    const json = domain.engines.json
-    if (json === undefined) return `json engine not enabled for this domain — ${statement} would fail with 409`
-    if (json.state === 'deleting') return `json engine is deleting in this domain — ${statement} would fail with 409`
-    return undefined
-  }
-  return undefined
-}
-
 function toDefaultDef(column: ColumnDraft): ColumnDefault | undefined {
   if (!column.defaultEnabled || !typeAllowsDefault(column.type)) return undefined
   if (column.type === 'TIMESTAMP' && column.defaultCurrentTimestamp) return { kind: 'currentTimestamp' }
@@ -184,7 +166,6 @@ interface ColumnRowProps {
   index: number
   isPk: boolean
   showPkTypeError: boolean
-  domain: DomainSummary
   targets: string[]
   nameError: string | undefined
   removeDisabled: boolean
@@ -200,7 +181,6 @@ function ColumnRow({
   index,
   isPk,
   showPkTypeError,
-  domain,
   targets,
   nameError,
   removeDisabled,
@@ -230,14 +210,11 @@ function ColumnRow({
           value={column.type}
           onChange={(event) => onChangeType(event.target.value as ColumnType)}
         >
-          {COLUMN_TYPES.map((type) => {
-            const reason = refEngineUnavailableReason(type, domain, 'CREATE')
-            return (
-              <option key={type} value={type} disabled={reason !== undefined} title={reason}>
-                {type}
-              </option>
-            )
-          })}
+          {COLUMN_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
         </select>
         <label className="ctm__row-pk">
           <input type="radio" name="ctm-pk" aria-label={`primary key: column ${index + 1}`} checked={isPk} disabled={!pkEligible} onChange={onSelectPk} />{' '}
@@ -450,7 +427,6 @@ export function CreateTableForm({ domain, apiClient, onClose }: CreateTableFormP
               index={index}
               isPk={column.key === pkKey}
               showPkTypeError={column.key === pkKey && pkTypeError}
-              domain={domain}
               targets={targetsFor(column.type)}
               nameError={column.name !== '' ? columnNameError(column) : undefined}
               removeDisabled={columns.length === 1}

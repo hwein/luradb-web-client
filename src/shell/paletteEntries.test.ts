@@ -10,8 +10,8 @@ const SCREENS: PaletteScreen[] = [
 ]
 
 const DOMAINS: DomainSummary[] = [
-  { name: 'analytics', engines: { rel: { state: 'active' } } },
-  { name: 'shop', engines: { kv: true, json: { state: 'active' } } },
+  { name: 'analytics', conditionalWrites: [] },
+  { name: 'shop', conditionalWrites: [] },
 ]
 
 const ARTICLES: ArticleMeta[] = [

@@ -5,7 +5,7 @@ import type { ApiClient } from '../api'
 import { CreateTableModal } from '../screens/sql/CreateTableModal'
 import { addTab } from '../screens/sql/sqlStore'
 import {
-  jsonDomainDetailQueryOptions,
+  jsonDocumentCountQueryOptions,
   jsonIndexesQueryOptions,
   relTableRowCountQueryOptions,
   relTablesQueryOptions,
@@ -29,11 +29,7 @@ function formatCount(value: number): string {
   return value < 1000 ? String(value) : `${(value / 1000).toFixed(1)}k`
 }
 
-function sectionLabelText(base: string, state: string | undefined): string {
-  return state === 'deleting' ? `${base} (deleting)` : base
-}
-
-function jsonSummaryText(count: number | null | undefined, indexCount: number | undefined): string | undefined {
+function jsonSummaryText(count: number | undefined, indexCount: number | undefined): string | undefined {
   if (typeof count !== 'number' || typeof indexCount !== 'number') return undefined
   return `${formatCount(count)} · idx ${indexCount}`
 }
@@ -65,14 +61,10 @@ function TableObjectRow({ domain, table, apiClient, onOpen }: { domain: string; 
 /** RELATIONAL/JSON/KEY-VALUE-Abschnitte der genau einen expandierten Domäne (spec shell/002 §3) — Daten nur hier geladen. */
 export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
   const navigate = useNavigate()
-  const hasRel = domain.engines.rel !== undefined
-  const hasJson = domain.engines.json !== undefined
-  const hasKv = domain.engines.kv !== undefined
-
-  const tablesQuery = useQuery({ ...relTablesQueryOptions(apiClient, domain.name, hasRel), refetchInterval: 30_000 })
-  const viewsQuery = useQuery({ ...relViewsQueryOptions(apiClient, domain.name, hasRel), refetchInterval: 30_000 })
-  const jsonDetailQuery = useQuery({ ...jsonDomainDetailQueryOptions(apiClient, domain.name, hasJson), refetchInterval: 30_000 })
-  const indexesQuery = useQuery({ ...jsonIndexesQueryOptions(apiClient, domain.name, hasJson), refetchInterval: 30_000 })
+  const tablesQuery = useQuery({ ...relTablesQueryOptions(apiClient, domain.name, true), refetchInterval: 30_000 })
+  const viewsQuery = useQuery({ ...relViewsQueryOptions(apiClient, domain.name, true), refetchInterval: 30_000 })
+  const jsonCountQuery = useQuery({ ...jsonDocumentCountQueryOptions(apiClient, domain.name, true), refetchInterval: 30_000 })
+  const indexesQuery = useQuery({ ...jsonIndexesQueryOptions(apiClient, domain.name, true), refetchInterval: 30_000 })
   const activity = useEngineActivity(apiClient, domain)
   const [tableModalOpen, setTableModalOpen] = useState(false)
 
@@ -88,7 +80,7 @@ export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
     void navigate('/sql')
   }
 
-  const jsonSummary = jsonSummaryText(jsonDetailQuery.data?.document_count, indexesQuery.data?.length)
+  const jsonSummary = jsonSummaryText(jsonCountQuery.data, indexesQuery.data?.length)
 
   return (
     <>
@@ -102,37 +94,22 @@ export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
           )}
         </div>
         <div className="explorer__sections">
-          {hasRel && (
+          {activity.rel !== undefined && (
             <>
-              <SectionLabel
-                tone="rel"
-                text={sectionLabelText('RELATIONAL', domain.engines.rel?.state)}
-                addLabel="new table"
-                onAdd={() => setTableModalOpen(true)}
-              />
+              <SectionLabel tone="rel" text="RELATIONAL" addLabel="new table" onAdd={() => setTableModalOpen(true)} />
               {(tablesQuery.data ?? []).map((table) => (
                 <TableObjectRow key={table.name} domain={domain.name} table={table.name} apiClient={apiClient} onOpen={() => openInData('rel', table.name)} />
               ))}
               {(viewsQuery.data ?? []).map((view) => (
-                <button
-                  key={view.name}
-                  type="button"
-                  className="explorer__object-row explorer__object-row--muted"
-                  onClick={() => openViewInSql(view.name)}
-                >
+                <button key={view.name} type="button" className="explorer__object-row explorer__object-row--muted" onClick={() => openViewInSql(view.name)}>
                   <EngineChip letter="V" tone="dashed" /> {view.name}
                 </button>
               ))}
             </>
           )}
-          {hasJson && (
+          {activity.json !== undefined && (
             <>
-              <SectionLabel
-                tone="json"
-                text={sectionLabelText('JSON', domain.engines.json?.state)}
-                addLabel="new document"
-                onAdd={() => openInData('json')}
-              />
+              <SectionLabel tone="json" text="JSON" addLabel="new document" onAdd={() => openInData('json')} />
               {activity.json === 'active' && (
                 <button type="button" className="explorer__object-row" onClick={() => openInData('json')}>
                   <EngineChip letter="J" tone="json" /> documents
@@ -141,16 +118,12 @@ export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
               )}
             </>
           )}
-          {hasKv && (
-            <>
-              <SectionLabel tone="kv" text="KEY-VALUE" addLabel="new key" onAdd={() => openInData('kv')} />
-              {activity.kv === 'active' && (
-                <button type="button" className="explorer__object-row" onClick={() => openInData('kv')}>
-                  <EngineChip letter="K" tone="kv" /> keys
-                  {typeof activity.kvKeyCount === 'number' && <span className="explorer__object-count">{formatCount(activity.kvKeyCount)}</span>}
-                </button>
-              )}
-            </>
+          <SectionLabel tone="kv" text="KEY-VALUE" addLabel="new key" onAdd={() => openInData('kv')} />
+          {activity.kv === 'active' && (
+            <button type="button" className="explorer__object-row" onClick={() => openInData('kv')}>
+              <EngineChip letter="K" tone="kv" /> keys
+              {typeof activity.kvKeyCount === 'number' && <span className="explorer__object-count">{formatCount(activity.kvKeyCount)}</span>}
+            </button>
           )}
         </div>
       </div>

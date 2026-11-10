@@ -29,7 +29,7 @@ function Harness({ onClose }: { onClose: () => void }) {
 
 /** Rendert `BulkImportForm` ohne die native `<dialog>`-Hülle (showModal() ist in diesem jsdom nicht implementiert). */
 async function renderForm(onClose: () => void = () => {}) {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })))
+  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })))
   await act(() => connect(makeConnection()))
 
   const queryClient = createAppQueryClient()
@@ -47,13 +47,13 @@ afterEach(() => {
 })
 
 describe('BulkImportForm', () => {
-  it('shows the summary and invalidates the document list + domain detail caches on success', async () => {
+  it('shows the summary and invalidates the document list + document count caches on success', async () => {
     server.use(http.post(BULK_URL, () => HttpResponse.json({ imported: 2, failed: 0, errors: [] })))
     const { queryClient } = await renderForm()
     const docsKey = ['json-documents', DOMAIN]
-    const detailKey = ['json-domain-detail', DOMAIN]
+    const countKey = ['json-count', DOMAIN]
     queryClient.setQueryData(docsKey, { pages: [], pageParams: [] })
-    queryClient.setQueryData(detailKey, { name: DOMAIN })
+    queryClient.setQueryData(countKey, 0)
 
     fireEvent.change(screen.getByLabelText('ndjson input'), { target: { value: '{"_key":"a"}\n{"_key":"b"}\n' } })
     fireEvent.click(screen.getByRole('button', { name: 'import' }))
@@ -61,7 +61,7 @@ describe('BulkImportForm', () => {
     expect(await screen.findByText(/imported 2/)).toBeInTheDocument()
     expect(screen.getByText('failed 0')).not.toHaveClass('bim__summary-failed')
     await waitFor(() => expect(queryClient.getQueryState(docsKey)?.isInvalidated).toBe(true))
-    expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(countKey)?.isInvalidated).toBe(true)
   })
 
   it('disables the button and shows "importing…" while the request is in flight', async () => {

@@ -179,7 +179,7 @@ export function RestoreForm({ apiClient, backupId, onClose }: RestoreFormProps) 
                 </label>
               </div>
             </div>
-            {mode === 'replace' && <div className="rsm__danger">replace deletes existing target domains</div>}
+            {mode === 'replace' && <div className="rsm__danger">replace overwrites the engines the archive holds — the domain and its permissions stay</div>}
             {wholeEngine && mode === 'fail_if_exists' && (
               <div className="rsm__hint">whole-engine restores usually need replace — the auto-created &quot;default&quot; domain already exists</div>
             )}

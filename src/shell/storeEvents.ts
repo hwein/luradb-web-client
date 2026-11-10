@@ -1,16 +1,17 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
 import type { SseEvent } from '../lib/sse'
-import { JSON_DOMAINS_KEY, KV_DOMAINS_KEY, REL_DOMAINS_KEY } from './domains'
+import { DOMAINS_KEY } from './domains'
 
 export interface StoreEvent {
-  engine: 'kv' | 'json' | 'rel'
+  /** Missing on domain events — they concern the domain in all engines. */
+  engine?: 'kv' | 'json' | 'rel'
   type: string
   domain: string
   object?: string
   ts: number
 }
 
-function isEngine(value: unknown): value is StoreEvent['engine'] {
+function isEngine(value: unknown): value is NonNullable<StoreEvent['engine']> {
   return value === 'kv' || value === 'json' || value === 'rel'
 }
 
@@ -24,20 +25,14 @@ export function parseStoreEvent(frame: SseEvent): StoreEvent | undefined {
   }
   if (typeof parsed !== 'object' || parsed === null) return undefined
   const { engine, type, domain, object, ts } = parsed as Record<string, unknown>
-  if (!isEngine(engine) || typeof type !== 'string' || typeof domain !== 'string') return undefined
+  if ((engine !== undefined && !isEngine(engine)) || typeof type !== 'string' || typeof domain !== 'string') return undefined
   return {
-    engine,
+    ...(engine === undefined ? {} : { engine }),
     type,
     domain,
     ...(typeof object === 'string' ? { object } : {}),
     ts: typeof ts === 'number' ? ts : 0,
   }
-}
-
-const DOMAIN_LIST_KEYS: Record<StoreEvent['engine'], QueryKey> = {
-  kv: KV_DOMAINS_KEY,
-  json: JSON_DOMAINS_KEY,
-  rel: REL_DOMAINS_KEY,
 }
 
 /**
@@ -49,7 +44,7 @@ export function invalidationTargetsFor(event: StoreEvent): QueryKey[] {
     case 'domain_created':
     case 'domain_deleted':
     case 'domain_purged':
-      return [DOMAIN_LIST_KEYS[event.engine]]
+      return [DOMAINS_KEY]
     case 'table_created':
     case 'table_dropped':
       return [['rel-tables', event.domain]]
@@ -65,7 +60,7 @@ export function invalidationTargetsFor(event: StoreEvent): QueryKey[] {
 }
 
 /** Alle stream-abhängigen Explorer-Queries (spec shell/009 §5) — benannte Liste statt globalem Invalidieren. */
-const ALL_STORE_KEYS: QueryKey[] = [KV_DOMAINS_KEY, JSON_DOMAINS_KEY, REL_DOMAINS_KEY, ['rel-tables'], ['rel-views'], ['json-indexes']]
+const ALL_STORE_KEYS: QueryKey[] = [DOMAINS_KEY, ['rel-tables'], ['rel-views'], ['json-indexes']]
 
 /** Voll-Resync nach `reset` oder Wiederverbindung: was der Stream trägt, wird neu gelesen — sonst nichts. */
 export function invalidateAllStoreQueries(queryClient: QueryClient): void {

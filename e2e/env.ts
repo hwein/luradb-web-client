@@ -38,10 +38,7 @@ export function readServerEnv(): ServerEnv {
   return { url: url.replace(/\/+$/, ''), adminKey }
 }
 
-/** Die drei Engine-Registries sind getrennte Namespaces — die UI-Anlage kaskadiert, das Aufräumen muss es auch. */
 export async function dropDomain(api: APIRequestContext, domain: string): Promise<void> {
-  for (const registry of ['rel/', 'json/', '']) {
-    // Best effort: 404/202 sind beide in Ordnung, ein Netzfehler darf den Lauf nicht rot färben.
-    await api.delete(`/store-api/${registry}domains/${domain}`).catch(() => undefined)
-  }
+  // Best effort: a network error must not turn the run red.
+  await api.delete(`/store-api/domains/${domain}`).catch(() => undefined)
 }

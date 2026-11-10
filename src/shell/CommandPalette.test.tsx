@@ -7,7 +7,7 @@ import type { Connection } from '../app/connections'
 import { createAppQueryClient } from '../app/queryClient'
 import { connect, disconnect } from '../app/session'
 import { resetDocsState, useDocsState } from '../screens/docs/docsStore'
-import { server } from '../test/msw'
+import { domainResponse, server } from '../test/msw'
 import { CommandPaletteContent } from './CommandPalette'
 import { SelectedDomainProvider, useSelectedDomain } from './SelectedDomainContext'
 
@@ -59,15 +59,8 @@ function Harness({ onClose }: { onClose: () => void }) {
 
 async function renderConnectedPalette(onClose: () => void = () => {}) {
   server.use(
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
-    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1 }])),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1, state: 'active' }])),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () =>
-      HttpResponse.json([
-        { name: 'analytics', created_at: 1, state: 'active' },
-        { name: 'shop', created_at: 1, state: 'active' },
-      ]),
-    ),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
+    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([domainResponse('shop'), domainResponse('analytics')])),
   )
   await act(() => connect(makeConnection()))
 
@@ -110,7 +103,7 @@ describe('CommandPaletteContent', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('ArrowDown crosses from SCREENS into DOMAINS, and Enter selects the domain and navigates using its highest-priority engine (rel)', async () => {
+  it('ArrowDown crosses from SCREENS into DOMAINS, and Enter selects the domain and navigates to /data?engine=rel', async () => {
     const onClose = vi.fn()
     await renderConnectedPalette(onClose)
     const input = screen.getByLabelText('command palette search')
@@ -123,6 +116,15 @@ describe('CommandPaletteContent', () => {
     expect(screen.getByTestId('route-state').textContent).toBe('/data?engine=rel')
     expect(screen.getByTestId('selected-domain').textContent).toBe('shop')
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the T, J and K chips at every domain', async () => {
+    await renderConnectedPalette()
+
+    for (const name of ['analytics', 'shop']) {
+      const row = screen.getByText(name, { selector: '.cmdk__row-name' }).closest('button')
+      expect(row?.querySelector('.cmdk__chips')?.textContent).toBe('TJK')
+    }
   })
 
   it('typing narrows the list, and a mouse click on a doc hit opens it and navigates to /docs', async () => {

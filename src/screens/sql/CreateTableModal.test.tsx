@@ -22,8 +22,8 @@ function makeConnection(): Connection {
   }
 }
 
-function makeDomain(overrides?: Partial<DomainSummary['engines']>): DomainSummary {
-  return { name: 'shop', engines: { kv: true, json: { state: 'active' }, rel: { state: 'active' }, ...overrides } }
+function makeDomain(): DomainSummary {
+  return { name: 'shop', conditionalWrites: [] }
 }
 
 function tablesHandler(names: string[]) {
@@ -67,7 +67,7 @@ function Harness({ domain, onClose }: { domain: DomainSummary; onClose: () => vo
 }
 
 async function renderForm(domain: DomainSummary, onClose: () => void = () => {}) {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })))
+  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })))
   await act(() => connect(makeConnection()))
 
   const queryClient = createAppQueryClient()
@@ -177,19 +177,14 @@ describe('CreateTableForm', () => {
     expect(screen.getByRole('button', { name: 'insert into editor' })).not.toBeDisabled()
   })
 
-  it('shows the KVREF hint with a docs link, and disables JSONREF when the domain has no json engine', async () => {
+  it('shows the KVREF hint with a docs link', async () => {
     server.use(tablesHandler([]), viewsHandler([]))
-    await renderForm(makeDomain({ json: undefined }))
+    await renderForm(makeDomain())
 
     fireEvent.click(screen.getByRole('button', { name: '+ add column' }))
     fireEvent.change(screen.getByLabelText('column 2 type'), { target: { value: 'KVREF' } })
 
     expect(await screen.findByText(/points to a kv key in this domain/)).toBeInTheDocument()
-
-    const typeSelect = screen.getByLabelText('column 2 type')
-    const jsonOption = within(typeSelect).getByRole('option', { name: 'JSONREF' })
-    expect(jsonOption).toBeDisabled()
-    expect(jsonOption.getAttribute('title')).toMatch(/json engine not enabled/)
 
     fireEvent.click(screen.getByRole('button', { name: 'docs' }))
     expect(await screen.findByTestId('docs-route-state')).toHaveTextContent('/docs')

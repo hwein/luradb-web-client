@@ -70,11 +70,9 @@ describe('App', () => {
   it('connects with one click on a remembered connection, then can disconnect back to the gate', async () => {
     storeRememberedConnection()
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
       http.get(`${ORIGIN}/store-api/auth/whoami`, () => HttpResponse.json({ name: 'admin', role: 'Admin' })),
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
-      http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
-      http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/health`, () => HttpResponse.json({ status: 'ok', uptime_secs: 4260 })),
     )
 

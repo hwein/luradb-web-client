@@ -18,16 +18,21 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Requires LuraDB 0.5.1 or newer.
+- Requires LuraDB 0.7.1 or newer.
+- Domains are created and deleted in one step for key-value, JSON and relational data; a domain being deleted leaves the lists at once.
+- Restore dialog: the replace warning says that the domain and its permissions are kept.
+- Docs: the articles on domains, permissions and status codes describe LuraDB 0.7.1.
 - KV bulk delete with a prefix runs as a single server-side operation; a selection over the server cap is rejected as a whole (413).
 - The explorer now updates from a live server event stream instead of waiting for the next poll.
 - Status bar shows the signed-in user; the role now comes from /auth/whoami.
 - JSON browser: deleting a JSON document fails on a version conflict if it changed since it was loaded.
+- Admin: a permission cell grants or revokes access to the whole domain (keys, documents and tables).
 
 ### Removed
 
 - Links to the server's /test-ui (Swagger is now behind auth and off by default).
 - Configuration: the screen is gone — LuraDB is configured in `luradb.toml` on the server.
+- Create-domain form: the hint that the name "domains" is reserved.
 
 ### Security
 

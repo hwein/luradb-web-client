@@ -79,7 +79,7 @@ export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOp
     onSuccess: (_data, { key }) => {
       queryClient.removeQueries({ queryKey: ['json-document', domain, key] })
       void queryClient.invalidateQueries({ queryKey: ['json-documents', domain] })
-      void queryClient.invalidateQueries({ queryKey: ['json-domain-detail', domain] })
+      void queryClient.invalidateQueries({ queryKey: ['json-count', domain] })
       setDeleteArmed(false)
       setReloadedNote(undefined)
       onClear()
@@ -107,7 +107,7 @@ export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOp
     },
     onSuccess: (createdKey) => {
       void queryClient.invalidateQueries({ queryKey: ['json-documents', domain] })
-      void queryClient.invalidateQueries({ queryKey: ['json-domain-detail', domain] })
+      void queryClient.invalidateQueries({ queryKey: ['json-count', domain] })
       setNewKey('')
       setNewText(NEW_DOCUMENT_TEXT)
       onSelectKey(createdKey)

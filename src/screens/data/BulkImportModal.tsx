@@ -26,7 +26,7 @@ export function BulkImportForm({ domain, apiClient, onClose }: BulkImportFormPro
     onSuccess: (result) => {
       if (result.imported > 0) {
         void queryClient.invalidateQueries({ queryKey: ['json-documents', domain] })
-        void queryClient.invalidateQueries({ queryKey: ['json-domain-detail', domain] })
+        void queryClient.invalidateQueries({ queryKey: ['json-count', domain] })
       }
     },
   })

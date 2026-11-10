@@ -7,24 +7,15 @@ import { DomainLinksPanel } from './DomainLinksPanel'
 import { conditionalWritesTitle, useDomainSummaries, useDomainsPending, type DomainSummary } from './domains'
 import './Explorer.css'
 import { ExpandedDomain } from './ExpandedDomain'
-import { useEngineActivity, type EngineActivityLevel } from './engineActivity'
+import { useEngineActivity } from './engineActivity'
 import { useSelectedDomain } from './SelectedDomainContext'
-
-function tagFor(name: string, state: string | undefined): string {
-  return state === 'deleting' ? `${name} (deleting)` : name
-}
-
-/** Ein Tag erscheint bei Aktivität (enthält Objekte) oder `state === 'deleting'` — der Zustands-Hinweis geht nie verloren (spec shell/004 §3). */
-function shouldTagEngine(state: string | undefined, level: EngineActivityLevel | undefined): boolean {
-  return state === 'deleting' || level === 'active'
-}
 
 function CollapsedDomainRow({ domain, apiClient, onSelect }: { domain: DomainSummary; apiClient: ApiClient | undefined; onSelect: () => void }) {
   const activity = useEngineActivity(apiClient, domain)
   const tags = [
-    domain.engines.rel && shouldTagEngine(domain.engines.rel.state, activity.rel) && tagFor('rel', domain.engines.rel.state),
-    domain.engines.json && shouldTagEngine(domain.engines.json.state, activity.json) && tagFor('json', domain.engines.json.state),
-    domain.engines.kv && activity.kv === 'active' && 'kv',
+    activity.rel === 'active' && 'rel',
+    activity.json === 'active' && 'json',
+    activity.kv === 'active' && 'kv',
     conditionalWritesTitle(domain) !== undefined && 'conditional writes',
   ].filter((tag): tag is string => Boolean(tag))
 

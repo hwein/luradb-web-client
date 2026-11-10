@@ -4,39 +4,30 @@ import { ApiError, type ApiClient } from '../api'
 import type { components } from '../api/schema'
 import { pollSilentRecord } from './pollSilentRecord'
 
-type KvDomain = components['schemas']['DomainResponse']
-type JsonDomain = components['schemas']['JsonDomainResponse']
-type RelDomain = components['schemas']['RelDomainResponse']
+type DomainResponse = components['schemas']['DomainResponse']
 
 export interface DomainSummary {
   name: string
-  engines: {
-    kv?: true
-    json?: { state: string }
-    rel?: { state: string }
-  }
-  /** Engines whose registry entry has require_conditional_writes set. */
-  conditionalWrites?: Array<'kv' | 'json'>
+  /** Engines whose single writes need a precondition (require_conditional_writes). */
+  conditionalWrites: Array<'kv' | 'json'>
 }
 
 /** Tooltip naming the engines that require conditional writes; undefined when none does. */
 export function conditionalWritesTitle(domain: DomainSummary): string | undefined {
-  return domain.conditionalWrites?.length ? `require_conditional_writes: ${domain.conditionalWrites.join(', ')}` : undefined
+  return domain.conditionalWrites.length ? `require_conditional_writes: ${domain.conditionalWrites.join(', ')}` : undefined
 }
 
-export const KV_DOMAINS_KEY = ['domains', 'kv'] as const
-export const JSON_DOMAINS_KEY = ['domains', 'json'] as const
-export const REL_DOMAINS_KEY = ['domains', 'rel'] as const
+export const DOMAINS_KEY = ['domains'] as const
 
 /** Geteilte Query-Options: Explorer und Screens nutzen denselben Key + dieselbe queryFn — ein Cache-Eintrag. */
-export function kvDomainsQueryOptions(apiClient: ApiClient | undefined) {
+export function domainsQueryOptions(apiClient: ApiClient | undefined) {
   return queryOptions({
-    queryKey: KV_DOMAINS_KEY,
-    queryFn: async (context): Promise<KvDomain[]> => {
+    queryKey: DOMAINS_KEY,
+    queryFn: async (context): Promise<DomainResponse[]> => {
       if (!apiClient) throw new Error('domain list query requires an active connection')
       const { data, response } = await apiClient.api.GET('/store-api/domains', { silentRecord: pollSilentRecord(context) })
       if (response.status === 401) throw new ApiError(401, 'invalid api key')
-      if (!response.ok || !data) throw new ApiError(response.status, 'engine unreachable')
+      if (!response.ok || !data) throw new ApiError(response.status, 'domain list failed')
       return data
     },
     enabled: apiClient !== undefined,
@@ -44,107 +35,39 @@ export function kvDomainsQueryOptions(apiClient: ApiClient | undefined) {
   })
 }
 
-export function jsonDomainsQueryOptions(apiClient: ApiClient | undefined) {
-  return queryOptions({
-    queryKey: JSON_DOMAINS_KEY,
-    queryFn: async (context): Promise<JsonDomain[]> => {
-      if (!apiClient) throw new Error('domain list query requires an active connection')
-      const { data, response } = await apiClient.api.GET('/store-api/json/domains', { silentRecord: pollSilentRecord(context) })
-      if (response.status === 401) throw new ApiError(401, 'invalid api key')
-      if (!response.ok || !data) throw new ApiError(response.status, 'engine unreachable')
-      return data
-    },
-    enabled: apiClient !== undefined,
-    refetchInterval: 30_000,
-  })
+function conditionalWritesOf(domain: DomainResponse): Array<'kv' | 'json'> {
+  const { kv, json } = domain.require_conditional_writes
+  return [...(kv ? ['kv' as const] : []), ...(json ? ['json' as const] : [])]
 }
 
-export function relDomainsQueryOptions(apiClient: ApiClient | undefined) {
-  return queryOptions({
-    queryKey: REL_DOMAINS_KEY,
-    queryFn: async (context): Promise<RelDomain[]> => {
-      if (!apiClient) throw new Error('domain list query requires an active connection')
-      const { data, response } = await apiClient.api.GET('/store-api/rel/domains', { silentRecord: pollSilentRecord(context) })
-      if (response.status === 401) throw new ApiError(401, 'invalid api key')
-      if (!response.ok || !data) throw new ApiError(response.status, 'engine unreachable')
-      return data
-    },
-    enabled: apiClient !== undefined,
-    refetchInterval: 30_000,
-  })
+function toSummaries(domains: DomainResponse[] | undefined): DomainSummary[] {
+  return (domains ?? [])
+    .map((domain) => ({ name: domain.name, conditionalWrites: conditionalWritesOf(domain) }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-/** Fehlt eine Engine-Liste (Fehler), zählt sie hier als leer — die übrigen Engines bilden die Union trotzdem. */
-function mergeDomains(kv: KvDomain[] | undefined, json: JsonDomain[] | undefined, rel: RelDomain[] | undefined): DomainSummary[] {
-  const byName = new Map<string, DomainSummary>()
-
-  function entryFor(name: string): DomainSummary {
-    const existing = byName.get(name)
-    if (existing) return existing
-    const created: DomainSummary = { name, engines: {}, conditionalWrites: [] }
-    byName.set(name, created)
-    return created
-  }
-
-  for (const domain of kv ?? []) {
-    const entry = entryFor(domain.name)
-    entry.engines.kv = true
-    if (domain.require_conditional_writes === true) entry.conditionalWrites?.push('kv')
-  }
-  for (const domain of json ?? []) {
-    const entry = entryFor(domain.name)
-    entry.engines.json = { state: domain.state }
-    if (domain.require_conditional_writes === true) entry.conditionalWrites?.push('json')
-  }
-  for (const domain of rel ?? []) entryFor(domain.name).engines.rel = { state: domain.state }
-
-  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
-}
-
-/** Union der drei Domain-Listen nach Name, alphabetisch (spec shell/002 §1). */
+/** The domain list, sorted alphabetically; empty while it loads or after it failed. */
 export function useDomainSummaries(apiClient: ApiClient | undefined): DomainSummary[] {
-  const kv = useQuery(kvDomainsQueryOptions(apiClient))
-  const json = useQuery(jsonDomainsQueryOptions(apiClient))
-  const rel = useQuery(relDomainsQueryOptions(apiClient))
-
-  return useMemo(() => mergeDomains(kv.data, json.data, rel.data), [kv.data, json.data, rel.data])
+  const { data } = useQuery(domainsQueryOptions(apiClient))
+  return useMemo(() => toSummaries(data), [data])
 }
 
 /**
- * Für den Explorer-Empty-State (spec shell/003 §3): true, solange irgendeine der drei Listen noch lädt.
- * Ohne Verbindung sind die Queries disabled und bleiben dauerhaft `isPending` — der Hinweis bleibt dadurch unterdrückt.
- * Gleiche Query-Options wie `useDomainSummaries` (cache-geteilt, keine Zusatz-Requests).
+ * For the explorer empty state (spec shell/003 §3): true while the list is loading.
+ * Without a connection the query is disabled and stays `isPending`, which keeps the hint suppressed.
  */
 export function useDomainsPending(apiClient: ApiClient | undefined): boolean {
-  const kv = useQuery(kvDomainsQueryOptions(apiClient))
-  const json = useQuery(jsonDomainsQueryOptions(apiClient))
-  const rel = useQuery(relDomainsQueryOptions(apiClient))
-
-  return kv.isPending || json.isPending || rel.isPending
+  return useQuery(domainsQueryOptions(apiClient)).isPending
 }
 
 function messageForDomainCreateError(status: number): string {
   return status === 409 ? 'domain already exists' : `create domain failed (HTTP ${status})`
 }
 
-// Drei getrennte Funktionen statt einer generischen (dynamische Pfade lassen sich mit openapi-fetch's
-// literalen Pfad-Overloads nicht sauber typisieren) — admin/001 kann sie direkt wiederverwenden.
-export async function createKvDomain(apiClient: ApiClient, name: string, requireConditionalWrites = false): Promise<void> {
+export async function createDomain(apiClient: ApiClient, name: string, requireConditionalWrites = false): Promise<void> {
   const { response } = await apiClient.api.POST('/store-api/domains', {
-    body: requireConditionalWrites ? { name, require_conditional_writes: true } : { name },
+    body: requireConditionalWrites ? { name, require_conditional_writes: { kv: true, json: true } } : { name },
   })
-  if (!response.ok) throw new ApiError(response.status, messageForDomainCreateError(response.status))
-}
-
-export async function createJsonDomain(apiClient: ApiClient, name: string, requireConditionalWrites = false): Promise<void> {
-  const { response } = await apiClient.api.POST('/store-api/json/domains', {
-    body: requireConditionalWrites ? { name, require_conditional_writes: true } : { name },
-  })
-  if (!response.ok) throw new ApiError(response.status, messageForDomainCreateError(response.status))
-}
-
-export async function createRelDomain(apiClient: ApiClient, name: string): Promise<void> {
-  const { response } = await apiClient.api.POST('/store-api/rel/domains', { body: { name } })
   if (!response.ok) throw new ApiError(response.status, messageForDomainCreateError(response.status))
 }
 
@@ -154,18 +77,7 @@ function messageForDomainDeleteError(status: number): string {
   return 'delete failed'
 }
 
-// Gleiches Muster wie bei create* (admin/001, Löschkaskade): eine Funktion je Engine statt generisch.
-export async function deleteKvDomain(apiClient: ApiClient, name: string): Promise<void> {
+export async function deleteDomain(apiClient: ApiClient, name: string): Promise<void> {
   const { response } = await apiClient.api.DELETE('/store-api/domains/{name}', { params: { path: { name } } })
-  if (!response.ok) throw new ApiError(response.status, messageForDomainDeleteError(response.status))
-}
-
-export async function deleteJsonDomain(apiClient: ApiClient, name: string): Promise<void> {
-  const { response } = await apiClient.api.DELETE('/store-api/json/domains/{name}', { params: { path: { name } } })
-  if (!response.ok) throw new ApiError(response.status, messageForDomainDeleteError(response.status))
-}
-
-export async function deleteRelDomain(apiClient: ApiClient, name: string): Promise<void> {
-  const { response } = await apiClient.api.DELETE('/store-api/rel/domains/{name}', { params: { path: { name } } })
   if (!response.ok) throw new ApiError(response.status, messageForDomainDeleteError(response.status))
 }

@@ -22,13 +22,11 @@ function makeConnection(): Connection {
 
 function baseHandlers(adminOk: boolean) {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
     http.get(`${ORIGIN}/store-api/auth/whoami`, () =>
       HttpResponse.json(adminOk ? { name: 'admin', role: 'Admin' } : { name: 'alice', role: 'User' }),
     ),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
     http.get(`${ORIGIN}/store-api/backups`, () => HttpResponse.json({ backups: [], running: null })),
     http.get(`${ORIGIN}/store-api/logs`, () => HttpResponse.text('503 Service Unavailable: log access is disabled (log.http_access = false)', { status: 503 })),
     http.get(`${ORIGIN}/store-api/logs/files`, () =>
@@ -80,7 +78,7 @@ describe('AdminScreen', () => {
 
   it('shows "admin check failed" with the response detail instead of the role-gate hint on a whoami 500 (spec admin/005 §3)', async () => {
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
       http.get(`${ORIGIN}/store-api/auth/whoami`, () => new HttpResponse(null, { status: 500 })),
     )
     await act(() => connect(makeConnection()))
@@ -102,7 +100,7 @@ describe('AdminScreen', () => {
   it('shows no gate text and no cards while whoami is still pending — no false "admin role required" flash (spec admin/005 §3)', async () => {
     let releaseProbe: (() => void) | undefined
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.14.2', server_version: '0.5.1' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
       http.get(`${ORIGIN}/store-api/auth/whoami`, async () => {
         await new Promise<void>((resolve) => {
           releaseProbe = resolve
@@ -110,8 +108,6 @@ describe('AdminScreen', () => {
         return HttpResponse.json({ name: 'admin', role: 'Admin' })
       }),
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
-      http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
-      http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
       http.get(`${ORIGIN}/store-api/backups`, () => HttpResponse.json({ backups: [], running: null })),
       http.get(`${ORIGIN}/store-api/logs`, () => HttpResponse.text('503 Service Unavailable: log access is disabled (log.http_access = false)', { status: 503 })),
       http.get(`${ORIGIN}/store-api/logs/files`, () =>

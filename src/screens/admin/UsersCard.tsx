@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ApiError, type ApiClient } from '../../api'
 import { useDomainSummaries, type DomainSummary } from '../../shell/domains'
 import { requireApiClient } from './DomainsCard'
-import { cellActionFor, primaryEngineFor, type CellValue } from './permissions'
+import { cellActionFor, type CellValue } from './permissions'
 import { createUser, deleteUser, rotateUserKey, USERS_KEY, usersQueryOptions, type CreateUserResponse, type RotateKeyResponse, type UserListItem } from './users'
 
 const NAME_PATTERN = /^[a-zA-Z0-9_-]+$/
@@ -20,6 +20,10 @@ function initials(name: string): string {
 
 function cellKey(userName: string, domainName: string): string {
   return `${userName}::${domainName}`
+}
+
+function domainOfCellKey(key: string): string {
+  return key.slice(key.indexOf('::') + 2)
 }
 
 /** Key nur bis Blur/Unmount im State (spec admin/002 §3/§5) — nie Storage, nie Log. */
@@ -63,14 +67,12 @@ interface PermissionCellProps {
 /** Eine Zelle (spec admin/002 §2): Klick = sofortiger POST/DELETE, kein optimistisches Update. */
 function PermissionCell({ apiClient, userName, domain, value, onChange }: PermissionCellProps) {
   const [error, setError] = useState<string | undefined>(undefined)
-  const engine = primaryEngineFor(domain)
 
   const mutation = useMutation<CellValue, unknown, void>({
     mutationFn: async () => {
-      if (!engine) throw new Error('domain has no engine to grant permissions on')
       const client = requireApiClient(apiClient)
       const action = cellActionFor(value)
-      await action.perform(client, userName, domain.name, engine)
+      await action.perform(client, userName, domain.name)
       return action.next
     },
     onSuccess: (next) => {
@@ -86,7 +88,7 @@ function PermissionCell({ apiClient, userName, domain, value, onChange }: Permis
         type="button"
         className={`admin-users__cell admin-users__cell--${value}`}
         onClick={() => mutation.mutate()}
-        disabled={mutation.isPending || engine === undefined}
+        disabled={mutation.isPending}
         title={value === 'unknown' ? 'current permission not readable — API provides write-only access' : undefined}
       >
         {CELL_LABEL[value]}
@@ -252,6 +254,15 @@ export function UsersCard({ apiClient }: { apiClient: ApiClient | undefined }) {
   const users = usersQuery.data ?? []
   // Session-Gedächtnis der Zellen: reiner In-Memory-State, bewusst kein sessionStorage (Reload ⇒ wieder "?").
   const [cells, setCells] = useState<Record<string, CellValue>>({})
+
+  // Deleting a domain deletes its permissions: a domain that left the list loses its remembered cells.
+  useEffect(() => {
+    const names = new Set(domains.map((domain) => domain.name))
+    setCells((current) => {
+      const kept = Object.entries(current).filter(([key]) => names.has(domainOfCellKey(key)))
+      return kept.length === Object.keys(current).length ? current : Object.fromEntries(kept)
+    })
+  }, [domains])
 
   function handleCellChange(userName: string, domainName: string, next: CellValue): void {
     setCells((current) => ({ ...current, [cellKey(userName, domainName)]: next }))

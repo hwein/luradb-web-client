@@ -51,7 +51,7 @@ test('login, create domain, run LuraSQL, browse KV', async ({ page, request }) =
   await expect(page.getByText('localhost:5173 /store-api')).toBeVisible()
   await expect(page.getByText(/^luradb \d+\.\d+/)).toBeVisible()
 
-  // --- Domäne anlegen (Explorer-Kaskade über kv/json/rel) und auswählen ---
+  // --- Create the domain and select it ---
   await page.getByRole('button', { name: '+ create domain' }).click()
   await page.getByLabel('domain name').fill(DOMAIN)
   await page.getByRole('button', { name: 'create', exact: true }).click()

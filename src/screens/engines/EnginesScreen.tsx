@@ -5,7 +5,7 @@ import { useCapabilities } from '../../app/capabilities'
 import { useSession } from '../../app/session'
 import { formatBytes } from '../../lib'
 import { useSelectedDomain } from '../../shell'
-import { jsonDomainsQueryOptions, kvDomainsQueryOptions, relDomainsQueryOptions } from '../../shell/domains'
+import { domainsQueryOptions } from '../../shell/domains'
 import { useJsonEngineTotals, useRelEngineTotals } from './domainMetrics'
 import { EngineCard, type EngineCardRow, type EngineTone } from './EngineCard'
 import './EnginesScreen.css'
@@ -36,27 +36,17 @@ export function EnginesScreen() {
   const apiClient = session.status === 'connected' ? session.apiClient : undefined
   const { select } = useSelectedDomain()
 
-  // Geteilte Query-Options mit Explorer/useConnection (shell/002): gleicher Key + gleiche queryFn, ein Cache-Eintrag.
-  const kvDomainsQuery = useQuery(kvDomainsQueryOptions(apiClient))
-  const jsonDomainsQuery = useQuery(jsonDomainsQueryOptions(apiClient))
-  const relDomainsQuery = useQuery(relDomainsQueryOptions(apiClient))
-  const kvDomains = kvDomainsQuery.data ?? []
-  const jsonDomains = jsonDomainsQuery.data ?? []
-  const relDomains = relDomainsQuery.data ?? []
+  // Shared query options with the Explorer (shell/002): same key and queryFn, one cache entry for all three cards.
+  const domainsQuery = useQuery(domainsQueryOptions(apiClient))
+  const domainNames = (domainsQuery.data ?? []).map((domain) => domain.name)
 
   const healthQuery = useQuery(healthQueryOptions(apiClient))
   const metricsQuery = useQuery(metricsQueryOptions(apiClient))
   const health = healthQuery.data
   const isAdmin = useCapabilities().admin === 'yes'
 
-  const jsonTotals = useJsonEngineTotals(
-    apiClient,
-    jsonDomains.map((domain) => domain.name),
-  )
-  const relTotals = useRelEngineTotals(
-    apiClient,
-    relDomains.map((domain) => domain.name),
-  )
+  const jsonTotals = useJsonEngineTotals(apiClient, domainNames)
+  const relTotals = useRelEngineTotals(apiClient, domainNames)
 
   const kvRows: EngineCardRow[] = [
     { label: 'domains', value: health ? formatNumber(health.domainCount) : NUMBER_PLACEHOLDER },
@@ -66,13 +56,13 @@ export function EnginesScreen() {
   ]
 
   const jsonRows: EngineCardRow[] = [
-    { label: 'domains', value: numberOrPlaceholder(jsonDomainsQuery.isSuccess, jsonDomains.length) },
+    { label: 'domains', value: numberOrPlaceholder(domainsQuery.isSuccess, domainNames.length) },
     { label: 'documents', value: numberOrPlaceholder(jsonTotals.loaded, jsonTotals.documentCount) },
     { label: 'indexes', value: numberOrPlaceholder(jsonTotals.loaded, jsonTotals.indexCount) },
   ]
 
   const relRows: EngineCardRow[] = [
-    { label: 'domains', value: numberOrPlaceholder(relDomainsQuery.isSuccess, relDomains.length) },
+    { label: 'domains', value: numberOrPlaceholder(domainsQuery.isSuccess, domainNames.length) },
     { label: 'tables', value: numberOrPlaceholder(relTotals.loaded, relTotals.tableCount) },
     { label: 'views', value: numberOrPlaceholder(relTotals.loaded, relTotals.viewCount) },
   ]
@@ -91,25 +81,25 @@ export function EnginesScreen() {
         <EngineCard
           tone="kv"
           title="KV ENGINE"
-          online={kvDomainsQuery.isSuccess}
+          online={domainsQuery.isSuccess}
           rows={kvRows}
-          domains={kvDomains.map((domain) => domain.name)}
+          domains={domainNames}
           onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'kv')}
         />
         <EngineCard
           tone="json"
           title="JSON ENGINE"
-          online={jsonDomainsQuery.isSuccess}
+          online={domainsQuery.isSuccess && !jsonTotals.off}
           rows={jsonRows}
-          domains={jsonDomains.map((domain) => domain.name)}
+          domains={domainNames}
           onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'json')}
         />
         <EngineCard
           tone="rel"
           title="REL ENGINE"
-          online={relDomainsQuery.isSuccess}
+          online={domainsQuery.isSuccess && !relTotals.off}
           rows={relRows}
-          domains={relDomains.map((domain) => domain.name)}
+          domains={domainNames}
           onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'rel')}
         />
       </div>

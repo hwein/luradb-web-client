@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
-import { server } from '../test/msw'
+import { domainResponse, server } from '../test/msw'
 import { createApi } from './client'
 import { getRecordedCalls, record, subscribeRecorder } from './recorder'
 
@@ -8,7 +8,7 @@ const BASE_URL = 'http://127.0.0.1:3000'
 
 describe('recorder', () => {
   it('captures a real call made through the api client', async () => {
-    server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1700000000 }])))
+    server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([domainResponse('shop')])))
     const { api, onCall } = createApi({ baseUrl: BASE_URL, fetchImpl: fetch, getAuthHeader: () => undefined })
     const unsubscribe = onCall(record)
 
@@ -26,7 +26,7 @@ describe('recorder', () => {
   })
 
   it('never records bodies, headers or the api key — only method/path/status/ms/ok plus id/ts', async () => {
-    server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1700000000 }])))
+    server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([domainResponse('shop')])))
     const { api, onCall } = createApi({ baseUrl: BASE_URL, fetchImpl: fetch, getAuthHeader: () => 'Bearer lura_super_secret' })
     const unsubscribe = onCall(record)
 

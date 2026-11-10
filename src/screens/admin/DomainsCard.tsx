@@ -1,38 +1,10 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { ApiError, type ApiClient } from '../../api'
-import {
-  createJsonDomain,
-  createKvDomain,
-  createRelDomain,
-  deleteJsonDomain,
-  deleteKvDomain,
-  deleteRelDomain,
-  jsonDomainsQueryOptions,
-  JSON_DOMAINS_KEY,
-  kvDomainsQueryOptions,
-  KV_DOMAINS_KEY,
-  relDomainsQueryOptions,
-  REL_DOMAINS_KEY,
-  useDomainSummaries,
-  type DomainSummary,
-} from '../../shell/domains'
+import { createDomain, deleteDomain, DOMAINS_KEY, domainsQueryOptions, useDomainSummaries, type DomainSummary } from '../../shell/domains'
 import { useEngineActivity, type EngineActivity } from '../../shell/engineActivity'
-import { runEngineCascade, type Engine } from '../../shell/engineCascade'
 
-const ENGINE_ORDER: Engine[] = ['kv', 'json', 'rel']
 export const NAME_PATTERN = /^[a-zA-Z0-9_-]+$/
-
-const CREATORS: Record<Engine, (apiClient: ApiClient, name: string) => Promise<void>> = {
-  kv: createKvDomain,
-  json: createJsonDomain,
-  rel: createRelDomain,
-}
-const DELETERS: Record<Engine, (apiClient: ApiClient, name: string) => Promise<void>> = {
-  kv: deleteKvDomain,
-  json: deleteJsonDomain,
-  rel: deleteRelDomain,
-}
 
 /** Geteilt mit UsersCard/BackupsCard (spec admin/005 §1) — eine Guard-Funktion statt dreifacher Kopie. */
 export function requireApiClient(apiClient: ApiClient | undefined): ApiClient {
@@ -50,12 +22,10 @@ function formatCount(value: number): string {
 }
 
 export function invalidateDomainLists(queryClient: QueryClient): void {
-  void queryClient.invalidateQueries({ queryKey: KV_DOMAINS_KEY })
-  void queryClient.invalidateQueries({ queryKey: JSON_DOMAINS_KEY })
-  void queryClient.invalidateQueries({ queryKey: REL_DOMAINS_KEY })
+  void queryClient.invalidateQueries({ queryKey: DOMAINS_KEY })
 }
 
-/** Ein Dot je Engine nur bei Aktivität (enthält Objekte), nicht bei bloßer Registry-Zugehörigkeit (spec shell/004 §2). */
+/** One dot per engine only when it holds objects (spec shell/004 §2). */
 function EngineDots({ activity }: { activity: EngineActivity }) {
   return (
     <span className="admin-domains__dots">
@@ -71,25 +41,23 @@ interface DomainRowProps {
   domain: DomainSummary
 }
 
-/** Eine Domain-Zeile (spec admin/001 §3, Nachtrag): Dots, belegbare Objektzahl über alle Engines, 🗑 → Inline-Bestätigung → Löschkaskade. */
+/** One domain row (spec admin/001 §3, addendum): dots, object count over all engines, 🗑 → inline confirm → one DELETE. */
 function DomainRow({ apiClient, domain }: DomainRowProps) {
   const queryClient = useQueryClient()
   const [armed, setArmed] = useState(false)
   const activity = useEngineActivity(apiClient, domain)
-  const isDeleting = domain.engines.json?.state === 'deleting' || domain.engines.rel?.state === 'deleting'
-  const engines = ENGINE_ORDER.filter((engine) => domain.engines[engine] !== undefined)
 
   const deleteMutation = useMutation({
-    mutationFn: () => runEngineCascade(engines, requireApiClient(apiClient), domain.name, DELETERS),
-    onSuccess: (failures) => {
+    mutationFn: () => deleteDomain(requireApiClient(apiClient), domain.name),
+    onSuccess: () => {
       invalidateDomainLists(queryClient)
-      if (failures.length === 0) setArmed(false)
+      setArmed(false)
     },
   })
 
   return (
     <div className="admin-domains__item">
-      <div className={`admin-domains__row${isDeleting ? ' admin-domains__row--muted' : ''}`}>
+      <div className="admin-domains__row">
         <span className="admin-domains__name" title={domain.name}>
           {domain.name}
         </span>
@@ -102,7 +70,7 @@ function DomainRow({ apiClient, domain }: DomainRowProps) {
       </div>
       {armed && (
         <div className="admin-domains__confirm">
-          delete &quot;{domain.name}&quot; from {engines.join('+')}?{' '}
+          delete &quot;{domain.name}&quot; with its keys, documents, tables and views?{' '}
           <button
             type="button"
             className="admin-domains__confirm-action"
@@ -115,26 +83,24 @@ function DomainRow({ apiClient, domain }: DomainRowProps) {
           <button type="button" className="admin-domains__confirm-cancel" onClick={() => setArmed(false)}>
             cancel
           </button>
-          {deleteMutation.data && deleteMutation.data.length > 0 && (
-            <div className="admin-domains__error">{deleteMutation.data.join(' · ')}</div>
-          )}
+          {deleteMutation.error && <div className="admin-domains__error">{messageOf(deleteMutation.error)}</div>}
         </div>
       )}
     </div>
   )
 }
 
-/** Inline-Zeile "new domain (max 50 chars)" + Create (spec admin/001 §3, shell/003 §2) — Kaskade läuft immer über alle drei Engines. */
+/** Inline row "new domain (max 50 chars)" + Create (spec admin/001 §3, shell/003 §2): one POST. */
 function CreateDomainRow({ apiClient }: { apiClient: ApiClient | undefined }) {
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const nameValid = name.length > 0 && name.length <= 50 && NAME_PATTERN.test(name)
 
   const createMutation = useMutation({
-    mutationFn: () => runEngineCascade(ENGINE_ORDER, requireApiClient(apiClient), name, CREATORS),
-    onSuccess: (failures) => {
+    mutationFn: () => createDomain(requireApiClient(apiClient), name),
+    onSuccess: () => {
       invalidateDomainLists(queryClient)
-      if (failures.length === 0) setName('')
+      setName('')
     },
   })
 
@@ -159,33 +125,23 @@ function CreateDomainRow({ apiClient }: { apiClient: ApiClient | undefined }) {
           Create
         </button>
       </div>
-      {createMutation.data && createMutation.data.length > 0 && <div className="admin-domains__error">{createMutation.data.join(' · ')}</div>}
+      {createMutation.error && <div className="admin-domains__error">{messageOf(createMutation.error)}</div>}
     </form>
   )
 }
 
-/** DOMAINS-Karte (spec admin/001 §3): Liste aus der Explorer-Union (shell/002), Anlage, Löschkaskade, Fußnote. */
+/** DOMAINS card (spec admin/001 §3): the Explorer's domain list (shell/002), create, delete, footnote. */
 export function DomainsCard({ apiClient }: { apiClient: ApiClient | undefined }) {
   const domains = useDomainSummaries(apiClient)
-  // Dieselben Query-Options wie useDomainSummaries (cache-geteilt, kein Zusatz-Request) — nur um die
-  // Fehler je Engine für die Sammelzeile sichtbar zu machen (spec admin/005 §2).
-  const kvQuery = useQuery(kvDomainsQueryOptions(apiClient))
-  const jsonQuery = useQuery(jsonDomainsQueryOptions(apiClient))
-  const relQuery = useQuery(relDomainsQueryOptions(apiClient))
-  const engineErrors = ([
-    ['kv', kvQuery.error] as [Engine, unknown],
-    ['json', jsonQuery.error] as [Engine, unknown],
-    ['rel', relQuery.error] as [Engine, unknown],
-  ])
-    .filter((entry) => entry[1] !== null)
-    .map(([engine, error]) => `${engine}: ${messageOf(error)}`)
+  // Same query options as useDomainSummaries (shared cache, no extra request) — only for the error line (spec admin/005 §2).
+  const listError = useQuery(domainsQueryOptions(apiClient)).error
 
   return (
     <div className="admin-card">
       <div className="admin-card__head">
         DOMAINS<span className="admin-card__head-note">isolated · no cross-domain</span>
       </div>
-      {engineErrors.length > 0 && <div className="admin-domains__query-error">domains unavailable — {engineErrors.join(' · ')}</div>}
+      {listError && <div className="admin-domains__query-error">domains unavailable — {messageOf(listError)}</div>}
       {domains.map((domain) => (
         <DomainRow key={domain.name} apiClient={apiClient} domain={domain} />
       ))}

@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query'
+import { queryOptions, type QueryFunctionContext } from '@tanstack/react-query'
 import { ApiError, type ApiClient } from '../api'
 import type { components } from '../api/schema'
 import { pollSilentRecord } from './pollSilentRecord'
@@ -6,10 +6,24 @@ import { pollSilentRecord } from './pollSilentRecord'
 type TableSummary = components['schemas']['TableSummary']
 type ViewSummary = components['schemas']['ViewSummary']
 type TableDetail = components['schemas']['TableDetail']
-type JsonDomainDetail = components['schemas']['JsonDomainResponse']
 type IndexResponse = components['schemas']['IndexResponse']
 
-/** Detail-Queries der expandierten Domäne (spec shell/002 §3/§5) — nur aktiv, wenn `enabled` (Domäne expandiert + Engine vorhanden). */
+interface EngineQueryState {
+  isLoadingError: boolean
+  error: unknown
+}
+
+/** An engine is switched off for a domain when one of its queries fails with 503 on first load; a 503 after a success (overload) does not count. */
+export function isEngineOff(queries: EngineQueryState[]): boolean {
+  return queries.some((query) => query.isLoadingError && query.error instanceof ApiError && query.error.status === 503)
+}
+
+/** pollSilentRecord, plus silent after a failed attempt (a switched-off engine answers 503 on every tick). `errorUpdatedAt`, not `error`: a refetch without data clears `error` before the query function runs. */
+function engineSilentRecord(context: Pick<QueryFunctionContext, 'client' | 'queryKey'>): boolean {
+  return pollSilentRecord(context) || (context.client.getQueryState(context.queryKey)?.errorUpdatedAt ?? 0) > 0
+}
+
+/** Detail queries of a domain (spec shell/002 §3/§5) — active only when `enabled`. */
 export function relTablesQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
     queryKey: ['rel-tables', domain] as const,
@@ -17,7 +31,7 @@ export function relTablesQueryOptions(apiClient: ApiClient | undefined, domain: 
       if (!apiClient) throw new Error('rel tables query requires an active connection')
       const { data, response } = await apiClient.api.GET('/store-api/rel/{domain}/tables', {
         params: { path: { domain } },
-        silentRecord: pollSilentRecord(context),
+        silentRecord: engineSilentRecord(context),
       })
       if (!response.ok || !data) throw new ApiError(response.status, 'failed to load tables')
       return data
@@ -33,7 +47,7 @@ export function relViewsQueryOptions(apiClient: ApiClient | undefined, domain: s
       if (!apiClient) throw new Error('rel views query requires an active connection')
       const { data, response } = await apiClient.api.GET('/store-api/rel/{domain}/views', {
         params: { path: { domain } },
-        silentRecord: pollSilentRecord(context),
+        silentRecord: engineSilentRecord(context),
       })
       if (!response.ok || !data) throw new ApiError(response.status, 'failed to load views')
       return data
@@ -56,18 +70,17 @@ export function relTableDetailQueryOptions(apiClient: ApiClient | undefined, dom
   })
 }
 
-/** `document_count` steht nur am Detail-Endpunkt (nicht in der Liste) — eigene Query je expandierter Domäne. */
-export function jsonDomainDetailQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
+export function jsonDocumentCountQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
-    queryKey: ['json-domain-detail', domain] as const,
-    queryFn: async (context): Promise<JsonDomainDetail> => {
-      if (!apiClient) throw new Error('json domain detail query requires an active connection')
-      const { data, response } = await apiClient.api.GET('/store-api/json/domains/{name}', {
-        params: { path: { name: domain } },
-        silentRecord: pollSilentRecord(context),
+    queryKey: ['json-count', domain] as const,
+    queryFn: async (context): Promise<number> => {
+      if (!apiClient) throw new Error('json count query requires an active connection')
+      const { data, response } = await apiClient.api.GET('/store-api/json/{domain}/documents/count', {
+        params: { path: { domain } },
+        silentRecord: engineSilentRecord(context),
       })
-      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load json domain detail')
-      return data
+      if (!response.ok || !data) throw new ApiError(response.status, 'failed to count documents')
+      return data.count
     },
     enabled: enabled && apiClient !== undefined,
   })
@@ -80,7 +93,7 @@ export function jsonIndexesQueryOptions(apiClient: ApiClient | undefined, domain
       if (!apiClient) throw new Error('json indexes query requires an active connection')
       const { data, response } = await apiClient.api.GET('/store-api/json/{domain}/indexes', {
         params: { path: { domain } },
-        silentRecord: pollSilentRecord(context),
+        silentRecord: engineSilentRecord(context),
       })
       if (!response.ok || !data) throw new ApiError(response.status, 'failed to load indexes')
       return data
