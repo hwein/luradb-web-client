@@ -1,0 +1,12 @@
+.zoom-toast {
+  position: fixed;
+  right: 12px;
+  bottom: 40px;
+  padding: 4px 10px;
+  background: var(--panel);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--tx);
+}

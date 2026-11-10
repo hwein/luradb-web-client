@@ -1,14 +1,27 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../test/msw'
 import { App } from './App'
 import { disconnect } from './session'
 
+const { setZoom } = vi.hoisted(() => ({ setZoom: vi.fn() }))
+
+vi.mock('@tauri-apps/api/webview', () => ({
+  getCurrentWebview: () => ({ setZoom }),
+}))
+
 const ORIGIN = window.location.origin
+
+beforeEach(() => {
+  setZoom.mockReset()
+  setZoom.mockResolvedValue(undefined)
+})
 
 afterEach(() => {
   disconnect()
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 function storeRememberedConnection(): void {
@@ -74,5 +87,46 @@ describe('App', () => {
     fireEvent.click(screen.getByTitle('disconnect'))
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'connect' })).toBeInTheDocument())
+  })
+
+  it('applies the stored zoom on the connection gate in desktop mode', () => {
+    vi.stubGlobal('__TAURI_INTERNALS__', {})
+    localStorage.setItem('luradb.zoom', '1.25')
+
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: 'LuraDB' })).toBeInTheDocument()
+    expect(setZoom).toHaveBeenCalledTimes(1)
+    expect(setZoom).toHaveBeenCalledWith(1.25)
+  })
+
+  it('shows the zoom toast after a zoom shortcut on the connection gate in desktop mode', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('__TAURI_INTERNALS__', {})
+
+    render(<App />)
+    expect(screen.getByRole('heading', { name: 'LuraDB' })).toBeInTheDocument()
+
+    fireEvent.keyDown(window, { key: '=', ctrlKey: true })
+    expect(screen.getByText('Zoom 110 %')).toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(1200)
+    })
+    expect(screen.queryByText('Zoom 110 %')).not.toBeInTheDocument()
+  })
+
+  it('renders no zoom toast on mount and none in browser mode', () => {
+    vi.stubGlobal('__TAURI_INTERNALS__', {})
+    const desktop = render(<App />)
+    expect(screen.queryByText(/^Zoom /)).not.toBeInTheDocument()
+    desktop.unmount()
+    vi.unstubAllGlobals()
+    setZoom.mockClear()
+
+    render(<App />)
+    fireEvent.keyDown(window, { key: '=', ctrlKey: true })
+    expect(screen.queryByText(/^Zoom /)).not.toBeInTheDocument()
+    expect(setZoom).not.toHaveBeenCalled()
   })
 })
