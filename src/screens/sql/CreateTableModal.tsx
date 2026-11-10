@@ -301,10 +301,11 @@ interface CreateTableFormProps {
   domain: DomainSummary
   apiClient: ApiClient | undefined
   onClose: () => void
+  onFromFile: () => void
 }
 
 /** Formular-Inhalt des Create-Table-Assistenten (spec sql/002) — ohne <dialog>-Hülle, damit Tests ihn ohne `showModal()` mounten können. */
-export function CreateTableForm({ domain, apiClient, onClose }: CreateTableFormProps) {
+export function CreateTableForm({ domain, apiClient, onClose, onFromFile }: CreateTableFormProps) {
   const navigate = useNavigate()
   const enabled = apiClient !== undefined
 
@@ -450,6 +451,16 @@ export function CreateTableForm({ domain, apiClient, onClose }: CreateTableFormP
         </div>
       </div>
       <div className="ctm__footer">
+        <button
+          type="button"
+          className="ctm__from-file"
+          onClick={() => {
+            onClose()
+            onFromFile()
+          }}
+        >
+          from csv/tsv file…
+        </button>
         <button type="button" className="ctm__cancel" onClick={onClose}>
           cancel
         </button>
@@ -465,10 +476,11 @@ interface CreateTableModalProps {
   domain: DomainSummary
   apiClient: ApiClient | undefined
   onClose: () => void
+  onFromFile: () => void
 }
 
 /** Create-Table-Assistent (spec sql/002): natives `<dialog>` + `showModal()` (ESC/Fokus-Trap nativ) um `CreateTableForm`. */
-export function CreateTableModal({ domain, apiClient, onClose }: CreateTableModalProps) {
+export function CreateTableModal({ domain, apiClient, onClose, onFromFile }: CreateTableModalProps) {
   const dialogRef = useRef<HTMLDialogElement | null>(null)
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
@@ -491,7 +503,7 @@ export function CreateTableModal({ domain, apiClient, onClose }: CreateTableModa
 
   return (
     <dialog ref={dialogRef} className="ctm" aria-labelledby="ctm-title">
-      <CreateTableForm domain={domain} apiClient={apiClient} onClose={onClose} />
+      <CreateTableForm domain={domain} apiClient={apiClient} onClose={onClose} onFromFile={onFromFile} />
     </dialog>
   )
 }

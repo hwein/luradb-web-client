@@ -60,13 +60,13 @@ function DocsRouteProbe() {
   return <p data-testid="docs-route-state">{location.pathname}</p>
 }
 
-function Harness({ domain, onClose }: { domain: DomainSummary; onClose: () => void }) {
+function Harness({ domain, onClose, onFromFile }: { domain: DomainSummary; onClose: () => void; onFromFile: () => void }) {
   const session = useSession()
   const apiClient = session.status === 'connected' ? session.apiClient : undefined
-  return <CreateTableForm domain={domain} apiClient={apiClient} onClose={onClose} />
+  return <CreateTableForm domain={domain} apiClient={apiClient} onClose={onClose} onFromFile={onFromFile} />
 }
 
-async function renderForm(domain: DomainSummary, onClose: () => void = () => {}) {
+async function renderForm(domain: DomainSummary, onClose: () => void = () => {}, onFromFile: () => void = () => {}) {
   server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })))
   await act(() => connect(makeConnection()))
 
@@ -74,7 +74,7 @@ async function renderForm(domain: DomainSummary, onClose: () => void = () => {})
   const result = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={['/sql']}>
-        <Harness domain={domain} onClose={onClose} />
+        <Harness domain={domain} onClose={onClose} onFromFile={onFromFile} />
         <Routes>
           <Route path="/sql" element={<SqlRouteProbe />} />
           <Route path="/docs" element={<DocsRouteProbe />} />
@@ -317,5 +317,17 @@ describe('CreateTableForm', () => {
       "/sql · CREATE TABLE orders (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  total REAL NOT NULL,\n  warehouse_id INTEGER REFERENCES warehouses,\n  status TEXT UNIQUE DEFAULT 'pending'\n);",
     )
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('the "from csv/tsv file…" link closes the form and requests the file import', async () => {
+    server.use(tablesHandler([]), viewsHandler([]))
+    const onClose = vi.fn()
+    const onFromFile = vi.fn()
+    await renderForm(makeDomain(), onClose, onFromFile)
+
+    fireEvent.click(screen.getByRole('button', { name: 'from csv/tsv file…' }))
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onFromFile).toHaveBeenCalledTimes(1)
   })
 })

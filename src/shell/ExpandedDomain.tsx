@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import type { ApiClient } from '../api'
+import { RelFileImportModal } from '../screens/data/RelFileImportModal'
 import { CreateTableModal } from '../screens/sql/CreateTableModal'
 import { addTab } from '../screens/sql/sqlStore'
 import {
@@ -67,6 +68,7 @@ export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
   const indexesQuery = useQuery({ ...jsonIndexesQueryOptions(apiClient, domain.name, true), refetchInterval: 30_000 })
   const activity = useEngineActivity(apiClient, domain)
   const [tableModalOpen, setTableModalOpen] = useState(false)
+  const [fileImportOpen, setFileImportOpen] = useState(false)
 
   function openInData(engine: 'kv' | 'json' | 'rel', table?: string): void {
     const params = new URLSearchParams({ engine })
@@ -127,7 +129,10 @@ export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
           )}
         </div>
       </div>
-      {tableModalOpen && <CreateTableModal domain={domain} apiClient={apiClient} onClose={() => setTableModalOpen(false)} />}
+      {tableModalOpen && (
+        <CreateTableModal domain={domain} apiClient={apiClient} onClose={() => setTableModalOpen(false)} onFromFile={() => setFileImportOpen(true)} />
+      )}
+      {fileImportOpen && <RelFileImportModal domain={domain.name} apiClient={apiClient} onClose={() => setFileImportOpen(false)} />}
     </>
   )
 }

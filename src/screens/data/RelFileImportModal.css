@@ -1,0 +1,281 @@
+/* --- Create table from file (spec s-55d9034e) — layout like .ctm and .bim --- */
+
+.rfi:not([open]) {
+  display: none;
+}
+
+.rfi {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 92vw);
+  max-height: min(720px, 88vh);
+  padding: 0;
+  background: var(--panel);
+  color: var(--tx);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-card);
+  font-family: var(--font-sans);
+}
+
+.rfi::backdrop {
+  background: color-mix(in oklch, var(--bg) 65%, transparent);
+}
+
+.rfi__head {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.rfi__title {
+  color: var(--tx);
+}
+
+.rfi__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rfi__input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rfi__file {
+  padding: 3px 6px;
+  border-radius: var(--rad);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--acc);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rfi__file:hover {
+  background: var(--panel2);
+}
+
+.rfi__file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.rfi__file-info {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+}
+
+.rfi__field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.rfi__label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--mut);
+}
+
+.rfi__name {
+  box-sizing: border-box;
+  width: 100%;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  padding: 7px 10px;
+  outline: none;
+}
+
+.rfi__flag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mut);
+}
+
+.rfi__select {
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 9px;
+  outline: none;
+}
+
+.rfi__error {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--err);
+}
+
+.rfi__segments {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rfi__segment {
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-chip);
+  color: var(--mut);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+
+.rfi__segment--active {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--accT);
+}
+
+.rfi__hint {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--mut);
+}
+
+.rfi__warn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--warn);
+}
+
+.rfi__result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--tx);
+}
+
+.rfi__summary-failed {
+  color: var(--err);
+}
+
+.rfi__cols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rfi__col-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--tx);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-chip);
+  padding: 3px 7px;
+}
+
+.rfi__col-chip-pk {
+  color: var(--acc);
+  font-size: 8px;
+}
+
+.rfi__col-chip-src {
+  color: var(--mut);
+  white-space: pre;
+}
+
+.rfi__errors {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+  padding: 8px 10px;
+  list-style: none;
+  background: var(--edbg);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-input);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--tx);
+}
+
+.rfi__open {
+  background: transparent;
+  border: none;
+  border-radius: var(--rad);
+  padding: 3px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--acc);
+  cursor: pointer;
+}
+
+.rfi__open:hover {
+  background: var(--panel2);
+}
+
+.rfi__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.rfi__close {
+  background: transparent;
+  border: 1px solid var(--bord);
+  color: var(--tx);
+  border-radius: var(--rad-input);
+  padding: 7px 14px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rfi__import {
+  background: var(--acc);
+  color: var(--accT);
+  border: none;
+  border-radius: var(--rad-input);
+  padding: 7px 16px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rfi__import:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

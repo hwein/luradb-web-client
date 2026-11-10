@@ -523,6 +523,21 @@ describe('Explorer', () => {
     expect(await screen.findByText('create table · alpha')).toBeInTheDocument()
   })
 
+  it('the create-table modal\'s "from csv/tsv file…" link swaps it for the file-import modal', async () => {
+    HTMLDialogElement.prototype.showModal = function showModalStub(this: HTMLDialogElement) {
+      this.setAttribute('open', '')
+    }
+    server.use(domainsHandler([domainResponse('alpha')]))
+
+    await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'new table' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'from csv/tsv file…' }))
+
+    expect(await screen.findByText('create table from file · alpha')).toBeInTheDocument()
+    expect(screen.queryByText('create table · alpha')).not.toBeInTheDocument()
+  })
+
   it('keeps the label "+" available once the rel section already has tables, not just in the empty state', async () => {
     server.use(
       domainsHandler([domainResponse('alpha')]),

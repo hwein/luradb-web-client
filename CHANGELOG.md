@@ -15,6 +15,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Status bar and Engines screen show server health (shards, disk, memory, I/O); write errors under overload or low resources name the server's retry delay.
 - KV writes in the data browser are conditional; domains can be created with require conditional writes and are tagged in the explorer.
 - Desktop: UI zoom from 80% to 200% with Ctrl+Plus, Ctrl+Minus, Ctrl+0 (reset) and Ctrl+mouse wheel; the zoom level is kept across restarts.
+- Create a relational table from a CSV/TSV file (schema is derived, rows are imported).
 
 ### Changed
 

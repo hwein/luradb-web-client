@@ -254,6 +254,23 @@
   flex-shrink: 0;
 }
 
+.ctm__from-file {
+  margin-right: auto;
+  background: transparent;
+  border: none;
+  border-radius: var(--rad);
+  color: var(--mut);
+  padding: 7px 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ctm__from-file:hover {
+  color: var(--acc);
+  background: var(--panel2);
+}
+
 .ctm__cancel {
   background: transparent;
   border: 1px solid var(--bord);
