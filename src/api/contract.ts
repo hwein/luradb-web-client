@@ -9,13 +9,13 @@ export interface SemVer {
   patch: number
 }
 
-function parseSemVer(version: string): SemVer {
+export function parseSemVer(version: string): SemVer {
   const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version)
   if (!match) throw new Error(`invalid semver: "${version}"`)
   return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) }
 }
 
-function compareSemVer(a: SemVer, b: SemVer): number {
+export function compareSemVer(a: SemVer, b: SemVer): number {
   if (a.major !== b.major) return a.major - b.major
   if (a.minor !== b.minor) return a.minor - b.minor
   return a.patch - b.patch

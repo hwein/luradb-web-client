@@ -1,0 +1,144 @@
+/* --- What's-new dialog --- */
+
+/* An author `display` would otherwise override the UA `display: none` of a closed dialog. */
+.whats-new:not([open]) {
+  display: none;
+}
+
+.whats-new {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 92vw);
+  max-height: min(640px, 88vh);
+  padding: 0;
+  background: var(--panel);
+  color: var(--tx);
+  border: 1px solid var(--bord);
+  border-radius: var(--rad-card);
+  font-family: var(--font-sans);
+}
+
+.whats-new::backdrop {
+  background: color-mix(in oklch, var(--bg) 65%, transparent);
+}
+
+.whats-new__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  border-bottom: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.whats-new__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.whats-new__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tx);
+}
+
+.whats-new__upto {
+  color: var(--mut);
+}
+
+.whats-new__compare {
+  margin: 0;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--bord);
+  font-size: 12px;
+  color: var(--mut);
+  flex-shrink: 0;
+}
+
+.whats-new__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.whats-new__release {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.whats-new__release-head {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tx);
+}
+
+.whats-new__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.whats-new__label {
+  color: var(--mut);
+}
+
+.whats-new__entry {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--tx);
+  overflow-wrap: anywhere;
+}
+
+.whats-new__entry code {
+  font-family: var(--font-mono);
+  background: var(--panel2);
+  border-radius: var(--rad-input);
+  padding: 0 4px;
+}
+
+.whats-new__badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: var(--rad-input);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.whats-new__badge--breaking {
+  color: var(--warn);
+}
+
+.whats-new__badge--api {
+  color: var(--acc);
+}
+
+.whats-new__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 18px;
+  border-top: 1px solid var(--bord);
+  flex-shrink: 0;
+}
+
+.whats-new__close {
+  background: transparent;
+  border: 1px solid var(--bord);
+  color: var(--tx);
+  border-radius: var(--rad-input);
+  padding: 7px 14px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}

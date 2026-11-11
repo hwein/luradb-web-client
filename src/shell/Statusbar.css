@@ -66,3 +66,20 @@
   align-items: center;
   gap: 8px;
 }
+
+/* The negative right margin offsets the padding, so the content stays where the plain span puts it. */
+.statusbar__server--button {
+  align-self: stretch;
+  background: transparent;
+  border: none;
+  padding: 0 6px;
+  margin-right: -6px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.statusbar__server--button:hover {
+  background: var(--panel2);
+  border-radius: var(--rad);
+}

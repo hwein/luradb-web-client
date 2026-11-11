@@ -1,8 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { BASE_PATH } from '../api'
+import { useState } from 'react'
+import { BASE_PATH, serverChangelog } from '../api'
 import { disconnect, useSession } from '../app/session'
 import { useConnection } from '../app/useConnection'
 import { LogoMark } from '../brand/LogoMark'
+import { WhatsNewModal } from './WhatsNewModal'
 import './Statusbar.css'
 
 export function Statusbar() {
@@ -10,6 +12,20 @@ export function Statusbar() {
   const session = useSession()
   const { state, hostLabel, authLabel, signedInLabel, serverLabel, uptimeLabel, healthLabel, healthBlocked } = useConnection()
   const host = hostLabel.slice(0, hostLabel.length - BASE_PATH.length)
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false)
+
+  const serverContent = (
+    <>
+      <LogoMark size={20} />
+      <span>{serverLabel}</span>
+      {uptimeLabel && (
+        <>
+          <span aria-hidden="true">·</span>
+          <span>{uptimeLabel}</span>
+        </>
+      )}
+    </>
+  )
 
   function handleDisconnect(): void {
     disconnect()
@@ -39,17 +55,21 @@ export function Statusbar() {
       {healthLabel && (
         <span className={`statusbar__health${healthBlocked ? ' statusbar__health--err' : ''}`}>{healthLabel}</span>
       )}
-      {serverLabel && (
-        <span className="statusbar__server">
-          <LogoMark size={20} />
-          <span>{serverLabel}</span>
-          {uptimeLabel && (
-            <>
-              <span aria-hidden="true">·</span>
-              <span>{uptimeLabel}</span>
-            </>
-          )}
-        </span>
+      {serverLabel &&
+        (serverChangelog === null ? (
+          <span className="statusbar__server">{serverContent}</span>
+        ) : (
+          <button
+            type="button"
+            className="statusbar__server statusbar__server--button"
+            title="what's new in luradb"
+            onClick={() => setWhatsNewOpen(true)}
+          >
+            {serverContent}
+          </button>
+        ))}
+      {whatsNewOpen && serverChangelog !== null && session.status === 'connected' && (
+        <WhatsNewModal changelog={serverChangelog} serverVersion={session.serverVersion} onClose={() => setWhatsNewOpen(false)} />
       )}
     </div>
   )

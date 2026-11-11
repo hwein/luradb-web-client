@@ -17,6 +17,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Desktop: UI zoom from 80% to 200% with Ctrl+Plus, Ctrl+Minus, Ctrl+0 (reset) and Ctrl+mouse wheel; the zoom level is kept across restarts.
 - Create a relational table from a CSV/TSV file (schema is derived, rows are imported).
 - Admin: the permission matrix shows the permissions the server has stored and grants them for the whole domain or for its keys, documents and tables separately.
+- Status bar: the server label opens a what's-new dialog with the LuraDB changes up to the release the client is built against.
 
 ### Changed
 

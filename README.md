@@ -28,6 +28,9 @@ work areas between them.
 | **Admin** | Domains, users and domain permissions, key rotation |
 | **Docs** | Built-in documentation, contextually linked (F1, "why?" on errors) |
 
+The server label in the status bar opens a what's-new dialog with the LuraDB
+changes up to the release the client is built against.
+
 ## Guiding principles
 
 - **REST-transparent.** Every view shows the HTTP call that produced it — in
@@ -88,7 +91,10 @@ the fastest path to a fresh executable.
 The TypeScript API types (`src/api/`) are committed and used as the build input.
 Regenerate them deliberately with `npm run api:types`, which fetches the OpenAPI
 contract from the [LuraDB repository](https://github.com/hwein/luradb) (`main` for
-released, `next` for in-development API).
+released, `next` for in-development API). The server changelog behind the
+what's-new dialog (`src/api/server-changelog.md`) is vendored the same way:
+`npm run api:changelog` downloads it from the LuraDB tag named by the pinned
+contract.
 
 ## Contributing
 
