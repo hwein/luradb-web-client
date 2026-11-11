@@ -265,6 +265,10 @@ describe('useStoreEvents', () => {
           start(controller) {
             push = (frame) => controller.enqueue(encoder.encode(frame))
           },
+          // A cancelled source means the hook stopped reading; enqueueing would throw.
+          cancel() {
+            push = undefined
+          },
         })
         return new HttpResponse(body, { headers: { 'Content-Type': 'text/event-stream' } })
       }),
