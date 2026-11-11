@@ -16,6 +16,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - KV writes in the data browser are conditional; domains can be created with require conditional writes and are tagged in the explorer.
 - Desktop: UI zoom from 80% to 200% with Ctrl+Plus, Ctrl+Minus, Ctrl+0 (reset) and Ctrl+mouse wheel; the zoom level is kept across restarts.
 - Create a relational table from a CSV/TSV file (schema is derived, rows are imported).
+- Admin: the permission matrix shows the permissions the server has stored and grants them for the whole domain or for its keys, documents and tables separately.
 
 ### Changed
 
@@ -51,6 +52,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - KV watch detects a silently dropped connection within 45 s and reconnects instead of staying on "live".
 - Creating a KV key no longer overwrites an existing key.
 - Creating a JSON document under a chosen key can no longer overwrite an existing one.
+- Admin: errors when granting or revoking a permission show the server's message.
 
 ### Changed
 

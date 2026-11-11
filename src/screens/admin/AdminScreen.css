@@ -394,6 +394,10 @@
   font: inherit;
   color: var(--mut);
   cursor: pointer;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .admin-users__cell--read {
@@ -405,7 +409,8 @@
   align-self: flex-start;
 }
 
-.admin-users__cell--write {
+.admin-users__cell--write,
+.admin-users__cell--other {
   font-size: 10px;
   color: var(--eng-kv-chip-tx);
   background: var(--eng-kv-chip-bg);
@@ -414,9 +419,40 @@
   align-self: flex-start;
 }
 
+/* Inherited from the whole-domain grant: the dashed border keeps the level's contrast in both themes. */
+.admin-users__cell--inherited {
+  border: 1px dashed currentColor;
+}
+
+.admin-users__cell--write.admin-users__cell--inherited,
+.admin-users__cell--other.admin-users__cell--inherited {
+  padding: 1px 6px;
+}
+
 .admin-users__cell:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+.admin-users__dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 4px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+.admin-users__dot--kv {
+  background: var(--eng-kv-border);
+}
+
+.admin-users__dot--json {
+  background: var(--eng-json-border);
+}
+
+.admin-users__dot--rel {
+  background: var(--eng-rel-border);
 }
 
 .admin-users__cell-error {
@@ -480,6 +516,46 @@
   color: var(--err);
   font-size: 11px;
   overflow-wrap: anywhere;
+}
+
+.admin-users__offgrid {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--mut);
+  overflow-wrap: anywhere;
+}
+
+.admin-users__offgrid-label {
+  margin-right: 8px;
+}
+
+.admin-users__offgrid-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 12px;
+}
+
+.admin-users__offgrid-revoke {
+  background: none;
+  border: none;
+  border-radius: var(--rad);
+  padding: 0 5px;
+  color: var(--mut);
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-users__offgrid-revoke:hover:not(:disabled) {
+  background: var(--panel2);
+  color: var(--tx);
+}
+
+.admin-users__offgrid-revoke:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .admin-users__query-error {

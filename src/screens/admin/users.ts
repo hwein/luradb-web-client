@@ -3,6 +3,7 @@ import { ApiError, type ApiClient } from '../../api'
 import type { components } from '../../api/schema'
 
 export type UserListItem = components['schemas']['UserListItem']
+export type UserPermission = UserListItem['permissions'][number]
 export type CreateUserResponse = components['schemas']['CreateUserResponse']
 export type RotateKeyResponse = components['schemas']['RotateKeyResponse']
 
