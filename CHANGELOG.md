@@ -18,6 +18,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Create a relational table from a CSV/TSV file (schema is derived, rows are imported).
 - Admin: the permission matrix shows the permissions the server has stored and grants them for the whole domain or for its keys, documents and tables separately.
 - Status bar: the server label opens a what's-new dialog with the LuraDB changes up to the release the client is built against.
+- Browser mode: a connection with a server URL connects directly if the server allows the origin via CORS; an empty URL keeps using the same-origin proxy.
 
 ### Changed
 

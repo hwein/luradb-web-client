@@ -10,8 +10,8 @@ dense, monospaced where the data lives, dark by default, and honest about the
 protocol underneath. It speaks nothing but the LuraDB REST API and ships
 primarily as a **cross-platform desktop app** (Tauri 2): the recommended first
 tool for LuraDB — install it, enter a server URL and key, and start working. No
-web server required; the same build optionally runs as a browser SPA behind a
-reverse proxy.
+web server required; the same build optionally runs as a browser SPA — behind a
+reverse proxy, or directly against a server that allows its origin via CORS.
 
 ## Workbench
 

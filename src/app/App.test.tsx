@@ -33,7 +33,7 @@ function storeRememberedConnection(): void {
         {
           id: 'conn-1',
           name: 'local',
-          type: { kind: 'rest', url: 'http://127.0.0.1:3000' },
+          type: { kind: 'rest', url: '' },
           auth: { kind: 'api-key', key: 'lura_secret' },
           lastUsed: 1,
         },

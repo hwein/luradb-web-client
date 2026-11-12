@@ -110,7 +110,7 @@ function ConnectionRow({ entry, confirmingDelete, onConnect, onEdit, onDeleteReq
         <span className="connection-gate__name">{name}</span>
         {entry.supported ? (
           <span className="mono-path">
-            {entry.connection.type.url} · {entry.connection.lastUsed ? new Date(entry.connection.lastUsed).toLocaleString() : 'never connected'}
+            {entry.connection.type.url === '' ? 'this origin (proxy)' : entry.connection.type.url} · {entry.connection.lastUsed ? new Date(entry.connection.lastUsed).toLocaleString() : 'never connected'}
           </span>
         ) : (
           <span className="mono-path">unsupported (newer app version required)</span>

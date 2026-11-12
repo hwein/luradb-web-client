@@ -13,19 +13,21 @@ import { RestScreen } from './RestScreen'
 
 const ORIGIN = window.location.origin
 
-function makeConnection(): Connection {
+const DIRECT_URL = 'http://luradb.test:3000'
+
+function makeConnection(url = ''): Connection {
   return {
     id: 'conn-1',
     name: 'local',
-    type: { kind: 'rest', url: 'http://127.0.0.1:3000' },
+    type: { kind: 'rest', url },
     auth: { kind: 'api-key', key: 'lura_secret' },
   }
 }
 
-function baseHandlers() {
+function baseHandlers(base = ORIGIN) {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
-    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([domainResponse('default')])),
+    http.get(`${base}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
+    http.get(`${base}/store-api/domains`, () => HttpResponse.json([domainResponse('default')])),
   ]
 }
 
@@ -34,9 +36,9 @@ function TasksProbe() {
   return <p data-testid="tasks-probe">{tasks.map((task) => `${task.domain}:${task.taskId}:${task.status.kind}`).join(',')}</p>
 }
 
-async function connectAndRender() {
-  server.use(...baseHandlers())
-  await act(() => connect(makeConnection()))
+async function connectAndRender(url = '') {
+  server.use(...baseHandlers(url === '' ? ORIGIN : url))
+  await act(() => connect(makeConnection(url)))
 
   const queryClient = createAppQueryClient()
   return render(
@@ -149,6 +151,32 @@ describe('RestScreen', () => {
     expect(curl).toContain('-H "Authorization: Bearer $LURADB_KEY"')
     expect(curl).not.toContain('lura_secret')
     expect(await screen.findByText('copied ✓')).toBeInTheDocument()
+  })
+
+  it('copy as curl uses this origin as base for a connection with an empty url', async () => {
+    const writeText = vi.fn()
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+
+    await connectAndRender()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await screen.findByText('OK')
+    fireEvent.click(screen.getByText('copy as curl'))
+
+    const curl = writeText.mock.calls[0]?.[0] as string
+    expect(curl.startsWith(`curl -X GET '${ORIGIN}/store-api/domains'`)).toBe(true)
+  })
+
+  it('copy as curl uses the server url as base for a direct connection', async () => {
+    const writeText = vi.fn()
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+
+    await connectAndRender(DIRECT_URL)
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await screen.findByText('OK')
+    fireEvent.click(screen.getByText('copy as curl'))
+
+    const curl = writeText.mock.calls[0]?.[0] as string
+    expect(curl).toContain(`'${DIRECT_URL}/store-api/domains'`)
   })
 
   it('arms destructive requests: first Send confirms, second sends', async () => {

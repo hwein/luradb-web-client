@@ -7,7 +7,7 @@ export interface FormFieldSpec {
   label: string
   kind: 'text' | 'secret' | 'checkbox'
   required?: boolean
-  /** Feld ist sichtbar, aber nicht editierbar (z. B. Server-URL im Browser-Modus). */
+  /** Field is visible but not editable. */
   disabled?: boolean
   /** Kurzer Hinweis unter dem Feld (mono, muted). */
   hint?: string
@@ -29,17 +29,15 @@ type RestType = Extract<ConnectionType, { kind: 'rest' }>
 
 const restType = {
   formFields(env: Environment): FormFieldSpec[] {
-    // Ein Gate für beide Modi (Autor-Vorgabe 2026-07-17): das URL-Feld ist immer da und startet LEER
-    // (keine Dev-Vorbelegung in einer ausgelieferten App); im Browser-Modus nicht editierbar, weil der
-    // Transport dort zwingend über den Origin-Proxy läuft.
+    // One gate for both modes: the URL field always starts empty (no dev prefill in a shipped app);
+    // in the browser it is optional — empty means this origin's proxy.
     if (env === 'browser') {
       return [
         {
           name: 'url',
           label: 'Server URL',
           kind: 'text',
-          disabled: true,
-          hint: 'browser mode connects via this origin’s proxy — the URL is used by the desktop app',
+          hint: 'leave empty to use this origin’s proxy — a direct URL only works if the server allows this origin in its [cors] section',
         },
       ]
     }
@@ -53,14 +51,29 @@ const restType = {
       },
     ]
   },
+  serverUrl(type: RestType, env: Environment): string {
+    if (env === 'desktop') return type.url
+    return type.url === '' ? window.location.origin : type.url
+  },
   buildTransport(type: RestType, env: Environment): Transport {
+    const baseUrl = restType.serverUrl(type, env)
     if (env === 'desktop')
-      return { baseUrl: type.url, fetchImpl: getTransport({ acceptInvalidCerts: type.acceptInvalidCerts === true }).fetchImpl }
-    return { baseUrl: window.location.origin, fetchImpl: fetch }
+      return { baseUrl, fetchImpl: getTransport({ acceptInvalidCerts: type.acceptInvalidCerts === true }).fetchImpl }
+    return { baseUrl, fetchImpl: fetch }
   },
   hostLabel(type: RestType, env: Environment): string {
-    return env === 'desktop' ? new URL(type.url).host : window.location.host
+    return new URL(restType.serverUrl(type, env)).host
   },
+}
+
+/** Effective server URL: in the browser an empty URL means this origin (proxy), a set URL is used directly (CORS). */
+export function connectionServerUrl(type: ConnectionType, env: Environment): string {
+  switch (type.kind) {
+    case 'rest':
+      return restType.serverUrl(type, env)
+    default:
+      return assertNever(type.kind)
+  }
 }
 
 export function connectionFormFields(kind: ConnectionType['kind'], env: Environment): FormFieldSpec[] {

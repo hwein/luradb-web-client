@@ -31,7 +31,7 @@ describe('ConnectionGate', () => {
       'luradb.connections',
       JSON.stringify({
         schemaVersion: 1,
-        connections: [{ id: 'x', name: 'existing', type: { kind: 'rest', url: 'http://127.0.0.1:3000' }, auth: { kind: 'api-key' } }],
+        connections: [{ id: 'x', name: 'existing', type: { kind: 'rest', url: '' }, auth: { kind: 'api-key' } }],
       }),
     )
     render(<ConnectionGate />)
@@ -39,6 +39,23 @@ describe('ConnectionGate', () => {
     expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
     expect(screen.getByText('existing')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '+ new connection' })).toBeInTheDocument()
+  })
+
+  it('labels a connection with an empty url as this origin (proxy)', () => {
+    localStorage.setItem(
+      'luradb.connections',
+      JSON.stringify({
+        schemaVersion: 1,
+        connections: [
+          { id: 'p', name: 'proxied', type: { kind: 'rest', url: '' }, auth: { kind: 'api-key' } },
+          { id: 'd', name: 'direct', type: { kind: 'rest', url: 'http://luradb.test:3000' }, auth: { kind: 'api-key' } },
+        ],
+      }),
+    )
+    render(<ConnectionGate />)
+
+    expect(screen.getByText('this origin (proxy) · never connected')).toBeInTheDocument()
+    expect(screen.getByText('http://luradb.test:3000 · never connected')).toBeInTheDocument()
   })
 
   it('creates a connection without connecting immediately', () => {

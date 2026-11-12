@@ -10,7 +10,7 @@ export interface EnvTransport {
 }
 
 /**
- * Desktop: Plugin-http (Rust-Schicht, kein CORS, freie Server-URL). Browser: natives fetch, Same-Origin/Proxy.
+ * Desktop: plugin-http (Rust layer, no CORS, any server URL). Browser: native fetch — same-origin via proxy, or cross-origin when the server allows it (CORS).
  * `acceptInvalidCerts: true` wrapt `pluginFetch` mit `danger` (deaktiviert TLS-Prüfung inkl. Hostname komplett,
  * siehe rustls-Verhalten in spec 009); sonst (auch im Browser) bleibt die Option wirkungslos.
  */
