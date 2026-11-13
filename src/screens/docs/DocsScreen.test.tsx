@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
 import { DocsScreen } from './DocsScreen'
@@ -39,6 +39,56 @@ describe('DocsScreen', () => {
 
     expect(screen.getByText('◈ docs://kv-engine')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Keys, values, and the null state' })).toBeInTheDocument()
+  })
+
+  it('opens the MCP article from the category list', () => {
+    renderDocsScreen()
+
+    fireEvent.click(screen.getByRole('button', { name: 'MCP' }))
+
+    expect(screen.getByText('◈ docs://mcp')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Connecting AI assistants over MCP' })).toBeInTheDocument()
+  })
+
+  it('renders the MCP tool overview as a table with exactly the 26 tools', () => {
+    renderDocsScreen()
+
+    fireEvent.click(screen.getByRole('button', { name: 'MCP' }))
+
+    const table = screen.getByRole('table')
+    const tools = Array.from(table.querySelectorAll('code')).map((code) => code.textContent)
+    expect(tools).toEqual([
+      'whoami',
+      'health',
+      'metrics',
+      'list_domains',
+      'describe_domain',
+      'list_tables',
+      'describe_table',
+      'list_views',
+      'list_json_indexes',
+      'kv_get',
+      'kv_scan',
+      'kv_count',
+      'json_get',
+      'json_list',
+      'json_search',
+      'json_count',
+      'sql_query',
+      'kv_put',
+      'kv_delete',
+      'kv_set_null',
+      'json_put',
+      'json_delete',
+      'sql_execute',
+      'create_domain',
+      'create_json_index',
+      'sql_ddl',
+    ])
+    expect(tools).toHaveLength(26)
+    for (const group of ['Explore', 'Read', 'Write', 'Structure']) {
+      expect(within(table).getByText(group)).toBeInTheDocument()
+    }
   })
 
   it('closes the active tab and falls back to its left neighbor', () => {

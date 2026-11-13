@@ -3,7 +3,7 @@ category: Auth & permissions
 title: Two roles, permissions per domain
 kicker: Auth & permissions
 ---
-Authentication is a single bearer key per user; authorization is granted per domain, not per key or per record.
+Authentication is a single bearer key per user — the same key also works over [MCP](docs:mcp); authorization is granted per domain, not per key or per record.
 
 1. **Two roles.** `Admin` bypasses all permission checks — full read+write on every domain, plus the ability to manage users, permissions, and domains. `User` can only do what's explicitly granted.
 2. **Permissions are `read` < `write` < `ddl`.** Each level includes the ones below it. `write` covers ordinary reads and writes; `ddl` — schema-changing LuraSQL — only matters for tables and acts as `write` on keys and documents.

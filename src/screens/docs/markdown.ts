@@ -16,7 +16,7 @@ marked.use({
   },
 })
 
-/** Eingeschränktes Markdown-Set (Headings/Absätze/Listen/Code/interne Links) — spec docs/001 §4. */
+/** Restricted Markdown set: headings, paragraphs, lists, tables, code and internal links. */
 export function renderArticleBody(markdown: string): string {
   return marked.parse(markdown, { async: false }) as string
 }

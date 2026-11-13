@@ -264,6 +264,37 @@
   overflow: auto;
 }
 
+.docs-article table {
+  width: 100%;
+  margin: 0 0 18px;
+  border-collapse: collapse;
+}
+
+.docs-article th,
+.docs-article td {
+  padding: 6px 12px 6px 0;
+  border-bottom: 1px solid var(--bord);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+.docs-article th {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: var(--fs-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mut);
+}
+
+.docs-article td {
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: 1.7;
+  color: var(--tx);
+}
+
 .docs-article :not(pre) > code {
   font-family: var(--font-mono);
   font-size: 0.85em;

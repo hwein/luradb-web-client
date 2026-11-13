@@ -146,6 +146,19 @@ describe('CommandPaletteContent', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('typing "mcp" lists the MCP article, and a click opens it and navigates to /docs', async () => {
+    const onClose = vi.fn()
+    await renderConnectedPalette(onClose)
+
+    fireEvent.change(screen.getByLabelText('command palette search'), { target: { value: 'mcp' } })
+
+    fireEvent.click(await screen.findByText('Connecting AI assistants over MCP'))
+
+    expect(screen.getByTestId('route-state').textContent).toBe('/docs')
+    expect(screen.getByTestId('docs-state').textContent).toBe('mcp·mcp')
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('Escape closes the palette', async () => {
     const onClose = vi.fn()
     await renderConnectedPalette(onClose)

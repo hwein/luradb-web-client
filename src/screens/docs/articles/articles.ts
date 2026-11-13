@@ -7,6 +7,7 @@ import gettingStartedRaw from './getting-started.md?raw'
 import jsonDocumentsIndexesRaw from './json-documents-indexes.md?raw'
 import kvEngineRaw from './kv-engine.md?raw'
 import lurasqlRaw from './lurasql.md?raw'
+import mcpRaw from './mcp.md?raw'
 
 export interface ArticleMeta {
   id: string
@@ -87,7 +88,7 @@ function parseArticle(raw: string): Article {
   return { ...parseHeader(header), body: body.trim(), chips: parseChips(trailer) }
 }
 
-// Reihenfolge = Sidebar-Reihenfolge im Design (Prototyp Z. 380-388) und Spec-Aufzählung (docs/001 §2).
+// Sidebar order follows the design; mcp is the addition after auth-permissions.
 const RAW_ARTICLES = [
   gettingStartedRaw,
   domainsIsolationRaw,
@@ -96,6 +97,7 @@ const RAW_ARTICLES = [
   lurasqlRaw,
   crossEngineLinksRaw,
   authPermissionsRaw,
+  mcpRaw,
   backupRestoreRaw,
   errorsStatusCodesRaw,
 ]

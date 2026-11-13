@@ -2,10 +2,30 @@ import { describe, expect, it } from 'vitest'
 import { ARTICLES, getArticle, searchArticles } from './articles'
 
 describe('ARTICLES registry', () => {
-  it('has all nine seed articles with unique ids', () => {
-    expect(ARTICLES).toHaveLength(9)
+  it('has all ten articles with unique ids', () => {
+    expect(ARTICLES).toHaveLength(10)
     const ids = ARTICLES.map((article) => article.id)
-    expect(new Set(ids).size).toBe(9)
+    expect(new Set(ids).size).toBe(10)
+  })
+
+  it('registers the mcp article directly after auth-permissions', () => {
+    const ids = ARTICLES.map((article) => article.id)
+    expect(ids.indexOf('mcp')).toBe(ids.indexOf('auth-permissions') + 1)
+    const article = getArticle('mcp')
+    expect(article?.category).toBe('MCP')
+    expect(article?.title).toBe('Connecting AI assistants over MCP')
+    expect(article?.kicker).toBe('MCP')
+  })
+
+  it('resolves both related chips of the mcp article to registered articles', () => {
+    const chips = getArticle('mcp')?.chips ?? []
+    expect(chips).toEqual([
+      { kind: 'related', label: 'related: Auth & permissions', targetId: 'auth-permissions' },
+      { kind: 'related', label: 'related: Getting started', targetId: 'getting-started' },
+    ])
+    for (const chip of chips) {
+      if (chip.kind === 'related') expect(getArticle(chip.targetId)).toBeDefined()
+    }
   })
 
   it('gives every article a non-empty category, title, kicker, and body', () => {
@@ -56,6 +76,12 @@ describe('searchArticles', () => {
 
   it('returns no hits when nothing matches', () => {
     expect(searchArticles('xyznonexistentterm')).toEqual([])
+  })
+
+  it('finds the mcp article for "mcp" and for "assistant"', () => {
+    for (const query of ['mcp', 'assistant']) {
+      expect(searchArticles(query).filter((hit) => hit.article.id === 'mcp')).toHaveLength(1)
+    }
   })
 
   it('finds AUTOINCREMENT in the lurasql article body', () => {
