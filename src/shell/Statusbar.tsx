@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { BASE_PATH, serverChangelog } from '../api'
-import { disconnect, useSession } from '../app/session'
+import { endSession } from '../app/queryClient'
+import { useSession } from '../app/session'
 import { useConnection } from '../app/useConnection'
 import { LogoMark } from '../brand/LogoMark'
 import { WhatsNewModal } from './WhatsNewModal'
@@ -27,14 +28,9 @@ export function Statusbar() {
     </>
   )
 
-  function handleDisconnect(): void {
-    disconnect()
-    queryClient.clear()
-  }
-
   return (
     <div className="statusbar">
-      <button type="button" className="statusbar__connection" title="disconnect" onClick={handleDisconnect}>
+      <button type="button" className="statusbar__connection" title="disconnect" onClick={() => endSession(queryClient)}>
         <span className={`statusbar__dot statusbar__dot--${state === 'connected' ? 'ok' : 'err'}`} />
         {state === 'connected' ? 'connected' : state}
       </button>

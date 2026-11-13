@@ -2,7 +2,8 @@ import { useQueryClient, type QueryKey } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import { BASE_PATH } from '../api'
 import { useCapabilities } from '../app/capabilities'
-import { disconnect, useConnectedSession } from '../app/session'
+import { endSession } from '../app/queryClient'
+import { useConnectedSession } from '../app/session'
 import { sseStream } from '../lib/sse'
 import { invalidateAllStoreQueries, invalidationTargetsFor, parseStoreEvent } from './storeEvents'
 
@@ -50,10 +51,7 @@ export function useStoreEvents(): void {
         // Der erste Verbindungsaufbau fällt mit den Mount-Ladevorgängen zusammen; jeder spätere kann eine Lücke gehabt haben.
         if (connectCount.current > 1) invalidateAllStoreQueries(queryClient)
       },
-      onUnauthorized: () => {
-        disconnect()
-        queryClient.clear()
-      },
+      onUnauthorized: () => endSession(queryClient),
     })
 
     return () => {

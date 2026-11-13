@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { BASE_PATH } from '../api'
 import { sseStream, type SseConnectionState, type SseEvent } from '../lib/sse'
-import { disconnect, useSession } from './session'
+import { endSession } from './queryClient'
+import { useSession } from './session'
 
 const MAX_EVENTS = 500
 
@@ -64,10 +65,7 @@ export function useKvWatch(domain: string, prefix?: string): KvWatchResult {
       },
       onReset: () => setResetCount((count) => count + 1),
       onStateChange: setConnectionState,
-      onUnauthorized: () => {
-        disconnect()
-        queryClient.clear()
-      },
+      onUnauthorized: () => endSession(queryClient),
     })
 
     return () => controller.abort()
