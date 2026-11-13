@@ -19,6 +19,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Admin: the permission matrix shows the permissions the server has stored and grants them for the whole domain or for its keys, documents and tables separately.
 - Status bar: the server label opens a what's-new dialog with the LuraDB changes up to the release the client is built against.
 - Browser mode: a connection with a server URL connects directly if the server allows the origin via CORS; an empty URL keeps using the same-origin proxy.
+- Backups: relational data can be backed up (scopes `rel`, `rel:<domain>`) and restored under a new name; the restore dialog shows an archive's format version, shard count, log positions and relational snapshot.
 
 ### Changed
 

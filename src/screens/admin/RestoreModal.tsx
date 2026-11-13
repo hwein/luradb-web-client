@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import type { ApiClient } from '../../api'
 import { useConnectedSession } from '../../app/session'
-import { formatBytes } from '../../lib'
+import { formatBytes, formatNumber } from '../../lib'
 import {
   backupDetailQueryOptions,
   BACKUPS_KEY,
@@ -17,7 +17,8 @@ import {
 import { NAME_PATTERN } from './DomainsCard'
 import './RestoreModal.css'
 
-const SINGLE_DOMAIN_SCOPE = /^(kv|json|domain):.+$/
+const SINGLE_DOMAIN_SCOPE = /^(kv|json|rel|domain):.+$/
+const LINKED_SCOPE = /^(rel|domain):/
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'request failed'
@@ -27,12 +28,23 @@ function optional(value: string | number | boolean | null | undefined): string {
   return value === null || value === undefined ? '—' : String(value)
 }
 
+function formatOf(detail: BackupDetail): string {
+  if (detail.format_version === null || detail.format_version === undefined) return '—'
+  const shards = detail.shards ?? 0
+  return shards > 0 ? `v${detail.format_version} · shards ${formatNumber(shards)}` : `v${detail.format_version}`
+}
+
 function Facts({ detail }: { detail: BackupDetail }) {
+  const { lsn_cut: cut, rel_snapshot_ts: snapshot } = detail
   const rows: [string, string][] = [
     ['scope', detail.scope],
     ['created', detail.created_at === null || detail.created_at === undefined ? '—' : formatBackupTime(detail.created_at)],
     ['size', detail.size_bytes === null || detail.size_bytes === undefined ? '—' : formatBytes(detail.size_bytes)],
-    ['format version', optional(detail.format_version)],
+    ['format', formatOf(detail)],
+    ...(cut === null || cut === undefined
+      ? []
+      : ([['lsn cut', `kv ${formatNumber(cut.kv)} · json ${formatNumber(cut.json)} · rel ${formatNumber(cut.rel)}`]] as [string, string][])),
+    ...(snapshot === null || snapshot === undefined || snapshot === 0 ? [] : ([['rel snapshot', formatNumber(snapshot)]] as [string, string][])),
     ['include auth', optional(detail.include_auth)],
     ['schedule', optional(detail.schedule)],
   ]
@@ -196,6 +208,11 @@ export function RestoreForm({ apiClient, backupId, onClose }: RestoreFormProps) 
                   placeholder="leave empty to keep the archived name"
                   maxLength={50}
                 />
+                {LINKED_SCOPE.test(scope) && (
+                  <div className="rsm__hint">
+                    a new name also repoints KVREF/JSONREF links of relational tables to the KV and JSON domain of that name
+                  </div>
+                )}
                 {!intoDomainValid && <div className="rsm__danger">max 50 chars, [a-zA-Z0-9_-]</div>}
               </div>
             )}

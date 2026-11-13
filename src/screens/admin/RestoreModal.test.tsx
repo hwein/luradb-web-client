@@ -6,7 +6,7 @@ import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect, useSession } from '../../app/session'
 import { server } from '../../test/msw'
-import { clearRestoreEntry } from './backups'
+import { clearRestoreEntry, type BackupDetail } from './backups'
 import { RestoreForm } from './RestoreModal'
 
 const ORIGIN = window.location.origin
@@ -31,7 +31,7 @@ function versionHandler() {
   return http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' }))
 }
 
-function detailHandler(detail: Record<string, unknown>) {
+function detailHandler(detail: BackupDetail) {
   return http.get(DETAIL_URL, () => HttpResponse.json(detail))
 }
 
@@ -60,6 +60,59 @@ describe('RestoreForm archive facts', () => {
     expect(await screen.findByText('kv:shop')).toBeInTheDocument()
     const values = [...document.querySelectorAll('.rsm__fact-value')].map((node) => node.textContent)
     expect(values).toEqual(['kv:shop', '—', '—', '—', '—', '—'])
+  })
+
+  it('shows format, shards, lsn cut and rel snapshot of a format version 3 archive', async () => {
+    server.use(
+      versionHandler(),
+      detailHandler({
+        id: 'bk_a',
+        state: 'complete',
+        scope: 'rel:orders',
+        created_at: 1,
+        size_bytes: 10,
+        format_version: 3,
+        shards: 4,
+        lsn_cut: { kv: 0, json: 0, rel: 4410 },
+        rel_snapshot_ts: 88213,
+        include_auth: false,
+        schedule: null,
+      }),
+    )
+    await renderForm()
+
+    await screen.findByText('rel:orders')
+    const labels = [...document.querySelectorAll('.rsm__fact-label')].map((node) => node.textContent)
+    expect(labels).toEqual(['scope', 'created', 'size', 'format', 'lsn cut', 'rel snapshot', 'include auth', 'schedule'])
+    const values = [...document.querySelectorAll('.rsm__fact-value')].map((node) => node.textContent)
+    expect(values[3]).toBe('v3 · shards 4')
+    expect(values[4]).toBe('kv 0 · json 0 · rel 4,410')
+    expect(values[5]).toBe('88,213')
+  })
+
+  it('shows a format version 1 archive without shards, lsn cut and rel snapshot', async () => {
+    server.use(
+      versionHandler(),
+      detailHandler({
+        id: 'bk_a',
+        state: 'complete',
+        scope: 'kv:shop',
+        created_at: 1,
+        size_bytes: 10,
+        format_version: 1,
+        shards: 0,
+        lsn_cut: null,
+        rel_snapshot_ts: 0,
+        include_auth: false,
+        schedule: null,
+      }),
+    )
+    await renderForm()
+
+    await screen.findByText('kv:shop')
+    const labels = [...document.querySelectorAll('.rsm__fact-label')].map((node) => node.textContent)
+    expect(labels).toEqual(['scope', 'created', 'size', 'format', 'include auth', 'schedule'])
+    expect(document.querySelectorAll('.rsm__fact-value')[3]?.textContent).toBe('v1')
   })
 
   it('shows a hint and invalidates the list when the archive is gone', async () => {
@@ -145,6 +198,86 @@ describe('RestoreForm options', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'restore' }))
     await waitFor(() => expect(bodies).toEqual([{ mode: 'fail_if_exists', into_domain: 'shop-copy', include_auth: true }]))
+  })
+
+  it('offers into domain for a rel:<domain> archive and sends into_domain', async () => {
+    const bodies: unknown[] = []
+    server.use(
+      versionHandler(),
+      detailHandler({ id: 'bk_a', state: 'complete', scope: 'rel:orders', created_at: 1 }),
+      http.post(`${DETAIL_URL}/restore`, async ({ request }) => {
+        bodies.push(await request.json())
+        return HttpResponse.json({ restore_id: 'rst_1', state: 'running' }, { status: 202 })
+      }),
+      http.get(`${ORIGIN}/store-api/restores/rst_1`, () =>
+        HttpResponse.json({ restore_id: 'rst_1', backup_id: 'bk_a', state: 'running', imported: 0, skipped: 0, failed: 0, errors: [], started_at: 1 }),
+      ),
+    )
+    await renderForm()
+
+    fireEvent.change(await screen.findByLabelText('into domain'), { target: { value: 'orders-copy' } })
+    fireEvent.click(screen.getByRole('button', { name: 'restore' }))
+
+    await waitFor(() => expect(bodies).toEqual([{ mode: 'fail_if_exists', into_domain: 'orders-copy' }]))
+  })
+
+  it('explains the link remap for rel and domain archives only', async () => {
+    const hint = 'a new name also repoints KVREF/JSONREF links of relational tables to the KV and JSON domain of that name'
+    for (const [scope, explained] of [
+      ['rel:orders', true],
+      ['domain:shop', true],
+      ['kv:shop', false],
+      ['json:logs', false],
+    ] as const) {
+      server.use(versionHandler(), detailHandler({ id: 'bk_a', state: 'complete', scope, created_at: 1 }))
+      const { view } = await renderForm()
+
+      const field = (await screen.findByLabelText('into domain')).parentElement
+      const found = field?.querySelector('.rsm__hint')
+      if (explained) expect(found?.textContent).toBe(hint)
+      else expect(screen.queryByText(hint)).not.toBeInTheDocument()
+
+      view.unmount()
+    }
+  })
+
+  it('appends the retry delay when the restore start fails with 503 and Retry-After', async () => {
+    server.use(
+      versionHandler(),
+      detailHandler({ id: 'bk_a', state: 'complete', scope: 'all', created_at: 1 }),
+      http.post(`${DETAIL_URL}/restore`, () =>
+        HttpResponse.text('503 Service Unavailable: the server is overloaded, retry later', { status: 503, headers: { 'Retry-After': '1' } }),
+      ),
+    )
+    await renderForm()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'restore' }))
+
+    await waitFor(() =>
+      expect(document.querySelector('.rsm__danger')?.textContent).toBe('503 Service Unavailable: the server is overloaded, retry later · retry in 1 s'),
+    )
+    expect(screen.getByRole('button', { name: 'restore' })).toBeInTheDocument()
+  })
+
+  it('shows a 507 on restore start once, with the retry delay the server names', async () => {
+    server.use(
+      versionHandler(),
+      detailHandler({ id: 'bk_a', state: 'complete', scope: 'all', created_at: 1 }),
+      http.post(`${DETAIL_URL}/restore`, () =>
+        HttpResponse.text('507 Insufficient Storage: write blocked: disk space below threshold, retry in 5 s', {
+          status: 507,
+          headers: { 'Retry-After': '5' },
+        }),
+      ),
+    )
+    await renderForm()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'restore' }))
+
+    await waitFor(() =>
+      expect(document.querySelector('.rsm__danger')?.textContent).toBe('507 Insufficient Storage: write blocked: disk space below threshold, retry in 5 s'),
+    )
+    expect(screen.getByRole('button', { name: 'restore' })).toBeInTheDocument()
   })
 
   it('shows a synchronous 409 backup_busy as form error', async () => {

@@ -9,6 +9,7 @@ export type BackupDetail = components['schemas']['BackupDetailResponse']
 export type RunningBackupInfo = components['schemas']['RunningBackupInfo']
 export type RestoreStatus = components['schemas']['RestoreStatusResponse']
 export type RestoreRequest = components['schemas']['RestoreRequest']
+type RestoreAccepted = components['schemas']['RestoreAcceptedResponse']
 
 /** 503 = Feature aus, 404 = Route fehlt (Server < 0.3.0) — beides sind Anzeigezustände, keine Fehler (spec §9). */
 export type BackupsResult =
@@ -106,10 +107,8 @@ export function restoreStatusQueryOptions(apiClient: ApiClient | undefined, rest
 }
 
 export async function createBackup(apiClient: ApiClient, scope: string, includeAuth: boolean): Promise<void> {
-  const { error, response } = await apiClient.api.POST('/store-api/backups', {
-    body: includeAuth ? { scope, include_auth: true } : { scope },
-  })
-  if (!response.ok) throw apiError(response.status, error, 'backup start failed')
+  const body = includeAuth ? { scope, include_auth: true } : { scope }
+  await apiClient.fetchRaw(`${BASE_PATH}/backups`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 }
 
 export async function deleteBackup(apiClient: ApiClient, id: string): Promise<void> {
@@ -118,9 +117,13 @@ export async function deleteBackup(apiClient: ApiClient, id: string): Promise<vo
 }
 
 export async function startRestore(apiClient: ApiClient, id: string, body: RestoreRequest): Promise<string> {
-  const { data, error, response } = await apiClient.api.POST('/store-api/backups/{id}/restore', { params: { path: { id } }, body })
-  if (!response.ok || !data) throw apiError(response.status, error, 'restore start failed')
-  return data.restore_id
+  const response = await apiClient.fetchRaw(`${BASE_PATH}/backups/${encodeURIComponent(id)}/restore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const accepted = (await response.json()) as RestoreAccepted
+  return accepted.restore_id
 }
 
 /** Roh-Body-Upload (Contract: text/plain); `postNdjson` wirft nicht — Nicht-2xx wird hier übersetzt (spec §8). */

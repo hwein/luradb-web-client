@@ -26,7 +26,7 @@ import { invalidateDomainLists, requireApiClient } from './DomainsCard'
 import { RestoreModal } from './RestoreModal'
 import { USERS_KEY } from './users'
 
-type ScopeKind = 'all' | 'kv' | 'json' | 'domain'
+type ScopeKind = 'all' | 'kv' | 'json' | 'rel' | 'domain'
 
 const ENTIRE_ENGINE = ''
 const POLL_MS = 2000
@@ -230,7 +230,7 @@ function RunForm({ apiClient, onDone }: RunFormProps) {
   return (
     <div className="admin-backups__run-form">
       <div className="admin-backups__segments" role="group" aria-label="backup scope">
-        {(['all', 'kv', 'json', 'domain'] as ScopeKind[]).map((option) => (
+        {(['all', 'kv', 'json', 'rel', 'domain'] as ScopeKind[]).map((option) => (
           <button
             key={option}
             type="button"

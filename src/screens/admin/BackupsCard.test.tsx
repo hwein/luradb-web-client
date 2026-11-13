@@ -1,5 +1,5 @@
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Connection } from '../../app/connections'
@@ -205,6 +205,57 @@ describe('BackupsCard run backup now', () => {
     await waitFor(() => expect(bodies).toEqual([{ scope: 'domain:logs' }]))
   })
 
+  function scopeHandlers(bodies: unknown[]) {
+    return [
+      http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([domainResponse('logs'), domainResponse('orders'), domainResponse('shop')])),
+      ...baseHandlers(),
+      http.get(BACKUPS_URL, () => HttpResponse.json({ backups: [], running: null })),
+      http.post(BACKUPS_URL, async ({ request }) => {
+        bodies.push(await request.json())
+        return HttpResponse.json({ id: 'bk_new', state: 'running' }, { status: 202 })
+      }),
+    ]
+  }
+
+  it('offers the scope segments all, kv, json, rel and domain in that order', async () => {
+    server.use(...scopeHandlers([]))
+    await renderConnected()
+
+    fireEvent.click(await screen.findByRole('button', { name: '▶ run backup now' }))
+
+    const group = screen.getByRole('group', { name: 'backup scope' })
+    expect(within(group).getAllByRole('button').map((button) => button.textContent)).toEqual(['all', 'kv', 'json', 'rel', 'domain'])
+  })
+
+  it('lists the domains for the rel scope and sends rel:<domain>', async () => {
+    const bodies: unknown[] = []
+    server.use(...scopeHandlers(bodies))
+    await renderConnected()
+
+    fireEvent.click(await screen.findByRole('button', { name: '▶ run backup now' }))
+    fireEvent.click(screen.getByRole('button', { name: 'rel' }))
+    await screen.findByRole('option', { name: 'orders' })
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['entire engine', 'logs', 'orders', 'shop'])
+
+    fireEvent.change(screen.getByLabelText('backup domain'), { target: { value: 'orders' } })
+    fireEvent.click(screen.getByRole('button', { name: 'start' }))
+    await waitFor(() => expect(bodies).toEqual([{ scope: 'rel:orders' }]))
+  })
+
+  it('sends the plain rel scope for the entire engine and keeps include auth records disabled', async () => {
+    const bodies: unknown[] = []
+    server.use(...scopeHandlers(bodies))
+    await renderConnected()
+
+    fireEvent.click(await screen.findByRole('button', { name: '▶ run backup now' }))
+    fireEvent.click(screen.getByLabelText('include auth records'))
+    fireEvent.click(screen.getByRole('button', { name: 'rel' }))
+    expect(screen.getByLabelText('include auth records')).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'start' }))
+    await waitFor(() => expect(bodies).toEqual([{ scope: 'rel' }]))
+  })
+
   it('sends include_auth for the plain all scope', async () => {
     const bodies: unknown[] = []
     server.use(
@@ -255,6 +306,51 @@ describe('BackupsCard run backup now', () => {
 
     expect(await screen.findByText('503 Service Unavailable: scope requires the JSON engine, which is disabled')).toBeInTheDocument()
     expect(screen.queryByText('backups disabled — set backup.enabled = true in luradb.toml')).not.toBeInTheDocument()
+  })
+
+  it('appends the retry delay when a run fails with 503 and Retry-After', async () => {
+    server.use(
+      ...baseHandlers(),
+      http.get(BACKUPS_URL, () => HttpResponse.json({ backups: [], running: null })),
+      http.post(BACKUPS_URL, () =>
+        HttpResponse.text('503 Service Unavailable: the server is overloaded, retry later', { status: 503, headers: { 'Retry-After': '1' } }),
+      ),
+    )
+    await renderConnected()
+
+    fireEvent.click(await screen.findByRole('button', { name: '▶ run backup now' }))
+    fireEvent.click(screen.getByRole('button', { name: 'start' }))
+
+    await waitFor(() =>
+      expect(document.querySelector('.admin-backups__error')?.textContent).toBe(
+        '503 Service Unavailable: the server is overloaded, retry later · retry in 1 s',
+      ),
+    )
+    expect(screen.getByRole('button', { name: 'start' })).toBeInTheDocument()
+  })
+
+  it('shows a 507 on run once, with the retry delay the server names', async () => {
+    server.use(
+      ...baseHandlers(),
+      http.get(BACKUPS_URL, () => HttpResponse.json({ backups: [], running: null })),
+      http.post(BACKUPS_URL, () =>
+        HttpResponse.text('507 Insufficient Storage: write blocked: disk space below threshold, retry in 5 s', {
+          status: 507,
+          headers: { 'Retry-After': '5' },
+        }),
+      ),
+    )
+    await renderConnected()
+
+    fireEvent.click(await screen.findByRole('button', { name: '▶ run backup now' }))
+    fireEvent.click(screen.getByRole('button', { name: 'start' }))
+
+    await waitFor(() =>
+      expect(document.querySelector('.admin-backups__error')?.textContent).toBe(
+        '507 Insufficient Storage: write blocked: disk space below threshold, retry in 5 s',
+      ),
+    )
+    expect(screen.getByRole('button', { name: 'start' })).toBeInTheDocument()
   })
 
   it('refreshes the domain lists when the scope target vanished (404)', async () => {
