@@ -71,7 +71,13 @@ function labels(): string[] {
 // Die Restore-Registry ist ein Modul-Singleton — vor jedem Test zurücksetzen (Muster src/lib/tasks.ts-Tests).
 beforeEach(() => clearRestoreEntry())
 
+// Fixed wall clock (Date only; timers stay real): relative times render the same on every run.
+beforeEach(() => {
+  vi.setSystemTime(new Date(2026, 5, 15, 12, 0, 0))
+})
+
 afterEach(() => {
+  vi.useRealTimers()
   act(() => disconnect())
 })
 

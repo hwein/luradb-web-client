@@ -3,7 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect } from '../../app/session'
@@ -823,6 +823,15 @@ describe('KvBrowser', () => {
   })
 
   describe('ttl and key metadata in the detail (spec data/012)', () => {
+    // Fixed wall clock (Date only; timers stay real): relative times render the same on every run.
+    beforeEach(() => {
+      vi.setSystemTime(new Date(2026, 5, 15, 12, 0, 0))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
     it('appends "expires in" and "modified … ago" from /meta (seconds vs. milliseconds) to the bytes line', async () => {
       const nowSecs = Math.floor(Date.now() / 1000)
       server.use(
