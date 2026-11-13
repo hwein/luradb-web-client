@@ -328,10 +328,40 @@
 
 /* --- USERS & PER-DOMAIN PERMISSIONS matrix (Prototyp Z. 215–222) --------- */
 
+/* Head and rows share one column grid; below its minimum width the card scrolls sideways instead of cutting chips. */
+.admin-users__scroll {
+  overflow-x: auto;
+  container-type: inline-size;
+}
+
+/* Lines under a user row stay in the visible part of the card while it scrolls sideways. */
+.admin-users__table .admin-users__offgrid,
+.admin-users__table .admin-users__confirm,
+.admin-users__table .admin-users__reveal {
+  position: sticky;
+  left: 0;
+  box-sizing: border-box;
+  width: 100cqw;
+}
+
+.admin-users__table {
+  --col-user: 120px;
+  --col-domain: 96px;
+  --col-actions: 140px;
+  --col-gap: 6px;
+  min-width: calc(
+    var(--col-user) + var(--domains) * var(--col-domain) + var(--col-actions) + (var(--domains) + 1) * var(--col-gap) + 32px
+  );
+}
+
 .admin-users__row {
-  display: flex;
+  display: grid;
+  grid-template-columns:
+    minmax(var(--col-user), 1.4fr)
+    repeat(var(--domains), minmax(var(--col-domain), 1fr))
+    var(--col-actions);
   align-items: center;
-  gap: 6px;
+  gap: var(--col-gap);
   padding: 9px 16px;
   border-bottom: 1px solid var(--bord);
   font-family: var(--font-mono);
@@ -346,7 +376,6 @@
 }
 
 .admin-users__col-user {
-  flex: 1.4 1 120px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -362,7 +391,6 @@
 }
 
 .admin-users__col-domain {
-  flex: 1 1 56px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -370,7 +398,7 @@
   gap: 2px;
 }
 
-/* Kopfzeile zeigt nur den Domain-Namen (kein Zellen-Inhalt) — hier greift Ellipsis statt Zeilenumbruch (spec admin/005 §5). */
+/* The head holds only the domain name: ellipsis instead of wrapping. */
 .admin-users__col-domain--head {
   display: block;
   overflow: hidden;
@@ -378,9 +406,9 @@
   white-space: nowrap;
 }
 
+/* Always the explicit last track, also when there is no domain column. */
 .admin-users__col-actions {
-  flex: 0 0 auto;
-  margin-left: auto;
+  grid-column: -2 / -1;
   display: flex;
   align-items: center;
   gap: 10px;

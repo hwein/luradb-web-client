@@ -17,6 +17,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Desktop: UI zoom from 80% to 200% with Ctrl+Plus, Ctrl+Minus, Ctrl+0 (reset) and Ctrl+mouse wheel; the zoom level is kept across restarts.
 - Create a relational table from a CSV/TSV file (schema is derived, rows are imported).
 - Admin: the permission matrix shows the permissions the server has stored and grants them for the whole domain or for its keys, documents and tables separately.
+- Admin: the permissions card scrolls sideways when its domain columns do not fit; column heads stay above their chips.
 - Status bar: the server label opens a what's-new dialog with the LuraDB changes up to the release the client is built against.
 - Browser mode: a connection with a server URL connects directly if the server allows the origin via CORS; an empty URL keeps using the same-origin proxy.
 - Backups: relational data can be backed up (scopes `rel`, `rel:<domain>`) and restored under a new name; the restore dialog shows an archive's format version, shard count, log positions and relational snapshot.
@@ -32,7 +33,6 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The explorer now updates from a live server event stream instead of waiting for the next poll.
 - Status bar shows the signed-in user; the role now comes from /auth/whoami.
 - JSON browser: deleting a JSON document fails on a version conflict if it changed since it was loaded.
-- Admin: a permission cell grants or revokes access to the whole domain (keys, documents and tables).
 - Engine cards show per-engine ops/s and read/write latency percentiles from the server's 60s metrics window.
 - Text is larger throughout the app (body 14px, data 13px, labels 11px); explorer, side panels and status bar grow to match.
 - Clickable rows and text actions show a hover surface, the selected entry keeps it (the explorer marks the object open in the data browser), and list rows are taller.

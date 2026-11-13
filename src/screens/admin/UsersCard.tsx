@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { ApiError, type ApiClient } from '../../api'
 import { DOMAINS_KEY, domainsQueryOptions, useDomainSummaries, type DomainSummary } from '../../shell/domains'
 import { requireApiClient } from './DomainsCard'
@@ -179,17 +179,18 @@ function PermissionCell({ apiClient, user, domainName }: { apiClient: ApiClient 
 
   return (
     <span className="admin-users__col-domain">
-      <PermissionChip apiClient={apiClient} userName={user.name} domainName={domainName} level={wholeLevel} />
+      <PermissionChip key={wholeLevel} apiClient={apiClient} userName={user.name} domainName={domainName} level={wholeLevel} />
       {ENGINES.map((engine) => {
         const own = parts[engine]
+        const level = own ?? whole ?? 'none'
         return (
           <PermissionChip
-            key={engine}
+            key={`${engine}-${level}`}
             apiClient={apiClient}
             userName={user.name}
             domainName={domainName}
             engine={engine}
-            level={own ?? whole ?? 'none'}
+            level={level}
             inherited={own === undefined && whole !== undefined}
           />
         )
@@ -352,19 +353,23 @@ export function UsersCard({ apiClient }: { apiClient: ApiClient | undefined }) {
   return (
     <div className="admin-card admin-users">
       <div className="admin-card__head">USERS &amp; PER-DOMAIN PERMISSIONS</div>
-      <div className="admin-users__row admin-users__row--head">
-        <span className="admin-users__col-user">user</span>
-        {domains.map((domain) => (
-          <span key={domain.name} className="admin-users__col-domain admin-users__col-domain--head" title={domain.name}>
-            {domain.name}
-          </span>
-        ))}
-        <span className="admin-users__col-actions" />
+      <div className="admin-users__scroll">
+        <div className="admin-users__table" style={{ '--domains': Math.max(domains.length, 1) } as CSSProperties}>
+          <div className="admin-users__row admin-users__row--head">
+            <span className="admin-users__col-user">user</span>
+            {domains.map((domain) => (
+              <span key={domain.name} className="admin-users__col-domain admin-users__col-domain--head" title={domain.name}>
+                {domain.name}
+              </span>
+            ))}
+            <span className="admin-users__col-actions" />
+          </div>
+          {usersQuery.isError && <div className="admin-users__query-error">users unavailable — {messageOf(usersQuery.error)}</div>}
+          {users.map((user) => (
+            <UserRow key={user.name} apiClient={apiClient} user={user} domains={domains} domainsLoaded={domainsLoaded} />
+          ))}
+        </div>
       </div>
-      {usersQuery.isError && <div className="admin-users__query-error">users unavailable — {messageOf(usersQuery.error)}</div>}
-      {users.map((user) => (
-        <UserRow key={user.name} apiClient={apiClient} user={user} domains={domains} domainsLoaded={domainsLoaded} />
-      ))}
       <CreateUserRow apiClient={apiClient} />
       <div className="admin-card__footnote admin-card__footnote--tight">
         {'click a chip to cycle read · read+write · — · top chip: whole domain, below: keys, documents, tables'}

@@ -366,6 +366,35 @@ describe('UsersCard', () => {
     expect(chip('alice · shop').textContent).toBe('—')
   })
 
+  it("clears a chip error when the chip's level changes", async () => {
+    const { handlers } = permissionServer('alice', [])
+    server.use(
+      versionHandler(),
+      ...domainHandlers(),
+      http.post(`${ORIGIN}/store-api/auth/users/alice/permissions`, async ({ request }) => {
+        const body = (await request.clone().json()) as Grant
+        return body.engine ? undefined : new HttpResponse(null, { status: 500 })
+      }),
+      ...handlers,
+    )
+    await act(() => connect(makeConnection()))
+    renderConnected()
+
+    await screen.findByText('alice')
+    fireEvent.click(chip('alice · shop'))
+    await screen.findByText('permission update failed (HTTP 500)')
+
+    fireEvent.click(chip('alice · shop · json'))
+    await waitFor(() => expect(chip('alice · shop').textContent).toBe('per part'))
+    expect(screen.queryByText('permission update failed (HTTP 500)')).toBeNull()
+
+    fireEvent.click(chip('alice · shop · json'))
+    await waitFor(() => expect(chip('alice · shop · json').textContent).toBe('read+write'))
+    fireEvent.click(chip('alice · shop · json'))
+    await waitFor(() => expect(chip('alice · shop').textContent).toBe('—'))
+    expect(screen.queryByText('permission update failed (HTTP 500)')).toBeNull()
+  })
+
   it('lists a grant on a domain outside the domain list under the user row and revokes it with one DELETE', async () => {
     const { state, handlers } = permissionServer('alice', [
       { domain: 'ghost', access: 'read' },
