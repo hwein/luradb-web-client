@@ -94,10 +94,17 @@
   display: flex;
   align-items: center;
   gap: 5px;
+  padding: 2px 6px;
+  border-radius: var(--rad);
   font-family: var(--font-mono);
   font-size: var(--fs-data);
   color: var(--tx);
   cursor: pointer;
+}
+
+.rsm__radio:hover,
+.rsm__check:hover:not(:has(:disabled)) {
+  background: var(--panel2);
 }
 
 .rsm__input {

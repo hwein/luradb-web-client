@@ -159,10 +159,12 @@
 
 .engines__card-row-label {
   color: var(--mut);
+  font-size: var(--fs-meta);
 }
 
 .engines__card-row-value {
   color: var(--tx);
+  font-weight: 500;
 }
 
 .engines__card-footer {
@@ -175,9 +177,10 @@
 }
 
 .engines__domain-link {
-  padding: 0;
+  padding: 0 4px;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--acc);
   font-family: var(--font-mono);
   font-size: inherit;
@@ -185,7 +188,7 @@
 }
 
 .engines__domain-link:hover {
-  text-decoration: underline;
+  background: var(--panel2);
 }
 
 /* --- Tasks/Requests-Zeile (spec §4/§5) ----------------------------------- */
@@ -262,13 +265,18 @@
 }
 
 .engines__reindex-cancel {
-  padding: 0;
+  padding: 6px 10px;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--mut);
   font-family: var(--font-sans);
   font-size: var(--fs-meta);
   cursor: pointer;
+}
+
+.engines__reindex-cancel:hover:not(:disabled) {
+  background: var(--panel2);
 }
 
 .engines__reindex-error {
@@ -301,12 +309,15 @@
 
 .engines__task-label {
   white-space: nowrap;
+  color: var(--tx);
+  font-weight: 500;
 }
 
 .engines__task-meta {
   flex: 1;
   min-width: 0;
   color: var(--mut);
+  font-size: var(--fs-meta);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -352,6 +363,9 @@
 .engines__request-path {
   flex: 1;
   min-width: 0;
+  color: var(--tx);
+  font-size: var(--fs-data);
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -359,9 +373,10 @@
 
 .engines__why-link {
   margin-left: auto;
-  padding: 0;
+  padding: 2px 6px;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--acc);
   font-family: var(--font-mono);
   font-size: var(--fs-meta);
@@ -370,5 +385,5 @@
 }
 
 .engines__why-link:hover {
-  text-decoration: underline;
+  background: var(--panel2);
 }

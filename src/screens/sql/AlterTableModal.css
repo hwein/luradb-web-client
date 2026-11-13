@@ -54,10 +54,16 @@
   display: flex;
   align-items: center;
   gap: 5px;
+  padding: 4px 6px;
+  border-radius: var(--rad);
   font-family: var(--font-mono);
   font-size: var(--fs-data);
   color: var(--mut);
   cursor: pointer;
+}
+
+.atm__op:hover {
+  background: var(--panel2);
 }
 
 .atm__section {
@@ -152,12 +158,16 @@
 .atm__hint-link {
   background: none;
   border: none;
-  padding: 0;
-  color: inherit;
-  text-decoration: underline;
+  border-radius: var(--rad);
+  padding: 0 4px;
+  color: var(--acc);
   font-family: inherit;
   font-size: inherit;
   cursor: pointer;
+}
+
+.atm__hint-link:hover {
+  background: var(--panel2);
 }
 
 .atm__preview {

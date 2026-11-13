@@ -80,7 +80,7 @@
   font-family: var(--font-mono);
   font-weight: 600;
   font-size: var(--fs-label);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   color: var(--mut);
   border-bottom: 1px solid var(--bord);
 }
@@ -117,6 +117,8 @@
 }
 
 .admin-domains__name {
+  color: var(--tx);
+  font-weight: 500;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -167,16 +169,19 @@
 }
 
 .admin-domains__trash {
-  padding: 0 0 0 8px;
+  margin-left: 2px;
+  padding: 3px 6px;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--mut);
   cursor: pointer;
   font-size: var(--fs-data);
   line-height: 1;
 }
 
-.admin-domains__trash:hover {
+.admin-domains__trash:hover:not(:disabled) {
+  background: var(--panel2);
   color: var(--tx);
 }
 
@@ -189,22 +194,32 @@
 }
 
 .admin-domains__confirm-action {
-  padding: 0;
+  padding: 0 4px;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--err);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
 }
 
+.admin-domains__confirm-action:hover:not(:disabled) {
+  background: var(--panel2);
+}
+
 .admin-domains__confirm-cancel {
-  padding: 0;
+  padding: 0 4px;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--mut);
   font: inherit;
   cursor: pointer;
+}
+
+.admin-domains__confirm-cancel:hover:not(:disabled) {
+  background: var(--panel2);
 }
 
 .admin-domains__error {
@@ -276,6 +291,9 @@
 
 .admin-auth__row-value {
   margin-left: auto;
+  color: var(--tx);
+  font-size: var(--fs-data);
+  font-weight: 500;
 }
 
 .admin-auth__row-value--ok {
@@ -338,6 +356,11 @@
   white-space: nowrap;
 }
 
+.admin-users__row:not(.admin-users__row--head) .admin-users__col-user {
+  color: var(--tx);
+  font-weight: 500;
+}
+
 .admin-users__col-domain {
   flex: 1 1 56px;
   min-width: 0;
@@ -390,7 +413,8 @@
 .admin-users__cell {
   background: none;
   border: none;
-  padding: 0;
+  border-radius: var(--rad);
+  padding: 0 4px;
   font: inherit;
   color: var(--mut);
   cursor: pointer;
@@ -398,6 +422,11 @@
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The write and other chips keep their own surface. */
+.admin-users__cell:not(.admin-users__cell--write):not(.admin-users__cell--other):hover:not(:disabled) {
+  background: var(--panel2);
 }
 
 .admin-users__cell--read {
@@ -463,24 +492,31 @@
 .admin-users__action {
   background: none;
   border: none;
-  padding: 0;
+  border-radius: var(--rad);
+  padding: 2px 6px;
   color: var(--acc);
   font-family: var(--font-mono);
   font-size: var(--fs-meta);
   cursor: pointer;
 }
 
+.admin-users__action:hover:not(:disabled) {
+  background: var(--panel2);
+}
+
 .admin-users__action-trash {
   background: none;
   border: none;
-  padding: 0;
+  border-radius: var(--rad);
+  padding: 3px 6px;
   color: var(--mut);
   cursor: pointer;
   font-size: var(--fs-data);
   line-height: 1;
 }
 
-.admin-users__action-trash:hover {
+.admin-users__action-trash:hover:not(:disabled) {
+  background: var(--panel2);
   color: var(--tx);
 }
 
@@ -493,22 +529,32 @@
 }
 
 .admin-users__confirm-action {
-  padding: 0;
+  padding: 0 4px;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--err);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
 }
 
+.admin-users__confirm-action:hover:not(:disabled) {
+  background: var(--panel2);
+}
+
 .admin-users__confirm-cancel {
-  padding: 0;
+  padding: 0 4px;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--mut);
   font: inherit;
   cursor: pointer;
+}
+
+.admin-users__confirm-cancel:hover:not(:disabled) {
+  background: var(--panel2);
 }
 
 .admin-users__error {
@@ -684,16 +730,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--tx);
+  font-weight: 500;
 }
 
 .admin-backups__schedule {
   color: var(--mut);
+  font-size: var(--fs-meta);
 }
 
 .admin-backups__size {
   margin-left: auto;
   flex: 0 0 auto;
   color: var(--mut);
+  font-size: var(--fs-meta);
 }
 
 .admin-backups__actions {
@@ -706,11 +756,16 @@
 .admin-backups__action {
   background: none;
   border: none;
-  padding: 0;
+  border-radius: var(--rad);
+  padding: 2px 6px;
   color: var(--acc);
   font-family: var(--font-mono);
   font-size: var(--fs-meta);
   cursor: pointer;
+}
+
+.admin-backups__action:hover:not(:disabled) {
+  background: var(--panel2);
 }
 
 .admin-backups__action:disabled {
@@ -722,15 +777,17 @@
 .admin-backups__trash {
   background: none;
   border: none;
-  padding: 0;
+  border-radius: var(--rad);
+  padding: 3px 6px;
   color: var(--mut);
   cursor: pointer;
   font-size: var(--fs-data);
   line-height: 1;
 }
 
-.admin-backups__dismiss:hover,
-.admin-backups__trash:hover {
+.admin-backups__dismiss:hover:not(:disabled),
+.admin-backups__trash:hover:not(:disabled) {
+  background: var(--panel2);
   color: var(--tx);
 }
 
@@ -743,22 +800,32 @@
 }
 
 .admin-backups__confirm-action {
-  padding: 0;
+  padding: 0 4px;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--err);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
 }
 
+.admin-backups__confirm-action:hover:not(:disabled) {
+  background: var(--panel2);
+}
+
 .admin-backups__confirm-cancel {
-  padding: 0;
+  padding: 0 4px;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--mut);
   font: inherit;
   cursor: pointer;
+}
+
+.admin-backups__confirm-cancel:hover:not(:disabled) {
+  background: var(--panel2);
 }
 
 .admin-backups__error {
@@ -790,11 +857,16 @@
 .admin-backups__run {
   background: none;
   border: none;
-  padding: 0;
+  border-radius: var(--rad);
+  padding: 2px 6px;
   color: var(--acc);
   font-family: var(--font-mono);
   font-size: var(--fs-data);
   cursor: pointer;
+}
+
+.admin-backups__run:hover:not(:disabled) {
+  background: var(--panel2);
 }
 
 .admin-backups__run:disabled {
@@ -803,6 +875,8 @@
 }
 
 .admin-backups__upload {
+  border-radius: var(--rad);
+  padding: 2px 6px;
   color: var(--mut);
   font-family: var(--font-mono);
   font-size: var(--fs-meta);
@@ -810,6 +884,7 @@
 }
 
 .admin-backups__upload:hover {
+  background: var(--panel2);
   color: var(--tx);
 }
 
@@ -880,10 +955,16 @@
   display: flex;
   align-items: center;
   gap: 5px;
+  padding: 2px 6px;
+  border-radius: var(--rad);
   font-family: var(--font-mono);
   font-size: var(--fs-meta);
   color: var(--mut);
   cursor: pointer;
+}
+
+.admin-backups__check:hover:not(:has(:disabled)) {
+  background: var(--panel2);
 }
 
 .admin-backups__spacer {
@@ -893,11 +974,16 @@
 .admin-backups__cancel {
   background: none;
   border: none;
-  padding: 0;
+  border-radius: var(--rad);
+  padding: 2px 6px;
   color: var(--mut);
   font-family: var(--font-mono);
   font-size: var(--fs-meta);
   cursor: pointer;
+}
+
+.admin-backups__cancel:hover:not(:disabled) {
+  background: var(--panel2);
 }
 
 .admin-backups__start {
@@ -966,7 +1052,8 @@
   flex: 0 0 auto;
   background: none;
   border: none;
-  padding: 0 2px;
+  border-radius: var(--rad);
+  padding: 3px 5px;
   color: var(--mut);
   cursor: pointer;
   font-size: var(--fs-data);
@@ -974,6 +1061,7 @@
 }
 
 .admin-log__filter-clear:hover {
+  background: var(--panel2);
   color: var(--tx);
 }
 
@@ -982,11 +1070,16 @@
   margin-left: auto;
   background: none;
   border: none;
-  padding: 0;
+  border-radius: var(--rad);
+  padding: 2px 6px;
   color: var(--acc);
   font-family: var(--font-mono);
   font-size: var(--fs-meta);
   cursor: pointer;
+}
+
+.admin-log__refresh:hover:not(:disabled) {
+  background: var(--panel2);
 }
 
 .admin-log__body {

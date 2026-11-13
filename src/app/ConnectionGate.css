@@ -136,7 +136,12 @@
   font-family: var(--font-mono);
   font-size: var(--fs-data);
   cursor: pointer;
-  padding: 0;
+  padding: 4px 6px;
+  border-radius: var(--rad);
+}
+
+.connection-gate__new:hover {
+  background: var(--panel2);
 }
 
 .connection-form {

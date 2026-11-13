@@ -142,7 +142,7 @@ export function SqlResults({ outcome, running, onExport, onOpenDoc }: SqlResults
         <span className="sql-results__label mono-label">RESULTS</span>
         {outcome && (
           <span className="sql-results__meta">
-            {summaryFor(outcome)} · {outcome.call.ms.toFixed(1)} ms · <CallLine method="POST" path={outcome.call.path} />
+            <span className="sql-results__summary">{summaryFor(outcome)}</span> · {outcome.call.ms.toFixed(1)} ms · <CallLine method="POST" path={outcome.call.path} />
             {selectResult?.limitApplied ? ' · limit applied' : ''}
           </span>
         )}

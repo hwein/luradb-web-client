@@ -138,7 +138,7 @@
   font-family: var(--font-mono);
   font-weight: 600;
   font-size: var(--fs-label);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--mut);
   padding: 10px 10px 4px;
@@ -148,15 +148,17 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  box-sizing: border-box;
   width: 100%;
+  min-height: var(--row-h);
   text-align: left;
-  padding: 7px 10px;
+  padding: 0 10px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--rad);
   background: transparent;
   color: var(--mut);
   font-family: var(--font-mono);
-  font-size: var(--fs-meta);
+  font-size: var(--fs-data);
   cursor: pointer;
 }
 
@@ -176,6 +178,11 @@
 
 .rest__endpoint-path {
   white-space: nowrap;
+  font-weight: 500;
+}
+
+.rest__endpoint--active .rest__endpoint-path {
+  color: var(--tx);
 }
 
 /* --- Response (rechte Spalte) ----------------------------------------- */
@@ -221,8 +228,9 @@
 
 .rest__copy-curl {
   margin-left: auto;
-  padding: 0;
+  padding: 2px 6px;
   border: none;
+  border-radius: var(--rad);
   background: transparent;
   color: var(--mut);
   font-family: var(--font-mono);
@@ -231,6 +239,7 @@
 }
 
 .rest__copy-curl:hover {
+  background: var(--panel2);
   color: var(--tx);
 }
 

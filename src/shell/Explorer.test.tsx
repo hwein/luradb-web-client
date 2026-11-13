@@ -136,14 +136,14 @@ function SqlRouteProbe() {
   )
 }
 
-async function connectAndRender() {
+async function connectAndRender(initialPath = '/sql') {
   server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })))
   await act(() => connect(makeConnection()))
 
   const queryClient = createAppQueryClient()
   const rendered = render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/sql']}>
+      <MemoryRouter initialEntries={[initialPath]}>
         <SelectedDomainProvider>
           <Explorer />
         </SelectedDomainProvider>
@@ -337,6 +337,48 @@ describe('Explorer', () => {
     expect(keysButton).toHaveTextContent('2')
     fireEvent.click(keysButton)
     expect(screen.getByTestId('data-route-state')).toHaveTextContent('/data?engine=kv')
+  })
+
+  it('marks the object row of the open data target as current', async () => {
+    server.use(
+      domainsHandler([domainResponse('alpha')]),
+      relTablesHandler('alpha', ['orders']),
+      relTableCountHandler('alpha', 'orders', 3),
+      relViewsHandler('alpha', ['v_paid']),
+      relTableDetailHandler('alpha', 'orders', [column('id', 'INTEGER')]),
+      jsonCountHandler('alpha', 1),
+      jsonIndexesHandler('alpha', 0),
+      kvCountHandler('alpha', 2),
+    )
+
+    await connectAndRender('/data')
+
+    const orders = await screen.findByRole('button', { name: /T orders/ })
+    const view = await screen.findByRole('button', { name: /V v_paid/ })
+    const documents = await screen.findByRole('button', { name: /^J documents/ })
+    const keys = await screen.findByRole('button', { name: /^K keys/ })
+    const rows = [orders, view, documents, keys]
+    const current = () => rows.filter((row) => row.getAttribute('aria-current') === 'true')
+
+    expect(current()).toEqual([documents])
+    expect(documents).toHaveClass('explorer__object-row--selected')
+
+    fireEvent.click(orders)
+    expect(current()).toEqual([orders])
+    expect(orders).toHaveClass('explorer__object-row--selected')
+    expect(documents).not.toHaveClass('explorer__object-row--selected')
+
+    fireEvent.click(documents)
+    expect(current()).toEqual([documents])
+
+    fireEvent.click(keys)
+    expect(current()).toEqual([keys])
+    expect(keys).toHaveClass('explorer__object-row--selected')
+
+    fireEvent.click(view)
+    expect(screen.getByTestId('sql-route-state')).toHaveTextContent('/sql')
+    expect(current()).toEqual([])
+    expect(rows.filter((row) => row.classList.contains('explorer__object-row--selected'))).toEqual([])
   })
 
   it('a view click opens the SQL console with a new LIMIT-50 select tab instead of the rel browser (no rows endpoint for views)', async () => {

@@ -133,6 +133,7 @@
   margin-left: auto;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--mut);
   font-size: 14px;
   line-height: 1;
@@ -142,6 +143,7 @@
 
 .ctm__row-remove:hover:not(:disabled) {
   color: var(--err);
+  background: var(--panel);
 }
 
 .ctm__row-remove:disabled {
@@ -203,24 +205,33 @@
 .ctm__hint-link {
   background: none;
   border: none;
-  padding: 0;
-  color: inherit;
-  text-decoration: underline;
+  border-radius: var(--rad);
+  padding: 0 4px;
+  color: var(--acc);
   font-family: inherit;
   font-size: inherit;
   cursor: pointer;
 }
 
+.ctm__hint-link:hover {
+  background: var(--panel);
+}
+
 .ctm__add-column {
   align-self: flex-start;
-  padding: 6px 2px;
+  padding: 6px 8px;
   font-family: var(--font-mono);
   font-size: var(--fs-meta);
   color: var(--acc);
   background: transparent;
   border: none;
+  border-radius: var(--rad);
   cursor: pointer;
   text-align: left;
+}
+
+.ctm__add-column:hover {
+  background: var(--panel2);
 }
 
 .ctm__preview {

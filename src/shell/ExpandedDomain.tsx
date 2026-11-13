@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import type { ApiClient } from '../api'
 import { RelFileImportModal } from '../screens/data/RelFileImportModal'
 import { CreateTableModal } from '../screens/sql/CreateTableModal'
@@ -48,11 +48,43 @@ function SectionLabel({ tone, text, addLabel, onAdd }: { tone: 'rel' | 'json' | 
   )
 }
 
+/** The object the data browser shows: `rel:<table>`, `json` or `kv`; without `engine` it falls back to JSON like DataScreen. */
+function dataTarget(pathname: string, search: string): string | undefined {
+  if (pathname !== '/data') return undefined
+  const params = new URLSearchParams(search)
+  const engine = params.get('engine')
+  if (engine === 'kv') return 'kv'
+  if (engine === 'rel') {
+    const table = params.get('table')
+    return table === null ? undefined : `rel:${table}`
+  }
+  return 'json'
+}
+
+function objectRowProps(selected: boolean): { className: string; 'aria-current': 'true' | undefined } {
+  return {
+    className: selected ? 'explorer__object-row explorer__object-row--selected' : 'explorer__object-row',
+    'aria-current': selected ? 'true' : undefined,
+  }
+}
+
 /** Tabellenzeile mit eigener Row-Count-Query (spec shell/010 §4): Zahl nur bei Erfolg — kein Platzhalter, keine `0` auf Verdacht. */
-function TableObjectRow({ domain, table, apiClient, onOpen }: { domain: string; table: string; apiClient: ApiClient | undefined; onOpen: () => void }) {
+function TableObjectRow({
+  domain,
+  table,
+  apiClient,
+  selected,
+  onOpen,
+}: {
+  domain: string
+  table: string
+  apiClient: ApiClient | undefined
+  selected: boolean
+  onOpen: () => void
+}) {
   const countQuery = useQuery({ ...relTableRowCountQueryOptions(apiClient, domain, table), refetchInterval: 60_000 })
   return (
-    <button type="button" className="explorer__object-row" onClick={onOpen}>
+    <button type="button" {...objectRowProps(selected)} onClick={onOpen}>
       <EngineChip letter="T" tone="rel" /> {table}
       {countQuery.isSuccess && <span className="explorer__object-count">{formatCount(countQuery.data)}</span>}
     </button>
@@ -62,6 +94,8 @@ function TableObjectRow({ domain, table, apiClient, onOpen }: { domain: string; 
 /** RELATIONAL/JSON/KEY-VALUE-Abschnitte der genau einen expandierten Domäne (spec shell/002 §3) — Daten nur hier geladen. */
 export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const target = dataTarget(location.pathname, location.search)
   const tablesQuery = useQuery({ ...relTablesQueryOptions(apiClient, domain.name, true), refetchInterval: 30_000 })
   const viewsQuery = useQuery({ ...relViewsQueryOptions(apiClient, domain.name, true), refetchInterval: 30_000 })
   const jsonCountQuery = useQuery({ ...jsonDocumentCountQueryOptions(apiClient, domain.name, true), refetchInterval: 30_000 })
@@ -100,7 +134,14 @@ export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
             <>
               <SectionLabel tone="rel" text="RELATIONAL" addLabel="new table" onAdd={() => setTableModalOpen(true)} />
               {(tablesQuery.data ?? []).map((table) => (
-                <TableObjectRow key={table.name} domain={domain.name} table={table.name} apiClient={apiClient} onOpen={() => openInData('rel', table.name)} />
+                <TableObjectRow
+                  key={table.name}
+                  domain={domain.name}
+                  table={table.name}
+                  apiClient={apiClient}
+                  selected={target === `rel:${table.name}`}
+                  onOpen={() => openInData('rel', table.name)}
+                />
               ))}
               {(viewsQuery.data ?? []).map((view) => (
                 <button key={view.name} type="button" className="explorer__object-row explorer__object-row--muted" onClick={() => openViewInSql(view.name)}>
@@ -113,7 +154,7 @@ export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
             <>
               <SectionLabel tone="json" text="JSON" addLabel="new document" onAdd={() => openInData('json')} />
               {activity.json === 'active' && (
-                <button type="button" className="explorer__object-row" onClick={() => openInData('json')}>
+                <button type="button" {...objectRowProps(target === 'json')} onClick={() => openInData('json')}>
                   <EngineChip letter="J" tone="json" /> documents
                   {jsonSummary && <span className="explorer__object-count">{jsonSummary}</span>}
                 </button>
@@ -122,7 +163,7 @@ export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
           )}
           <SectionLabel tone="kv" text="KEY-VALUE" addLabel="new key" onAdd={() => openInData('kv')} />
           {activity.kv === 'active' && (
-            <button type="button" className="explorer__object-row" onClick={() => openInData('kv')}>
+            <button type="button" {...objectRowProps(target === 'kv')} onClick={() => openInData('kv')}>
               <EngineChip letter="K" tone="kv" /> keys
               {typeof activity.kvKeyCount === 'number' && <span className="explorer__object-count">{formatCount(activity.kvKeyCount)}</span>}
             </button>

@@ -12,17 +12,24 @@
   color: var(--mut);
 }
 
+/* The negative left margin offsets the padding, so the content keeps its place. */
 .statusbar__connection {
   display: flex;
   align-items: center;
+  align-self: stretch;
   gap: 6px;
   background: transparent;
   border: none;
-  padding: 0;
-  margin: 0;
+  border-radius: var(--rad);
+  padding: 0 6px;
+  margin: 0 0 0 -6px;
   font: inherit;
   color: inherit;
   cursor: pointer;
+}
+
+.statusbar__connection:hover {
+  background: var(--panel2);
 }
 
 .statusbar__dot {
@@ -72,6 +79,7 @@
   align-self: stretch;
   background: transparent;
   border: none;
+  border-radius: var(--rad);
   padding: 0 6px;
   margin-right: -6px;
   font: inherit;
@@ -81,5 +89,4 @@
 
 .statusbar__server--button:hover {
   background: var(--panel2);
-  border-radius: var(--rad);
 }

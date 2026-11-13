@@ -70,15 +70,21 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 7px 10px;
+  min-height: var(--row-h);
+  padding: 0 10px;
   background: transparent;
   border: none;
   border-radius: var(--rad);
   color: var(--tx);
   font-family: var(--font-mono);
-  font-size: var(--fs-body);
+  font-size: var(--fs-data);
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
+}
+
+.cmdk__row:hover {
+  background: var(--panel2);
 }
 
 .cmdk__row--active {
@@ -97,6 +103,7 @@
   flex-shrink: 0;
   color: var(--mut);
   font-size: var(--fs-meta);
+  font-weight: 400;
 }
 
 .cmdk__chips {

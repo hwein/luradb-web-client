@@ -31,6 +31,10 @@
   color: var(--mut);
 }
 
+.rail__button:not(.rail__button--active):hover {
+  background: var(--panel2);
+}
+
 .rail__button--active {
   background: var(--acc);
   color: var(--accT);
