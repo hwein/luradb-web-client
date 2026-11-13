@@ -44,7 +44,7 @@ export function KvWatchFeed({ domain, prefix }: KvWatchFeedProps) {
   }, [latestTs, resetCount, domain, queryClient])
 
   return (
-    <div className="kv-feed">
+    <div className="kv-feed selectable">
       <div className="kv-feed__head">
         <span className="mono-label">WATCH</span>
         <span className="kv-feed__state">

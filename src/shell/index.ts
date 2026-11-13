@@ -1,4 +1,6 @@
 export { AppShell } from './AppShell'
 export { useSelectedDomain } from './SelectedDomainContext'
+export { TitleBar } from './TitleBar'
+export { useDesktopGuards } from './useDesktopGuards'
 export { useZoom } from './useZoom'
 export { ZoomToast } from './ZoomToast'

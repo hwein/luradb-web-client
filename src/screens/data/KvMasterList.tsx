@@ -24,7 +24,7 @@ export function KvMasterList({ keys, selectedKey, onSelect, onNew, loading, hasM
   }, [selectedKey, keys])
 
   return (
-    <div className="kv-list">
+    <div className="kv-list selectable">
       <div className="kv-list__head">
         <span className="kv-list__label">key</span>
         <button type="button" className="kv-list__new" onClick={onNew}>

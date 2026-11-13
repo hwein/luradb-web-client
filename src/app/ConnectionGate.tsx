@@ -52,7 +52,7 @@ export function ConnectionGate() {
 
         <div className="connection-gate__panel">
           {session.status === 'error' && (
-            <p className="connection-gate__banner connection-gate__banner--error" role="alert">
+            <p className="connection-gate__banner connection-gate__banner--error selectable" role="alert">
               {session.message}
             </p>
           )}

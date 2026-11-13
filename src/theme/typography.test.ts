@@ -15,6 +15,7 @@ const EXCEPTIONS: Exception[] = [
   { file: 'src/screens/docs/DocsScreen.css', selector: '.docs-article :not(pre) > code', value: '0.85em' },
   { file: 'src/shell/CommandPalette.css', selector: '.cmdk__input', value: '14px' },
   { file: 'src/screens/sql/CreateTableModal.css', selector: '.ctm__row-remove', value: '14px' },
+  { file: 'src/shell/TitleBar.css', selector: '.titlebar__name', value: '12px' },
 ]
 
 const TOKEN = /^var\(--fs-(label|meta|data|body|title)\)$/

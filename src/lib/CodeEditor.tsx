@@ -68,5 +68,5 @@ export function CodeEditor({ value, onChange, extensions, ariaLabel, placeholder
     view.dispatch({ changes: { from: 0, to: current.length, insert: value } })
   }, [value])
 
-  return <div ref={hostRef} className="code-editor" />
+  return <div ref={hostRef} className="code-editor selectable" />
 }

@@ -13,7 +13,7 @@ function RequestRow({ call, onWhy }: { call: RecordedCall; onWhy: (status: numbe
   const { status, method, path, ms } = call
 
   return (
-    <div className="engines__request-row">
+    <div className="engines__request-row selectable">
       <span className="engines__request-status">
         {typeof status === 'number' ? (
           <StatusCode status={status} ms={ms} />

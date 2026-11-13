@@ -7,7 +7,7 @@ export interface CallLineProps {
 /** "Show the call" (Styleguide §05): eine Zeile im Muster `POST /store-api/… · note`. */
 export function CallLine({ method, path, note }: CallLineProps) {
   return (
-    <span className="mono-path">
+    <span className="mono-path selectable">
       {method} {path}
       {note !== undefined && ` · ${note}`}
     </span>

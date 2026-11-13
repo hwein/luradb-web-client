@@ -92,6 +92,12 @@
   --logo-kv: oklch(0.5 0.13 150);
 }
 
+html,
+body {
+  overscroll-behavior: none;
+}
+
+/* Text is opt-in selectable via .selectable; WebKit (macOS, Linux) needs the prefix. */
 body {
   margin: 0;
   background: var(--bg);
@@ -99,6 +105,25 @@ body {
   font-family: var(--font-sans);
   font-size: var(--fs-body);
   line-height: var(--lh-tight);
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+.selectable {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: auto;
+}
+
+img,
+a,
+svg {
+  -webkit-user-drag: none;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* Placeholder auf Token statt Browser-Grau — deckungsgleich mit .cm-placeholder (CodeEditor); opacity gegen Firefox-Dimmung. */

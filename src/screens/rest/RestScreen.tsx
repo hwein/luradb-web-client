@@ -281,7 +281,7 @@ export function RestScreen() {
           ) : null}
         </div>
         {result !== undefined ? (
-          <pre className="rest__response-body">{result.bodyText}</pre>
+          <pre className="rest__response-body selectable">{result.bodyText}</pre>
         ) : (
           <div className="rest__response-empty">send a request to see the response</div>
         )}

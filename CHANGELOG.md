@@ -36,6 +36,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Engine cards show per-engine ops/s and read/write latency percentiles from the server's 60s metrics window.
 - Text is larger throughout the app (body 14px, data 13px, labels 11px); explorer, side panels and status bar grow to match.
 - Clickable rows and text actions show a hover surface, the selected entry keeps it (the explorer marks the object open in the data browser), and list rows are taller.
+- Desktop app: the window has its own title bar in the app theme with minimize, maximize and close buttons.
+- Text is selectable only in editors, result grids, lists, detail panes, docs, logs, watch feeds, request and response text and error messages; the desktop app shows the browser context menu only in text fields and editors and ignores the browser shortcuts for reload, print and find.
 
 ### Removed
 

@@ -162,7 +162,7 @@ export function ServerLogCard({ apiClient }: { apiClient: ApiClient | undefined 
               refresh
             </button>
           </div>
-          <div className="admin-log__body" ref={bodyRef} onScroll={handleScroll}>
+          <div className="admin-log__body selectable" ref={bodyRef} onScroll={handleScroll}>
             {(tailQuery.data?.lines ?? []).map((line, index) => (
               <div key={index} className="admin-log__line">
                 {line}

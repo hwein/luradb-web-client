@@ -1,7 +1,8 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { BrowserRouter } from 'react-router'
-import { AppShell, useZoom, ZoomToast } from '../shell'
+import { AppShell, TitleBar, useDesktopGuards, useZoom, ZoomToast } from '../shell'
+import './App.css'
 import { ConnectionGate } from './ConnectionGate'
 import { createAppQueryClient } from './queryClient'
 import { useSession } from './session'
@@ -20,6 +21,7 @@ function AppContent() {
 export function App() {
   const [queryClient] = useState(createAppQueryClient)
   const zoomCommand = useZoom()
+  useDesktopGuards()
 
   useEffect(() => {
     try {
@@ -32,7 +34,12 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AppContent />
+        <div className="app-frame">
+          <TitleBar />
+          <div className="app-frame__content">
+            <AppContent />
+          </div>
+        </div>
       </BrowserRouter>
       <ZoomToast command={zoomCommand} />
     </QueryClientProvider>

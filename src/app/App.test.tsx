@@ -11,6 +11,16 @@ vi.mock('@tauri-apps/api/webview', () => ({
   getCurrentWebview: () => ({ setZoom }),
 }))
 
+vi.mock('@tauri-apps/api/window', () => ({
+  getCurrentWindow: () => ({
+    minimize: vi.fn(),
+    toggleMaximize: vi.fn(),
+    close: vi.fn(),
+    isMaximized: () => Promise.resolve(false),
+    onResized: () => Promise.resolve(() => {}),
+  }),
+}))
+
 const ORIGIN = window.location.origin
 
 beforeEach(() => {
@@ -112,6 +122,35 @@ describe('App', () => {
       vi.advanceTimersByTime(1200)
     })
     expect(screen.queryByText('Zoom 110 %')).not.toBeInTheDocument()
+  })
+
+  it('blocks the context menu on the connection gate in desktop mode', () => {
+    vi.stubGlobal('__TAURI_INTERNALS__', {})
+
+    render(<App />)
+
+    expect(fireEvent.contextMenu(screen.getByRole('heading', { name: 'LuraDB' }))).toBe(false)
+    expect(fireEvent.contextMenu(screen.getByLabelText('Name'))).toBe(true)
+  })
+
+  it('shows the title bar above the connection gate in desktop mode', () => {
+    vi.stubGlobal('__TAURI_INTERNALS__', {})
+
+    const { container } = render(<App />)
+
+    const titleBar = container.querySelector('.titlebar')
+    const gate = container.querySelector('.connection-gate')
+    expect(titleBar).toBeInTheDocument()
+    expect(gate).toBeInTheDocument()
+    expect(titleBar?.compareDocumentPosition(gate as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+  })
+
+  it('shows no title bar in browser mode', () => {
+    const { container } = render(<App />)
+
+    expect(screen.getByRole('heading', { name: 'LuraDB' })).toBeInTheDocument()
+    expect(container.querySelector('.titlebar')).not.toBeInTheDocument()
+    expect(screen.queryByText('LuraDB Client')).not.toBeInTheDocument()
   })
 
   it('renders no zoom toast on mount and none in browser mode', () => {

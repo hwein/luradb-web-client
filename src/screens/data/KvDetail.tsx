@@ -344,7 +344,7 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
     (deleteMutation.isError && isPreconditionFailed(deleteMutation.error))
 
   return (
-    <div className="kv-detail">
+    <div className="kv-detail selectable">
       <div className="kv-detail__head">
         <span className="kv-detail__key-label">KEY {key}</span>
         {editing ? (

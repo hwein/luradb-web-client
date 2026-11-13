@@ -353,7 +353,7 @@ export function RelRowDetail({ domain, apiClient, table, columns, mode, row, onC
   const expanded = expandedOf(row)
 
   return (
-    <div className="rel-detail">
+    <div className="rel-detail selectable">
       <div className="rel-detail__head">
         <span className="rel-detail__label">ROW {mode.pk}</span>
         {editing ? (

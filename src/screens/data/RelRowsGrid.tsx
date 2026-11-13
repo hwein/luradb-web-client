@@ -88,7 +88,7 @@ export function RelRowsGrid({
         ) : rows.length === 0 ? (
           <div className="rel-list__hint">no rows</div>
         ) : (
-          <table className="rel-grid">
+          <table className="rel-grid selectable">
             <thead>
               <tr>
                 {columns.map((column) => {

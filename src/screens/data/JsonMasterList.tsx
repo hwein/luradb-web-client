@@ -14,7 +14,7 @@ interface JsonMasterListProps {
 /** Master list (spec §3): key/preview/ver, the selected row keeps the hover surface, offset-based "load more". */
 export function JsonMasterList({ documents, selectedKey, onSelect, onNew, loading, hasMore, loadingMore, onLoadMore }: JsonMasterListProps) {
   return (
-    <div className="json-list">
+    <div className="json-list selectable">
       <div className="json-list__head">
         <span className="json-list__key">key</span>
         <span className="json-list__preview">preview</span>

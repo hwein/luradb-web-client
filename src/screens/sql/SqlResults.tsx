@@ -64,7 +64,7 @@ function ResultGrid({ result, onOpenDoc }: { result: SqlSelectResult; onOpenDoc:
   }
 
   return (
-    <table className="sql-grid">
+    <table className="sql-grid selectable">
       <thead>
         <tr>
           {result.columns.map((column) => (
@@ -107,7 +107,7 @@ function ResultGrid({ result, onOpenDoc }: { result: SqlSelectResult; onOpenDoc:
 function ResultBody({ outcome, onOpenDoc }: { outcome: SqlOutcome; onOpenDoc: (docId: string) => void }) {
   if (outcome.status === 'error') {
     return (
-      <div className="sql-results__error">
+      <div className="sql-results__error selectable">
         {outcome.message} ·{' '}
         <button type="button" className="sql-link" onClick={() => onOpenDoc(outcome.docId)}>
           {docLinkLabel(outcome.docId)}

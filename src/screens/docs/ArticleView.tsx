@@ -26,7 +26,7 @@ export function ArticleView({ article }: ArticleViewProps) {
   }
 
   return (
-    <div className="docs__article-inner">
+    <div className="docs__article-inner selectable">
       <div className="docs__kicker mono-label">{article.kicker}</div>
       <h1 className="docs__title">{article.title}</h1>
       {/* Eigene, gebündelte Artikel (spec docs/001 §4) — kein User-Content, daher unbedenklich. */}

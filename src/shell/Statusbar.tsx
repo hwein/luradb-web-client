@@ -35,7 +35,7 @@ export function Statusbar() {
         {state === 'connected' ? 'connected' : state}
       </button>
       {hostLabel && (
-        <span>
+        <span className="selectable">
           {host} {BASE_PATH}
         </span>
       )}

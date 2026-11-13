@@ -248,7 +248,7 @@ export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOp
   const usedReferences = referencedBy.filter((card) => (card.rowCount ?? 0) > 0)
 
   return (
-    <div className="json-detail">
+    <div className="json-detail selectable">
       <div className="json-detail__head">
         <span className="json-detail__doc-label">DOCUMENT {doc.key}</span>
         {editing ? (
