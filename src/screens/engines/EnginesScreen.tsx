@@ -7,17 +7,16 @@ import { formatBytes } from '../../lib'
 import { useSelectedDomain } from '../../shell'
 import { domainsQueryOptions } from '../../shell/domains'
 import { useJsonEngineTotals, useRelEngineTotals } from './domainMetrics'
-import { EngineCard, type EngineCardRow, type EngineTone } from './EngineCard'
+import { EngineCard, type EngineCardRow } from './EngineCard'
 import './EnginesScreen.css'
 import { formatNumber } from '../../lib'
+import { NUMBER_PLACEHOLDER } from './format'
 import { healthQueryOptions } from './health'
 import { HealthBar } from './HealthBar'
-import { metricsQueryOptions } from './metrics'
+import { metricsQueryOptions, type EngineTone } from './metrics'
+import { useEngineOpsHistory } from './rate'
 import { RecentRequestsCard } from './RecentRequestsCard'
-import { SystemThroughput } from './SystemThroughput'
 import { TasksJobsCard } from './TasksJobsCard'
-
-const NUMBER_PLACEHOLDER = '…'
 
 function numberOrPlaceholder(loaded: boolean, value: number): string {
   return loaded ? formatNumber(value) : NUMBER_PLACEHOLDER
@@ -29,7 +28,7 @@ export function openDomainIn(navigate: NavigateFunction, select: (name: string) 
   void navigate(`/data?engine=${engine}`)
 }
 
-/** Übersichts-Screen (spec engines/001): SYSTEM-Durchsatz, drei Engine-Karten, Tasks & Jobs, Recent Requests. */
+/** Overview screen: three engine cards, Tasks & Jobs, Recent Requests. */
 export function EnginesScreen() {
   const navigate = useNavigate()
   const session = useSession()
@@ -42,6 +41,7 @@ export function EnginesScreen() {
 
   const healthQuery = useQuery(healthQueryOptions(apiClient))
   const metricsQuery = useQuery(metricsQueryOptions(apiClient))
+  const history = useEngineOpsHistory(metricsQuery.data, metricsQuery.dataUpdatedAt)
   const health = healthQuery.data
   const isAdmin = useCapabilities().admin === 'yes'
 
@@ -69,7 +69,6 @@ export function EnginesScreen() {
 
   return (
     <div className="engines">
-      <SystemThroughput metrics={metricsQuery.data} />
       {health && (
         <HealthBar
           health={health}
@@ -85,6 +84,8 @@ export function EnginesScreen() {
           rows={kvRows}
           domains={domainNames}
           onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'kv')}
+          metrics={metricsQuery.data?.engines.kv}
+          spark={history.kv}
         />
         <EngineCard
           tone="json"
@@ -93,6 +94,8 @@ export function EnginesScreen() {
           rows={jsonRows}
           domains={domainNames}
           onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'json')}
+          metrics={metricsQuery.data?.engines.json}
+          spark={history.json}
         />
         <EngineCard
           tone="rel"
@@ -101,6 +104,8 @@ export function EnginesScreen() {
           rows={relRows}
           domains={domainNames}
           onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'rel')}
+          metrics={metricsQuery.data?.engines.rel}
+          spark={history.rel}
         />
       </div>
       <div className="engines__bottom">

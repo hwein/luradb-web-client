@@ -13,7 +13,7 @@ function levelTone(level: ResourceLevel): string {
   return level === 'ok' ? '' : level === 'blocked' ? ' engines__health-seg--err' : ' engines__health-seg--warn'
 }
 
-/** Server state strip below the SYSTEM bar. */
+/** Server state strip. */
 export function HealthBar({ health, resources, metricsUnavailable }: HealthBarProps) {
   const { shards, resources: levels, ioFailures } = health
   const shardsOk = shards.filter((shard) => shard.status === 'ok').length

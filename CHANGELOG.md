@@ -33,12 +33,14 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Status bar shows the signed-in user; the role now comes from /auth/whoami.
 - JSON browser: deleting a JSON document fails on a version conflict if it changed since it was loaded.
 - Admin: a permission cell grants or revokes access to the whole domain (keys, documents and tables).
+- Engine cards show per-engine ops/s and read/write latency percentiles from the server's 60s metrics window.
 
 ### Removed
 
 - Links to the server's /test-ui (Swagger is now behind auth and off by default).
 - Configuration: the screen is gone — LuraDB is configured in `luradb.toml` on the server.
 - Create-domain form: the hint that the name "domains" is reserved.
+- System-wide throughput bar on the Engines screen.
 
 ### Security
 

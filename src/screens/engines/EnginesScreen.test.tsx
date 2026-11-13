@@ -26,8 +26,28 @@ const HEALTH = {
   vlog_size_bytes: 2097152, // 2.0 MB
 }
 
+function engineBlock(fields: Record<string, number>) {
+  return {
+    read_ops: 0,
+    write_ops: 0,
+    window_secs: 60,
+    read_latency_us_p50: 0,
+    read_latency_us_p95: 0,
+    read_latency_us_p99: 0,
+    write_latency_us_p50: 0,
+    write_latency_us_p95: 0,
+    write_latency_us_p99: 0,
+    ...fields,
+  }
+}
+
 const METRICS = {
   system: { total_reads: 8, total_writes: 19, compaction_runs: 3, janitor_runs: 5, memtable_size_bytes: 1000 },
+  engines: {
+    kv: engineBlock({ read_ops: 100, write_ops: 200, read_latency_us_p50: 5, read_latency_us_p95: 50, write_latency_us_p50: 500, write_latency_us_p95: 5000 }),
+    json: engineBlock({ read_ops: 60, write_ops: 0, read_latency_us_p50: 7, read_latency_us_p95: 70 }),
+    rel: engineBlock({}),
+  },
   domains: [],
   block_cache: {},
 }
@@ -298,15 +318,24 @@ describe('EnginesScreen', () => {
     })
   })
 
-  it('renders the SYSTEM throughput bar wired to /store-api/metrics (delta-integration itself covered by SystemThroughput.test.tsx)', async () => {
+  it('shows per-engine ops/s and latency lines from the engines block', async () => {
     await connectAndRender()
 
-    const throughputText = () => document.querySelector('.engines__throughput')?.textContent ?? ''
-    expect(await screen.findByText('system-wide · derived from /store-api/metrics')).toBeInTheDocument()
-    // Nur ein Metrik-Stand bislang ⇒ noch keine Rate (spec §1: Rate braucht zwei Metrik-Stände).
-    expect(throughputText()).toContain('0 reads/s')
-    expect(throughputText()).toContain('0 writes/s')
-    expect(document.querySelectorAll('.engines__spark-bar')).toHaveLength(24) // 2 Sparklines à 12 Balken
+    const kvCard = document.querySelector('.engines__card--kv') as HTMLElement
+    await waitFor(() => expect(kvCard.querySelector('.engines__card-ops')?.textContent).toContain('5.0'))
+    expect(kvCard.querySelector('.engines__card-window')?.textContent).toBe('60s window')
+    expect(Array.from(kvCard.querySelectorAll('.engines__card-lat')).map((line) => line.textContent)).toEqual([
+      'reads 1.7/s · p50 5 µs · p95 50 µs',
+      'writes 3.3/s · p50 500 µs · p95 5.0 ms',
+    ])
+    expect(document.querySelectorAll('.engines__spark-bar')).toHaveLength(36)
+  })
+
+  it('never renders the system-wide throughput label', async () => {
+    await connectAndRender()
+
+    await waitFor(() => expect(document.querySelector('.engines__card-window')).toBeInTheDocument())
+    expect(screen.queryByText('system-wide · derived from /store-api/metrics')).not.toBeInTheDocument()
   })
 
   describe('health bar (spec s-c5d388f5)', () => {

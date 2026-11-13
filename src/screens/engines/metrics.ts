@@ -3,11 +3,8 @@ import { BASE_PATH, type ApiClient } from '../../api'
 import { pollSilentRecord } from '../../shell/pollSilentRecord'
 
 export interface SystemMetrics {
-  totalReads: number
-  totalWrites: number
   compactionRuns: number
   janitorRuns: number
-  memtableSizeBytes: number
 }
 
 export interface DiskVolume {
@@ -21,10 +18,27 @@ export interface MetricsResources {
   memory?: { rssBytes: number; budgetBytes: number }
 }
 
+export type EngineTone = 'kv' | 'json' | 'rel'
+
+/** Latencies in µs; a 0 percentile means no op landed in the window. */
+export interface EngineMetrics {
+  readOps: number
+  writeOps: number
+  readLatencyUsP50: number
+  readLatencyUsP95: number
+  writeLatencyUsP50: number
+  writeLatencyUsP95: number
+  windowSecs: number
+}
+
 export interface MetricsSnapshot {
   system: SystemMetrics
   resources?: MetricsResources
+  engines: Partial<Record<EngineTone, EngineMetrics>>
 }
+
+const ENGINE_TONES: EngineTone[] = ['kv', 'json', 'rel']
+const DEFAULT_WINDOW_SECS = 60
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -53,19 +67,41 @@ function parseResources(value: unknown): MetricsResources | undefined {
   return { disk }
 }
 
-/** `domains[]`/`block_cache` sind Teil der Response, bleiben hier aber ungenutzt (spec engines/001 braucht nur `system`). */
+function parseEngine(value: unknown): EngineMetrics | undefined {
+  if (!isRecord(value)) return undefined
+  const windowSecs = numberField(value, 'window_secs')
+  return {
+    readOps: numberField(value, 'read_ops'),
+    writeOps: numberField(value, 'write_ops'),
+    readLatencyUsP50: numberField(value, 'read_latency_us_p50'),
+    readLatencyUsP95: numberField(value, 'read_latency_us_p95'),
+    writeLatencyUsP50: numberField(value, 'write_latency_us_p50'),
+    writeLatencyUsP95: numberField(value, 'write_latency_us_p95'),
+    windowSecs: windowSecs > 0 ? windowSecs : DEFAULT_WINDOW_SECS,
+  }
+}
+
+function parseEngines(value: unknown): MetricsSnapshot['engines'] {
+  const engines: MetricsSnapshot['engines'] = {}
+  if (!isRecord(value)) return engines
+  for (const tone of ENGINE_TONES) {
+    const engine = parseEngine(value[tone])
+    if (engine) engines[tone] = engine
+  }
+  return engines
+}
+
+/** Reads `system`, `resources` and `engines`; the other blocks of the response stay unused. */
 function parseMetrics(body: unknown): MetricsSnapshot {
   if (!isRecord(body) || !isRecord(body.system)) throw new Error('unexpected /store-api/metrics response shape')
   const system = body.system
   const resources = parseResources(body.resources)
   return {
     ...(resources ? { resources } : {}),
+    engines: parseEngines(body.engines),
     system: {
-      totalReads: numberField(system, 'total_reads'),
-      totalWrites: numberField(system, 'total_writes'),
       compactionRuns: numberField(system, 'compaction_runs'),
       janitorRuns: numberField(system, 'janitor_runs'),
-      memtableSizeBytes: numberField(system, 'memtable_size_bytes'),
     },
   }
 }

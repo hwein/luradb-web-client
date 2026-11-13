@@ -10,7 +10,7 @@ interface Exception {
 
 const EXCEPTIONS: Exception[] = [
   { file: 'src/app/ConnectionGate.css', selector: '.connection-gate__wordmark', value: '64px' },
-  { file: 'src/screens/engines/EnginesScreen.css', selector: '.engines__throughput-value', value: '26px' },
+  { file: 'src/screens/engines/EnginesScreen.css', selector: '.engines__card-ops', value: '26px' },
   { file: 'src/screens/docs/DocsScreen.css', selector: '.docs__title', value: '22px' },
   { file: 'src/screens/docs/DocsScreen.css', selector: '.docs-article :not(pre) > code', value: '0.85em' },
   { file: 'src/shell/CommandPalette.css', selector: '.cmdk__input', value: '14px' },
