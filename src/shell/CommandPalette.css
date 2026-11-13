@@ -61,7 +61,7 @@
 .cmdk__empty-row {
   padding: 7px 10px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-data);
   color: var(--mut);
 }
 
@@ -76,7 +76,7 @@
   border-radius: var(--rad);
   color: var(--tx);
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   text-align: left;
   cursor: pointer;
 }
@@ -96,7 +96,7 @@
 .cmdk__row-meta {
   flex-shrink: 0;
   color: var(--mut);
-  font-size: 11px;
+  font-size: var(--fs-meta);
 }
 
 .cmdk__chips {
@@ -111,7 +111,7 @@
   border-radius: var(--rad-chip);
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 9px;
+  font-size: var(--fs-label);
   display: grid;
   place-items: center;
   flex-shrink: 0;

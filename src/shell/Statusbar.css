@@ -8,7 +8,7 @@
   background: var(--panel);
   border-top: 1px solid var(--bord);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   color: var(--mut);
 }
 

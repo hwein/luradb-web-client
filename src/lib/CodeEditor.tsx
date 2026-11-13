@@ -10,7 +10,7 @@ type CmExtension = typeof minimalSetup
 const baseTheme = EditorView.theme({
   '&': { backgroundColor: 'transparent', color: 'var(--tx)' },
   '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--font-mono)', fontSize: '11.5px', lineHeight: '1.7' },
+  '.cm-scroller': { fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-meta)', lineHeight: '1.7' },
   '.cm-content': { padding: '0', caretColor: 'var(--acc)' },
   '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--acc)' },
   '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--panel2)' },

@@ -22,7 +22,7 @@
   gap: 2px;
   color: var(--mut);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-data);
 }
 
 .docs__tab--active {
@@ -81,7 +81,7 @@
   border-radius: var(--rad);
   color: var(--tx);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-data);
   padding: 8px 11px;
   outline: none;
 }
@@ -106,7 +106,7 @@
   border-radius: 6px;
   color: var(--mut);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-data);
   cursor: pointer;
 }
 
@@ -139,14 +139,14 @@
 
 .docs__result-title {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-data);
   font-weight: 600;
   color: var(--tx);
 }
 
 .docs__result-context {
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   color: var(--mut);
 }
 
@@ -154,7 +154,7 @@
   padding: 7px 10px;
   color: var(--mut);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-data);
 }
 
 /* --- Artikel -------------------------------------------------------------- */
@@ -171,7 +171,7 @@
 .docs__empty {
   color: var(--mut);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 
 .docs__kicker {
@@ -190,7 +190,7 @@
 .docs-article p {
   margin: 0 0 18px;
   font-family: var(--font-sans);
-  font-size: 13.5px;
+  font-size: var(--fs-body);
   line-height: 1.75;
   color: var(--tx);
 }
@@ -203,7 +203,7 @@
   margin: 0 0 8px;
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 10px;
+  font-size: var(--fs-label);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--mut);
@@ -218,7 +218,7 @@
   margin: 0 0 20px;
   padding: 0;
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   line-height: 1.7;
   color: var(--tx);
 }
@@ -242,7 +242,7 @@
   margin: 0 0 20px;
   padding-left: 18px;
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   line-height: 1.7;
   color: var(--tx);
 }
@@ -250,7 +250,7 @@
 .docs-article pre,
 .docs-article pre code {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--fs-meta);
   line-height: 1.8;
 }
 
@@ -291,7 +291,7 @@
   border-radius: var(--rad-pill);
   background: transparent;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   color: var(--mut);
   cursor: pointer;
 }
