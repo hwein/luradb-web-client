@@ -5,6 +5,7 @@ import { WHOAMI_KEY } from '../../app/capabilities'
 import { useConnectedSession } from '../../app/session'
 import { formatBytes } from '../../lib'
 import { useDomainSummaries } from '../../shell/domains'
+import { invalidateAllStoreQueries } from '../../shell/storeEvents'
 import {
   BACKUPS_KEY,
   backupsQueryOptions,
@@ -80,7 +81,8 @@ function RestoreRow({ entry, result, statusError, onView }: RestoreRowProps) {
   useEffect(() => {
     if (!terminal || invalidatedRef.current === entry.restore_id) return
     invalidatedRef.current = entry.restore_id
-    invalidateDomainLists(queryClient)
+    // A restore swaps tables, views and indexes without sending store events.
+    invalidateAllStoreQueries(queryClient)
     if (entry.include_auth) {
       void queryClient.invalidateQueries({ queryKey: USERS_KEY })
       void queryClient.invalidateQueries({ queryKey: WHOAMI_KEY })

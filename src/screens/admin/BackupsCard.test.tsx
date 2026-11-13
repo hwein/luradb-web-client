@@ -616,6 +616,18 @@ describe('BackupsCard restore row', () => {
     expect(screen.getByRole('button', { name: '▶ run backup now' })).toBeEnabled()
   })
 
+  it('reloads the table, view and index lists of the explorer once a restore has ended', async () => {
+    seedRestore()
+    server.use(...restoreHandlers('complete'))
+    const queryClient = await renderConnected()
+    const spy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    expect(await screen.findByText('restore · complete')).toBeInTheDocument()
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ['rel-tables'] }))
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['rel-views'] })
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['json-indexes'] })
+  })
+
   it('also invalidates users and the whoami identity when the restore carried auth records', async () => {
     seedRestore(true)
     server.use(...restoreHandlers('failed'))
