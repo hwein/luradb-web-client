@@ -13,14 +13,6 @@ const targetSchemaPath = path.join(rootDir, 'src', 'api', 'schema.d.ts')
 const ref = process.argv[2] ?? process.env.LURADB_API_REF ?? 'main'
 const url = `https://raw.githubusercontent.com/hwein/luradb/${ref}/api/openapi.json`
 
-const response = await fetch(url)
-if (!response.ok) {
-  console.error(`api:types: fetch ${url} → HTTP ${response.status}. Ref '${ref}' korrekt (main/next/tag)?`)
-  process.exit(1)
-}
-const source = await response.text()
-writeFileSync(targetJsonPath, source)
-
 // api/openapi.json wiederholt list/create/get/delete_domain-operationIds je Engine
 // (generisch + json + rel) – nur fuers Codegen in-memory eindeutig machen, damit
 // Redoclys operation-operationId-unique-Check nicht abbricht. Die committete Kopie
@@ -43,9 +35,20 @@ function dedupeOperationIds(schema) {
   }
 }
 
-const schema = JSON.parse(source)
-dedupeOperationIds(schema)
-const ast = await openapiTS(schema)
-writeFileSync(targetSchemaPath, `${COMMENT_HEADER}${astToString(ast)}`)
+const response = await fetch(url)
 
-console.log(`api:types: Contract ${schema.info.version} @ luradb/${ref} → src/api/openapi.json + src/api/schema.d.ts`)
+// exitCode instead of exiting directly: exiting right after fetch aborts node on Windows.
+if (!response.ok) {
+  console.error(`api:types: fetch ${url} → HTTP ${response.status}. Ref '${ref}' korrekt (main/next/tag)?`)
+  process.exitCode = 1
+} else {
+  const source = await response.text()
+  writeFileSync(targetJsonPath, source)
+
+  const schema = JSON.parse(source)
+  dedupeOperationIds(schema)
+  const ast = await openapiTS(schema)
+  writeFileSync(targetSchemaPath, `${COMMENT_HEADER}${astToString(ast)}`)
+
+  console.log(`api:types: Contract ${schema.info.version} @ luradb/${ref} → src/api/openapi.json + src/api/schema.d.ts`)
+}

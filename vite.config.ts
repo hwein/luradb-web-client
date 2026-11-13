@@ -62,6 +62,8 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],
+      // Parallel runs under memory pressure exceed the 5 s default.
+      testTimeout: 15_000,
       // e2e/ gehört Playwright (braucht Server + Key); Vitest würde die *.spec.ts sonst einsammeln.
       exclude: [...configDefaults.exclude, 'e2e/**'],
     },
