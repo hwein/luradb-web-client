@@ -135,7 +135,7 @@
   border: none;
   border-radius: var(--rad);
   color: var(--mut);
-  font-size: 14px;
+  font-size: var(--fs-body);
   line-height: 1;
   cursor: pointer;
   padding: 2px 4px;

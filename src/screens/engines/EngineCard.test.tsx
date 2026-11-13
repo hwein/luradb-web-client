@@ -49,6 +49,13 @@ describe('EngineCard metrics', () => {
     expect(latencyLines(container)[1]).toContain('p50')
   })
 
+  it('marks a window with a single read', () => {
+    const { container } = renderCard({ ...METRICS, readOps: 1, writeOps: 0 })
+
+    expect(text(container, '.engines__card-ops')).toBe('<0.1 ops/s')
+    expect(latencyLines(container)).toEqual(['reads <0.1/s · p50 5 µs · p95 50 µs', 'writes 0/s'])
+  })
+
   it('shows the placeholder and no latency lines without metrics', () => {
     const { container } = renderCard(undefined)
 

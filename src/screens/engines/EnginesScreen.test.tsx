@@ -331,6 +331,18 @@ describe('EnginesScreen', () => {
     expect(document.querySelectorAll('.engines__spark-bar')).toHaveLength(36)
   })
 
+  it('shows the json and rel cards with their own figures', async () => {
+    await connectAndRender()
+
+    const jsonCard = document.querySelector('.engines__card--json') as HTMLElement
+    const relCard = document.querySelector('.engines__card--rel') as HTMLElement
+    const latLines = (card: HTMLElement) => Array.from(card.querySelectorAll('.engines__card-lat')).map((line) => line.textContent)
+    await waitFor(() => expect(jsonCard.querySelector('.engines__card-ops')?.textContent).toBe('1.0 ops/s'))
+    expect(latLines(jsonCard)).toEqual(['reads 1.0/s · p50 7 µs · p95 70 µs', 'writes 0/s'])
+    expect(relCard.querySelector('.engines__card-ops')?.textContent).toBe('0 ops/s')
+    expect(latLines(relCard)).toEqual(['reads 0/s', 'writes 0/s'])
+  })
+
   it('never renders the system-wide throughput label', async () => {
     await connectAndRender()
 

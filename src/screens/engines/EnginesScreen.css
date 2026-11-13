@@ -33,7 +33,6 @@
 
 .engines__spark-bar {
   width: 7px;
-  background: var(--acc);
   opacity: 0.75;
   border-radius: 2px;
 }

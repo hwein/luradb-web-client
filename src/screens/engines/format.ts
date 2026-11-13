@@ -4,6 +4,7 @@ export const NUMBER_PLACEHOLDER = '…'
 
 export function formatRate(perSec: number): string {
   if (perSec === 0) return '0'
+  if (perSec < 0.05) return '<0.1'
   return perSec < 10 ? perSec.toFixed(1) : formatNumber(perSec)
 }
 

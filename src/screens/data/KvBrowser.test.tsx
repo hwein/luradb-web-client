@@ -828,7 +828,7 @@ describe('KvBrowser', () => {
       server.use(
         http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['ttl-key']))),
         http.get(keyUrl('ttl-key'), () => rawValue('payload')),
-        http.get(metaUrl('ttl-key'), () => HttpResponse.json({ expires_at: nowSecs + 601, last_modified_at: Date.now() - 120_500 })),
+        http.get(metaUrl('ttl-key'), () => HttpResponse.json({ expires_at: nowSecs + 630, last_modified_at: Date.now() - 120_500 })),
       )
       await connectAndRender()
 

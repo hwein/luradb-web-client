@@ -55,18 +55,21 @@ describe('endSession', () => {
 })
 
 describe('createAppQueryClient', () => {
-  it('ends the session on a 401 query error, not on a 500', async () => {
+  it('ends the session and empties the query cache on a 401 query error, not on a 500', async () => {
     await connectSession()
     const queryClient = renderProbe()
+    queryClient.setQueryData(['probe'], 1)
 
     await act(() =>
       queryClient.fetchQuery({ queryKey: ['fail-500'], queryFn: () => Promise.reject(new ApiError(500, 'boom')) }).catch(() => undefined),
     )
     expect(screen.getByTestId('session')).toHaveTextContent('connected')
+    expect(queryClient.getQueryData(['probe'])).toBe(1)
 
     await act(() =>
       queryClient.fetchQuery({ queryKey: ['fail-401'], queryFn: () => Promise.reject(new ApiError(401, 'denied')) }).catch(() => undefined),
     )
     expect(screen.getByTestId('session')).toHaveTextContent('unauthenticated')
+    expect(queryClient.getQueryData(['probe'])).toBeUndefined()
   })
 })

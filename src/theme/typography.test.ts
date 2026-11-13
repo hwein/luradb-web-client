@@ -13,8 +13,6 @@ const EXCEPTIONS: Exception[] = [
   { file: 'src/screens/engines/EnginesScreen.css', selector: '.engines__card-ops', value: '26px' },
   { file: 'src/screens/docs/DocsScreen.css', selector: '.docs__title', value: '22px' },
   { file: 'src/screens/docs/DocsScreen.css', selector: '.docs-article :not(pre) > code', value: '0.85em' },
-  { file: 'src/shell/CommandPalette.css', selector: '.cmdk__input', value: '14px' },
-  { file: 'src/screens/sql/CreateTableModal.css', selector: '.ctm__row-remove', value: '14px' },
   { file: 'src/shell/TitleBar.css', selector: '.titlebar__name', value: '12px' },
 ]
 
@@ -65,7 +63,7 @@ function findViolations(path: string, content: string): string[] {
   return content
     .split('\n')
     .flatMap((line, i) =>
-      /(?:fontSize|['"]font-size['"])\s*:\s*['"`]?[0-9.]/.test(line) ? [`${path}:${String(i + 1)}: ${line.trim()}`] : [],
+      /(?:(?:fontSize|['"]font-size['"])\s*:|fontSize\s*=\s*\{?)\s*['"`]?[0-9.]/.test(line) ? [`${path}:${String(i + 1)}: ${line.trim()}`] : [],
     )
 }
 
@@ -111,5 +109,13 @@ describe('typography scale', () => {
     expect(findViolations('src/x.ts', "const t = { fontSize: '13px' }")).toHaveLength(1)
     expect(findViolations('src/x.ts', "const t = { 'font-size': '13px' }")).toHaveLength(1)
     expect(findViolations('src/x.ts', "const t = { fontSize: 'var(--fs-body)' }")).toEqual([])
+  })
+
+  it('reports a fontSize literal passed as a JSX attribute', () => {
+    expect(findViolations('src/x.tsx', '<text fontSize={12} />')).toHaveLength(1)
+    expect(findViolations('src/x.tsx', '<text fontSize="12px" />')).toHaveLength(1)
+    expect(findViolations('src/x.tsx', "<text fontSize={'12px'} />")).toHaveLength(1)
+    expect(findViolations('src/x.tsx', '<text fontSize={size} />')).toEqual([])
+    expect(findViolations('src/x.tsx', '<text fontSize="var(--fs-body)" />')).toEqual([])
   })
 })

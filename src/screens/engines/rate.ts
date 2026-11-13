@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { EngineTone, MetricsSnapshot } from './metrics'
+import { ENGINE_TONES, type EngineTone, type MetricsSnapshot } from './metrics'
 
 export const SPARKLINE_BARS = 12
 
@@ -18,7 +18,7 @@ export function useEngineOpsHistory(metrics: MetricsSnapshot | undefined, dataUp
 
   if (metrics !== undefined && dataUpdatedAt !== state.at) {
     const history = { ...state.history }
-    for (const tone of ['kv', 'json', 'rel'] as const) {
+    for (const tone of ENGINE_TONES) {
       const engine = metrics.engines[tone]
       if (engine) history[tone] = appendSample(history[tone], (engine.readOps + engine.writeOps) / engine.windowSecs)
     }

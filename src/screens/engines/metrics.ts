@@ -37,7 +37,7 @@ export interface MetricsSnapshot {
   engines: Partial<Record<EngineTone, EngineMetrics>>
 }
 
-const ENGINE_TONES: EngineTone[] = ['kv', 'json', 'rel']
+export const ENGINE_TONES: EngineTone[] = ['kv', 'json', 'rel']
 const DEFAULT_WINDOW_SECS = 60
 
 function isRecord(value: unknown): value is Record<string, unknown> {

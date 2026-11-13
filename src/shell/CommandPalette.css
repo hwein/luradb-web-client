@@ -33,7 +33,7 @@
   border-bottom: 1px solid var(--bord);
   color: var(--tx);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: var(--fs-body);
   padding: 14px 18px;
   outline: none;
 }

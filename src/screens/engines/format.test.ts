@@ -9,6 +9,12 @@ describe('formatRate', () => {
     expect(formatRate(10)).toBe('10')
     expect(formatRate(18440)).toBe('18,440')
   })
+
+  it('marks a positive rate that would round to 0.0', () => {
+    expect(formatRate(1 / 60)).toBe('<0.1')
+    expect(formatRate(2 / 60)).toBe('<0.1')
+    expect(formatRate(6 / 60)).toBe('0.1')
+  })
 })
 
 describe('formatLatency', () => {
