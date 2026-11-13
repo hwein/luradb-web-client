@@ -55,3 +55,14 @@
   font-size: var(--fs-label);
   padding: 5px 7px;
 }
+
+.rail__disconnect {
+  border: none;
+  border-radius: var(--rad);
+  padding: 0;
+  cursor: pointer;
+}
+
+.rail__disconnect:hover {
+  background: var(--panel2);
+}

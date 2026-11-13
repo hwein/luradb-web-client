@@ -1,18 +1,26 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { endSession } from '../app/queryClient'
 import { Rail } from './Rail'
+
+vi.mock('../app/queryClient', () => ({ endSession: vi.fn() }))
 
 afterEach(() => {
   Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal')
 })
 
 function renderRail() {
-  return render(
-    <MemoryRouter>
-      <Rail />
-    </MemoryRouter>,
+  const queryClient = new QueryClient()
+  render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <Rail />
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
+  return queryClient
 }
 
 describe('Rail', () => {
@@ -33,5 +41,16 @@ describe('Rail', () => {
     fireEvent.click(screen.getByTitle('about LuraDB Client'))
 
     expect(document.querySelector('dialog')).toBeInTheDocument()
+  })
+
+  it('ends the session from the disconnect button below the theme toggle', () => {
+    const queryClient = renderRail()
+
+    const theme = screen.getByTitle('Toggle theme')
+    const disconnect = screen.getByTitle('Disconnect')
+    expect(theme.compareDocumentPosition(disconnect)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    fireEvent.click(disconnect)
+
+    expect(endSession).toHaveBeenCalledWith(queryClient)
   })
 })
