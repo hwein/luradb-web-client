@@ -46,7 +46,7 @@
 .rsm__facts {
   margin: 0;
   display: grid;
-  grid-template-columns: 110px 1fr;
+  grid-template-columns: 120px 1fr;
   gap: 4px 12px;
   font-family: var(--font-mono);
   font-size: var(--fs-meta);

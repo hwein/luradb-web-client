@@ -4,7 +4,7 @@
 }
 
 .app-shell__explorer {
-  width: 242px;
+  width: 260px;
   flex-shrink: 0;
   background: var(--panel2);
   border-right: 1px solid var(--bord);

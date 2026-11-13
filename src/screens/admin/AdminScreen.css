@@ -6,7 +6,7 @@
   height: 100%;
 }
 
-/* --- Index-Sektion: eigener Scroll-Container, Grid 360px/minmax(520px,1fr) (Prototyp Z. 190f) --- */
+/* --- Index section: own scroll container, grid 390px/minmax(560px,1fr) --- */
 
 .admin-index {
   flex: 1;
@@ -33,10 +33,10 @@
 .admin-index__grid {
   padding: 18px;
   display: grid;
-  grid-template-columns: 360px minmax(520px, 1fr);
+  grid-template-columns: 390px minmax(560px, 1fr);
   gap: 14px;
   align-content: start;
-  min-width: 920px;
+  min-width: 1000px;
 }
 
 .admin-index__column {
@@ -46,8 +46,8 @@
   min-width: 0;
 }
 
-/* Grid-Härtung (spec admin/005 §5): ohne dies können lange Domain-/User-Namen und Fehlertexte die Spalte
-   über ihre Track-Breite hinaustreiben und das Grid über die 920px-Untergrenze sprengen. */
+/* Grid hardening: without this, long domain or user names and error texts push a column past its track
+   width and the grid past its 1000px minimum. */
 .admin-index__column > * {
   min-width: 0;
 }

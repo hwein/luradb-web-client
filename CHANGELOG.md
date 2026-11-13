@@ -34,6 +34,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - JSON browser: deleting a JSON document fails on a version conflict if it changed since it was loaded.
 - Admin: a permission cell grants or revokes access to the whole domain (keys, documents and tables).
 - Engine cards show per-engine ops/s and read/write latency percentiles from the server's 60s metrics window.
+- Text is larger throughout the app (body 14px, data 13px, labels 11px); explorer, side panels and status bar grow to match.
 
 ### Removed
 

@@ -277,7 +277,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 380px;
+  grid-template-columns: 1fr 410px;
 }
 
 .json-list {
@@ -343,7 +343,7 @@
 }
 
 .json-list__key {
-  width: 110px;
+  width: 120px;
   flex-shrink: 0;
 }
 
@@ -356,7 +356,7 @@
 }
 
 .json-list__ver {
-  width: 70px;
+  width: 76px;
   flex-shrink: 0;
 }
 
@@ -652,7 +652,7 @@
 }
 
 .data__body--watch {
-  grid-template-columns: 1fr 380px 260px;
+  grid-template-columns: 1fr 410px 280px;
 }
 
 /* --- KV Bulk-Leiste (spec data/008) -------------------------------------- */
@@ -1061,7 +1061,7 @@
 
 /* Min height of ~3 lines: signals multi-line input, grows with the content. */
 .kv-detail__editor .cm-content {
-  min-height: 59px;
+  min-height: 62px;
 }
 
 .kv-detail__key-input {
@@ -1579,7 +1579,7 @@
 }
 
 .rel-detail__field-row .rel-detail__field-label {
-  width: 130px;
+  width: 140px;
   flex-shrink: 0;
   color: var(--mut);
 }

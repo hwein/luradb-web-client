@@ -1,6 +1,6 @@
 .rest {
   height: 100%;
-  min-width: 840px;
+  min-width: 910px;
   display: grid;
   grid-template-columns: 1fr 1fr;
 }
@@ -169,7 +169,7 @@
 }
 
 .rest__endpoint-method {
-  width: 44px;
+  width: 48px;
   flex-shrink: 0;
   font-weight: 600;
 }

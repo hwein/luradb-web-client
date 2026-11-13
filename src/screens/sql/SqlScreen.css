@@ -8,7 +8,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-width: 420px;
+  min-width: 460px;
   min-height: 0;
 }
 
@@ -429,7 +429,7 @@
 /* --- Docs split (Prototyp Z. 91–109) --------------------------------- */
 
 .sql-docs {
-  width: clamp(280px, 28vw, 360px);
+  width: clamp(300px, 28vw, 390px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;

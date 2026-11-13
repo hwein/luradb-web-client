@@ -27,12 +27,12 @@
   --rad-card: 10px;
   --rad-pill: 999px;
 
-  --fs-label: 10px;
-  --fs-meta: 11px;
-  --fs-data: 12px;
-  --fs-body: 13px;
-  --fs-title: 15px;
-  --lh-tight: 1.3;
+  --fs-label: 11px;
+  --fs-meta: 12px;
+  --fs-data: 13px;
+  --fs-body: 14px;
+  --fs-title: 16px;
+  --lh-tight: 1.35;
   --lh-body: 1.5;
 }
 
@@ -96,6 +96,7 @@ body {
   color: var(--tx);
   font-family: var(--font-sans);
   font-size: var(--fs-body);
+  line-height: var(--lh-tight);
 }
 
 /* Placeholder auf Token statt Browser-Grau — deckungsgleich mit .cm-placeholder (CodeEditor); opacity gegen Firefox-Dimmung. */

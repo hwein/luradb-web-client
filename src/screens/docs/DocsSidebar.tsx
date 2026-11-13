@@ -10,7 +10,7 @@ interface DocsSidebarProps {
   searchInputRef: RefObject<HTMLInputElement | null>
 }
 
-/** Linke Spalte 250px (spec docs/001 §3): Suche + Kategorienliste, bei Suchtext stattdessen Treffer-Liste. */
+/** Left column, 270px: search and category list; with a search text the hit list instead. */
 export function DocsSidebar({ search, activeId, searchInputRef }: DocsSidebarProps) {
   const hits = useMemo(() => searchArticles(search), [search])
   const isSearching = search.trim() !== ''
