@@ -10,7 +10,23 @@ interface WhatsNewProps {
   onClose: () => void
 }
 
-/** Text between two backticks becomes <code>; an unpaired backtick stays literal. */
+/** Text between two `**` becomes <strong>; an unpaired `**` stays literal. */
+function pushBold(nodes: ReactNode[], text: string): void {
+  let rest = text
+  while (rest !== '') {
+    const open = rest.indexOf('**')
+    const close = open === -1 ? -1 : rest.indexOf('**', open + 2)
+    if (close === -1) {
+      nodes.push(rest)
+      return
+    }
+    if (open > 0) nodes.push(rest.slice(0, open))
+    nodes.push(<strong key={nodes.length}>{rest.slice(open + 2, close)}</strong>)
+    rest = rest.slice(close + 2)
+  }
+}
+
+/** Text between two backticks becomes <code>, between two `**` outside code <strong>; unpaired markers stay literal. */
 function renderInlineCode(text: string): ReactNode[] {
   const nodes: ReactNode[] = []
   let rest = text
@@ -18,10 +34,10 @@ function renderInlineCode(text: string): ReactNode[] {
     const open = rest.indexOf('`')
     const close = open === -1 ? -1 : rest.indexOf('`', open + 1)
     if (close === -1) {
-      nodes.push(rest)
+      pushBold(nodes, rest)
       break
     }
-    if (open > 0) nodes.push(rest.slice(0, open))
+    if (open > 0) pushBold(nodes, rest.slice(0, open))
     nodes.push(<code key={nodes.length}>{rest.slice(open + 1, close)}</code>)
     rest = rest.slice(close + 1)
   }

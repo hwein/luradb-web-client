@@ -63,6 +63,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Creating a KV key no longer overwrites an existing key.
 - Creating a JSON document under a chosen key can no longer overwrite an existing one.
 - Admin: errors when granting or revoking a permission show the server's message.
+- What's-new dialog shows text between `**` as bold and gives code spans a border; the status bar server label stays on one line.
 
 ### Changed
 

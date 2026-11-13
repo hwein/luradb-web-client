@@ -46,7 +46,7 @@ describe('WhatsNewContent', () => {
     expect(heads).toEqual(['v0.7.1 · 2026-11-09', 'v0.7.0 · 2026-11-08'])
   })
 
-  it('renders the non-empty section labels of a release in the fixed order', () => {
+  it('renders the non-empty section labels of a release in the order the changelog gives them', () => {
     const { container } = renderContent()
 
     const first = container.querySelector('.whats-new__release')
@@ -76,6 +76,38 @@ describe('WhatsNewContent', () => {
     expect(code[0]?.textContent).toBe('GET /x')
     const entry = code[0]?.parentElement
     expect(entry?.textContent).toBe('breakinguse GET /x or ` alone')
+  })
+
+  it('renders a double-asterisk pair as bold text', () => {
+    const entry: ServerChangelog = {
+      releases: [
+        {
+          version: '0.7.1',
+          date: '2026-11-09',
+          sections: [
+            {
+              key: 'changed',
+              entries: [
+                { text: '`PATCH` sets null. **Breaking** status-code Change.', api: false, breaking: false },
+                { text: 'lone ** stays', api: false, breaking: false },
+                { text: 'in `a **b** c` code', api: false, breaking: false },
+              ],
+            },
+          ],
+        },
+      ],
+    }
+    const { container } = render(<WhatsNewContent changelog={entry} serverVersion="0.7.1" onClose={() => {}} />)
+
+    const [bold, lone, inCode] = [...container.querySelectorAll('.whats-new__entry')]
+    expect(bold?.querySelectorAll('strong')).toHaveLength(1)
+    expect(bold?.querySelector('strong')?.textContent).toBe('Breaking')
+    expect(bold?.textContent).not.toContain('*')
+    expect(bold?.querySelector('code')?.textContent).toBe('PATCH')
+    expect(lone?.textContent).toBe('lone ** stays')
+    expect(lone?.querySelector('strong')).toBeNull()
+    expect(inCode?.querySelector('strong')).toBeNull()
+    expect(inCode?.querySelector('code')?.textContent).toBe('a **b** c')
   })
 
   it('shows the newer-server line when the server is ahead of the newest listed release', () => {

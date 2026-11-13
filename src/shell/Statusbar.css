@@ -72,6 +72,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
 }
 
 /* The negative right margin offsets the padding, so the content stays where the plain span puts it. */
