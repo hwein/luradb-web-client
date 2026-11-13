@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useSession } from '../app/session'
-import { ARTICLES } from '../screens/docs/articles/articles'
+import { DOC_ENTRIES } from '../screens/docs/articles/articles'
 import { openDocs } from '../screens/docs/openDocs'
 import { openDomainIn } from '../screens/engines/EnginesScreen'
 import './CommandPalette.css'
@@ -56,7 +56,7 @@ export function CommandPaletteContent({ onClose }: CommandPaletteContentProps) {
   const [selectedIndex, setSelectedIndex] = useState(0)
 
   const screens = ROUTES.map((route) => ({ path: route.path, title: route.title }))
-  const groups: PaletteGroup[] = paletteEntries(query, screens, domains, ARTICLES, apiClient !== undefined)
+  const groups: PaletteGroup[] = paletteEntries(query, screens, domains, DOC_ENTRIES, apiClient !== undefined)
   const flatEntries = groups.flatMap((group) => group.entries)
   const activeIndex = flatEntries.length === 0 ? 0 : Math.min(selectedIndex, flatEntries.length - 1)
 

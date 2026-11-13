@@ -133,12 +133,12 @@ describe('CommandPaletteContent', () => {
     const input = screen.getByLabelText('command palette search')
 
     // Leere Eingabe zeigt keine Docs — erst nach Eingabe erscheint der Treffer (spec §2).
-    expect(screen.queryByText('Scoped NDJSON backups, restored over REST')).not.toBeInTheDocument()
+    expect(screen.queryByText('Backup and restore')).not.toBeInTheDocument()
 
     fireEvent.change(input, { target: { value: 'backup' } })
 
     expect(screen.queryByText('shop')).not.toBeInTheDocument()
-    const docRow = await screen.findByText('Scoped NDJSON backups, restored over REST')
+    const docRow = await screen.findByText('Backup and restore')
     fireEvent.click(docRow)
 
     expect(screen.getByTestId('route-state').textContent).toBe('/docs')
@@ -146,13 +146,13 @@ describe('CommandPaletteContent', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('typing "mcp" lists the MCP article, and a click opens it and navigates to /docs', async () => {
+  it('typing "mcp" lists the MCP topic, and a click opens it and navigates to /docs', async () => {
     const onClose = vi.fn()
     await renderConnectedPalette(onClose)
 
     fireEvent.change(screen.getByLabelText('command palette search'), { target: { value: 'mcp' } })
 
-    fireEvent.click(await screen.findByText('Connecting AI assistants over MCP'))
+    fireEvent.click(await screen.findByText('MCP server'))
 
     expect(screen.getByTestId('route-state').textContent).toBe('/docs')
     expect(screen.getByTestId('docs-state').textContent).toBe('mcp·mcp')

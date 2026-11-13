@@ -1,13 +1,16 @@
 import { useSyncExternalStore } from 'react'
+import { resolveSitePage } from './articles/articles'
 
 export interface DocsState {
-  /** Offene Tabs (Artikel-Ids), in Öffnungsreihenfolge. */
+  /** Open tabs (topic ids or site paths), in opening order. */
   tabs: string[]
   activeId: string | undefined
   search: string
+  /** Anchor per tab id. */
+  anchors: Record<string, string>
 }
 
-const initialState: DocsState = { tabs: [], activeId: undefined, search: '' }
+const initialState: DocsState = { tabs: [], activeId: undefined, search: '', anchors: {} }
 
 let state: DocsState = initialState
 const listeners = new Set<() => void>()
@@ -31,10 +34,18 @@ export function useDocsState(): DocsState {
   return useSyncExternalStore(subscribe, getSnapshot)
 }
 
-/** Öffnet den Artikel-Tab (falls noch nicht offen) und aktiviert ihn. */
-export function openArticle(id: string): void {
+function withoutAnchor(anchors: Record<string, string>, id: string): Record<string, string> {
+  const next = { ...anchors }
+  delete next[id]
+  return next
+}
+
+/** Opens the tab (if not open yet) and activates it; without `anchor` the tab takes the anchor of its topic. */
+export function openArticle(id: string, anchor?: string): void {
   const tabs = state.tabs.includes(id) ? state.tabs : [...state.tabs, id]
-  setState({ ...state, tabs, activeId: id })
+  const anchors = withoutAnchor(state.anchors, id)
+  const target = anchor ?? resolveSitePage(id)?.anchor
+  setState({ ...state, tabs, activeId: id, anchors: target === undefined ? anchors : { ...anchors, [id]: target } })
 }
 
 export function activateTab(id: string): void {
@@ -48,7 +59,7 @@ export function closeTab(id: string): void {
   if (index === -1) return
   const tabs = state.tabs.filter((tabId) => tabId !== id)
   const activeId = state.activeId === id ? tabs[Math.max(0, index - 1)] : state.activeId
-  setState({ ...state, tabs, activeId })
+  setState({ ...state, tabs, activeId, anchors: withoutAnchor(state.anchors, id) })
 }
 
 export function setSearch(query: string): void {

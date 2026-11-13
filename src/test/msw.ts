@@ -1,7 +1,17 @@
+import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import type { components } from '../api/schema'
 
-export const server = setupServer()
+/** Default for every page of the docs site, so no test reaches the real site. */
+const docsSitePage = http.get('https://docs.luradb.org/*', ({ request }) => {
+  const { pathname } = new URL(request.url)
+  return new HttpResponse(
+    `<!doctype html><html><body><h1>Site page ${pathname}</h1><div class="sl-markdown-content"><p>Content of ${pathname}</p></div></body></html>`,
+    { headers: { 'Content-Type': 'text/html' } },
+  )
+})
+
+export const server = setupServer(docsSitePage)
 
 type KeyScanResponse = components['schemas']['KeyScanResponse']
 type DomainResponse = components['schemas']['DomainResponse']

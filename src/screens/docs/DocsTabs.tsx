@@ -1,4 +1,4 @@
-import { getArticle } from './articles/articles'
+import { getDocEntry, resolveSitePage } from './articles/articles'
 import { activateTab, closeTab } from './docsStore'
 
 interface DocsTabsProps {
@@ -13,13 +13,12 @@ export function DocsTabs({ tabs, activeId }: DocsTabsProps) {
   return (
     <div className="docs__tabs">
       {tabs.map((id) => {
-        const article = getArticle(id)
-        if (!article) return null
+        if (!getDocEntry(id) && !resolveSitePage(id)) return null
         const active = id === activeId
         return (
           <div key={id} className={`docs__tab${active ? ' docs__tab--active' : ''}`}>
             <button type="button" className="docs__tab-label" onClick={() => activateTab(id)}>
-              ◈ docs://{id}
+              ◈ docs://{id.replace(/^\/+|\/+$/g, '')}
             </button>
             <button type="button" className="docs__tab-close" aria-label={`close ${id}`} onClick={() => closeTab(id)}>
               ×

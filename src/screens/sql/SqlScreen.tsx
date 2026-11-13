@@ -78,7 +78,7 @@ export function SqlScreen() {
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0]
 
   const [docsOpen, setDocsOpen] = useState(false)
-  const [docsArticle, setDocsArticle] = useState('cross-engine-links')
+  const [docsArticle, setDocsArticle] = useState('lurasql')
   const [savingView, setSavingView] = useState(false)
 
   const location = useLocation()
@@ -149,7 +149,7 @@ export function SqlScreen() {
     [],
   )
 
-  // Docs-„try in the console →" (docs/001) trägt {insertQuery} als Router-State — neuen Tab anlegen, State löschen.
+  // {insertQuery} router state seeds a new tab; the state is cleared afterwards.
   useEffect(() => {
     const query = insertQueryFrom(location.state)
     if (query === undefined) return

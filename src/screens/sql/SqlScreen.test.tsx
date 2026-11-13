@@ -84,7 +84,7 @@ afterEach(() => {
 })
 
 describe('SqlScreen', () => {
-  it('seeds a tab from the docs "try in the console" router state and runs it', async () => {
+  it('seeds a tab from the insertQuery router state and runs it', async () => {
     let requestBody: unknown
     server.use(
       http.post(SQL_URL, async ({ request }) => {

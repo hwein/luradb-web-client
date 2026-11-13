@@ -1,31 +1,76 @@
 import { describe, expect, it } from 'vitest'
-import { ARTICLES, getArticle, searchArticles } from './articles'
+import {
+  ARTICLES,
+  DOC_ENTRIES,
+  DOCS_SITE,
+  REMOTE_TOPICS,
+  docsIdForSitePath,
+  getArticle,
+  getDocEntry,
+  getRemoteTopic,
+  resolveSitePage,
+  searchArticles,
+} from './articles'
 
 describe('ARTICLES registry', () => {
-  it('has all ten articles with unique ids', () => {
-    expect(ARTICLES).toHaveLength(10)
-    const ids = ARTICLES.map((article) => article.id)
-    expect(new Set(ids).size).toBe(10)
+  it('has one local article and nine remote topics with unique ids', () => {
+    expect(ARTICLES).toHaveLength(1)
+    expect(ARTICLES[0]?.id).toBe('getting-started')
+    expect(REMOTE_TOPICS).toHaveLength(9)
+    expect(DOC_ENTRIES).toHaveLength(10)
+    expect(new Set(DOC_ENTRIES.map((entry) => entry.id)).size).toBe(10)
   })
 
-  it('registers the mcp article directly after auth-permissions', () => {
-    const ids = ARTICLES.map((article) => article.id)
-    expect(ids.indexOf('mcp')).toBe(ids.indexOf('auth-permissions') + 1)
-    const article = getArticle('mcp')
-    expect(article?.category).toBe('MCP')
-    expect(article?.title).toBe('Connecting AI assistants over MCP')
-    expect(article?.kicker).toBe('MCP')
-  })
-
-  it('resolves both related chips of the mcp article to registered articles', () => {
-    const chips = getArticle('mcp')?.chips ?? []
-    expect(chips).toEqual([
-      { kind: 'related', label: 'related: Auth & permissions', targetId: 'auth-permissions' },
-      { kind: 'related', label: 'related: Getting started', targetId: 'getting-started' },
+  it('keeps the sidebar order of the ten topics', () => {
+    expect(DOC_ENTRIES.map((entry) => entry.id)).toEqual([
+      'getting-started',
+      'domains-isolation',
+      'kv-engine',
+      'json-documents-indexes',
+      'lurasql',
+      'cross-engine-links',
+      'auth-permissions',
+      'mcp',
+      'backup-restore',
+      'errors-status-codes',
     ])
+  })
+
+  it('maps every remote topic to its docs.luradb.org page', () => {
+    expect(DOCS_SITE).toBe('https://docs.luradb.org')
+    const pages = REMOTE_TOPICS.map(({ id, path, anchor }) => ({ id, path, anchor }))
+    expect(pages).toEqual([
+      { id: 'domains-isolation', path: '/how-it-works/domains-and-engines/', anchor: undefined },
+      { id: 'kv-engine', path: '/using/key-value/', anchor: undefined },
+      { id: 'json-documents-indexes', path: '/using/json-documents/', anchor: undefined },
+      { id: 'lurasql', path: '/using/lurasql/', anchor: undefined },
+      { id: 'cross-engine-links', path: '/using/lurasql/', anchor: 'a-reference-can-embed-the-row-it-points-to' },
+      { id: 'auth-permissions', path: '/operating/security/', anchor: undefined },
+      { id: 'mcp', path: '/using/mcp-server/', anchor: undefined },
+      { id: 'backup-restore', path: '/operating/backup-and-restore/', anchor: undefined },
+      { id: 'errors-status-codes', path: '/reference/status-codes/', anchor: undefined },
+    ])
+    expect(getRemoteTopic('mcp')?.title).toBe('MCP server')
+  })
+
+  it('resolves the related chips of getting-started to registered topics', () => {
+    const chips = getArticle('getting-started')?.chips ?? []
+    expect(chips).toHaveLength(2)
     for (const chip of chips) {
-      if (chip.kind === 'related') expect(getArticle(chip.targetId)).toBeDefined()
+      expect(chip.kind).toBe('related')
+      expect(getDocEntry(chip.targetId)).toBeDefined()
     }
+  })
+
+  it('resolves a site path to its page and a topic path to its topic', () => {
+    expect(resolveSitePage('/operating/configuration/')).toEqual({ path: '/operating/configuration/' })
+    expect(resolveSitePage('cross-engine-links')).toEqual({
+      path: '/using/lurasql/',
+      anchor: 'a-reference-can-embed-the-row-it-points-to',
+    })
+    expect(resolveSitePage('nope')).toBeUndefined()
+    expect(docsIdForSitePath('/using/lurasql/')).toBe('lurasql')
+    expect(docsIdForSitePath('/operating/configuration/')).toBe('/operating/configuration/')
   })
 
   it('gives every article a non-empty category, title, kicker, and body', () => {
@@ -37,36 +82,30 @@ describe('ARTICLES registry', () => {
     }
   })
 
-  it('resolves an article by id via getArticle', () => {
-    expect(getArticle('cross-engine-links')?.title).toBe('KVREF & JSONREF columns')
-  })
-
   it('returns undefined for an unknown id', () => {
     expect(getArticle('does-not-exist')).toBeUndefined()
-  })
-
-  it('parses the try/related chip trailer', () => {
-    const article = getArticle('cross-engine-links')
-    expect(article?.chips).toEqual([
-      { kind: 'console', label: 'try in the console →', query: 'SELECT id, customer_ref FROM orders LIMIT 5' },
-      { kind: 'related', label: 'related: LuraSQL · LEFT JOIN', targetId: 'lurasql' },
-      { kind: 'related', label: 'related: Errors · 409', targetId: 'errors-status-codes' },
-    ])
   })
 })
 
 describe('searchArticles', () => {
-  it('finds a term that only appears in an article body, not its title', () => {
-    const hits = searchArticles('reindex')
-    expect(hits.some((hit) => hit.article.id === 'json-documents-indexes')).toBe(true)
-    expect(hits.every((hit) => !hit.article.title.toLowerCase().includes('reindex'))).toBe(true)
+  it('finds a term from the getting-started body with a context snippet', () => {
+    const hits = searchArticles('handshake')
+    expect(hits.map((hit) => hit.entry.id)).toEqual(['getting-started'])
+    expect(hits[0]?.context).toContain('handshake')
   })
 
-  it('is case-insensitive and includes a context snippet around the match', () => {
-    const hits = searchArticles('KVREF')
-    const hit = hits.find((h) => h.article.id === 'cross-engine-links')
-    expect(hit).toBeDefined()
-    expect(hit?.context.toLowerCase()).toContain('kvref')
+  it('finds a remote topic by title or category with the site as context', () => {
+    for (const query of ['security', 'auth & perm']) {
+      expect(searchArticles(query)).toEqual([
+        { entry: expect.objectContaining({ id: 'auth-permissions' }) as unknown, context: 'docs.luradb.org' },
+      ])
+    }
+    expect(searchArticles('mcp').map((hit) => hit.entry.id)).toContain('mcp')
+  })
+
+  it('does not find a remote topic by body text', () => {
+    expect(searchArticles('AUTOINCREMENT')).toEqual([])
+    expect(searchArticles('reindex')).toEqual([])
   })
 
   it('returns no hits for an empty or whitespace-only query', () => {
@@ -76,16 +115,5 @@ describe('searchArticles', () => {
 
   it('returns no hits when nothing matches', () => {
     expect(searchArticles('xyznonexistentterm')).toEqual([])
-  })
-
-  it('finds the mcp article for "mcp" and for "assistant"', () => {
-    for (const query of ['mcp', 'assistant']) {
-      expect(searchArticles(query).filter((hit) => hit.article.id === 'mcp')).toHaveLength(1)
-    }
-  })
-
-  it('finds AUTOINCREMENT in the lurasql article body', () => {
-    const hits = searchArticles('AUTOINCREMENT')
-    expect(hits.some((hit) => hit.article.id === 'lurasql')).toBe(true)
   })
 })

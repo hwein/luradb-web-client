@@ -26,7 +26,7 @@ work areas between them.
 | **REST Explorer** | Request builder over the OpenAPI contract; every response in raw form |
 | **Engines & Jobs** | Status and metric cards, running tasks, recent requests |
 | **Admin** | Domains, users and domain permissions, key rotation |
-| **Docs** | Built-in documentation, contextually linked (F1, "why?" on errors) |
+| **Docs** | A built-in getting-started article and the pages of docs.luradb.org, rendered in the app, contextually linked (F1, "why?" on errors) |
 
 The server label in the status bar opens a what's-new dialog with the LuraDB
 changes up to the release the client is built against.

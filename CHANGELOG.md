@@ -22,14 +22,13 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Status bar: the server label opens a what's-new dialog with the LuraDB changes up to the release the client is built against.
 - Browser mode: a connection with a server URL connects directly if the server allows the origin via CORS; an empty URL keeps using the same-origin proxy.
 - Backups: relational data can be backed up (scopes `rel`, `rel:<domain>`) and restored under a new name; the restore dialog shows an archive's format version, shard count, log positions and relational snapshot.
-- Docs: new article on connecting AI assistants over MCP.
+- Docs: new topic on connecting AI assistants over MCP.
 
 ### Changed
 
 - Requires LuraDB 0.7.1 or newer.
 - Domains are created and deleted in one step for key-value, JSON and relational data; a domain being deleted leaves the lists at once.
 - Restore dialog: the replace warning says that the domain and its permissions are kept.
-- Docs: the articles on domains, permissions and status codes describe LuraDB 0.7.1.
 - KV bulk delete with a prefix runs as a single server-side operation; a selection over the server cap is rejected as a whole (413).
 - The explorer now updates from a live server event stream instead of waiting for the next poll.
 - Status bar shows the signed-in user; the role now comes from /auth/whoami.
@@ -39,6 +38,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Clickable rows and text actions show a hover surface, the selected entry keeps it (the explorer marks the object open in the data browser), and list rows are taller.
 - Desktop app: the window has its own title bar in the app theme with minimize, maximize and close buttons.
 - Text is selectable only in editors, result grids, lists, detail panes, docs, logs, watch feeds, request and response text and error messages; the desktop app shows the browser context menu only in text fields and editors and ignores the browser shortcuts for reload, print and find.
+- Docs: every topic except "Connect to a running server" shows the content of its docs.luradb.org page and needs a network connection.
+- Docs: search finds these topics by title, no longer by their text.
 
 ### Removed
 
@@ -46,6 +47,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Configuration: the screen is gone — LuraDB is configured in `luradb.toml` on the server.
 - Create-domain form: the hint that the name "domains" is reserved.
 - System-wide throughput bar on the Engines screen.
+- Docs: the "try in the console" examples.
 
 ### Security
 

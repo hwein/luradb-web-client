@@ -1,4 +1,4 @@
-import type { ArticleMeta } from '../screens/docs/articles/articles'
+import type { DocEntry } from '../screens/docs/articles/articles'
 import type { DomainSummary } from './domains'
 
 export interface PaletteScreen {
@@ -30,7 +30,7 @@ export function paletteEntries(
   query: string,
   screens: PaletteScreen[],
   domains: DomainSummary[],
-  articles: ArticleMeta[],
+  articles: DocEntry[],
   hasSession: boolean,
 ): PaletteGroup[] {
   const needle = query.trim().toLowerCase()

@@ -4,8 +4,9 @@ import { ArticleView } from './ArticleView'
 import './DocsScreen.css'
 import { DocsSidebar } from './DocsSidebar'
 import { DocsTabs } from './DocsTabs'
-import { getArticle } from './articles/articles'
-import { useDocsState } from './docsStore'
+import { SitePageView } from './SitePageView'
+import { getArticle, resolveSitePage } from './articles/articles'
+import { openArticle, useDocsState } from './docsStore'
 
 function hasFocusSearch(state: unknown): boolean {
   if (typeof state !== 'object' || state === null) return false
@@ -14,7 +15,7 @@ function hasFocusSearch(state: unknown): boolean {
 
 /** Docs-Bereich (spec docs/001 §3): Tab-Strip + Suche/Kategorien + Artikel, Tab-/Suchzustand im Docs-Store. */
 export function DocsScreen() {
-  const { tabs, activeId, search } = useDocsState()
+  const { tabs, activeId, search, anchors } = useDocsState()
   const location = useLocation()
   const navigate = useNavigate()
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -29,6 +30,7 @@ export function DocsScreen() {
   }, [location, navigate])
 
   const activeArticle = activeId ? getArticle(activeId) : undefined
+  const sitePageId = activeId !== undefined && !activeArticle && resolveSitePage(activeId) ? activeId : undefined
 
   return (
     <div className="docs">
@@ -36,7 +38,13 @@ export function DocsScreen() {
       <div className="docs__body">
         <DocsSidebar search={search} activeId={activeId} searchInputRef={searchInputRef} />
         <div className="docs__article">
-          {activeArticle ? <ArticleView article={activeArticle} /> : <div className="docs__empty">Pick an article from the list to start reading.</div>}
+          {activeArticle ? (
+            <ArticleView article={activeArticle} />
+          ) : sitePageId !== undefined ? (
+            <SitePageView id={sitePageId} anchor={anchors[sitePageId]} onOpen={openArticle} />
+          ) : (
+            <div className="docs__empty">Pick an article from the list to start reading.</div>
+          )}
         </div>
       </div>
     </div>

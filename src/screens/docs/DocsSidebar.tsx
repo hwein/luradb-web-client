@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { RefObject } from 'react'
-import { ARTICLES, searchArticles } from './articles/articles'
+import { DOC_ENTRIES, searchArticles } from './articles/articles'
 import { openDocs } from './openDocs'
 import { setSearch } from './docsStore'
 
@@ -35,8 +35,8 @@ export function DocsSidebar({ search, activeId, searchInputRef }: DocsSidebarPro
             <div className="docs__results-empty">no matches</div>
           ) : (
             hits.map((hit) => (
-              <button key={hit.article.id} type="button" className="docs__result" onClick={() => openDocs(hit.article.id)}>
-                <span className="docs__result-title">{hit.article.title}</span>
+              <button key={hit.entry.id} type="button" className="docs__result" onClick={() => openDocs(hit.entry.id)}>
+                <span className="docs__result-title">{hit.entry.title}</span>
                 <span className="docs__result-context">{hit.context}</span>
               </button>
             ))
@@ -44,14 +44,14 @@ export function DocsSidebar({ search, activeId, searchInputRef }: DocsSidebarPro
         </div>
       ) : (
         <nav className="docs__nav">
-          {ARTICLES.map((article) => (
+          {DOC_ENTRIES.map((entry) => (
             <button
-              key={article.id}
+              key={entry.id}
               type="button"
-              className={`docs__nav-item${article.id === activeId ? ' docs__nav-item--active' : ''}`}
-              onClick={() => openDocs(article.id)}
+              className={`docs__nav-item${entry.id === activeId ? ' docs__nav-item--active' : ''}`}
+              onClick={() => openDocs(entry.id)}
             >
-              {article.category}
+              {entry.category}
             </button>
           ))}
         </nav>

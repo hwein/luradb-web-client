@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import type { MouseEvent } from 'react'
-import { useNavigate } from 'react-router'
 import type { Article } from './articles/articles'
 import { renderArticleBody } from './markdown'
 import { openDocs } from './openDocs'
@@ -11,7 +10,6 @@ interface ArticleViewProps {
 
 /** Artikel-Rendering (spec docs/001 §3): Kicker, Titel, Markdown-Rumpf, Chip-Zeile. */
 export function ArticleView({ article }: ArticleViewProps) {
-  const navigate = useNavigate()
   const html = useMemo(() => renderArticleBody(article.body), [article.body])
 
   // Event-Delegation für `docs:`-Links im Markdown-Rumpf (orchestrator hint #2) — der Renderer selbst
@@ -34,18 +32,7 @@ export function ArticleView({ article }: ArticleViewProps) {
       {article.chips.length > 0 && (
         <div className="docs__chips">
           {article.chips.map((chip) => (
-            <button
-              key={chip.kind === 'console' ? 'console' : `related-${chip.targetId}`}
-              type="button"
-              className={`docs__chip${chip.kind === 'console' ? ' docs__chip--acc' : ''}`}
-              onClick={() => {
-                if (chip.kind === 'console') {
-                  void navigate('/sql', { state: { insertQuery: chip.query } })
-                } else {
-                  openDocs(chip.targetId)
-                }
-              }}
-            >
+            <button key={chip.targetId} type="button" className="docs__chip" onClick={() => openDocs(chip.targetId)}>
               {chip.label}
             </button>
           ))}

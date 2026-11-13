@@ -92,6 +92,27 @@ describe('docsStore', () => {
     expect(result.current.activeId).toBeUndefined()
   })
 
+  it('openArticle stores the anchor of the tab and closeTab drops it', () => {
+    const { result } = renderHook(() => useDocsState())
+
+    act(() => {
+      openArticle('/operating/configuration/', 'rel-enabled')
+      openArticle('cross-engine-links')
+    })
+
+    expect(result.current.anchors).toEqual({
+      '/operating/configuration/': 'rel-enabled',
+      'cross-engine-links': 'a-reference-can-embed-the-row-it-points-to',
+    })
+
+    act(() => {
+      closeTab('/operating/configuration/')
+      closeTab('cross-engine-links')
+    })
+
+    expect(result.current.anchors).toEqual({})
+  })
+
   it('setSearch updates the search text', () => {
     const { result } = renderHook(() => useDocsState())
 

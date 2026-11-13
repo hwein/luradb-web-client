@@ -1,27 +1,30 @@
-import authPermissionsRaw from './auth-permissions.md?raw'
-import backupRestoreRaw from './backup-restore.md?raw'
-import crossEngineLinksRaw from './cross-engine-links.md?raw'
-import domainsIsolationRaw from './domains-isolation.md?raw'
-import errorsStatusCodesRaw from './errors-status-codes.md?raw'
 import gettingStartedRaw from './getting-started.md?raw'
-import jsonDocumentsIndexesRaw from './json-documents-indexes.md?raw'
-import kvEngineRaw from './kv-engine.md?raw'
-import lurasqlRaw from './lurasql.md?raw'
-import mcpRaw from './mcp.md?raw'
 
-export interface ArticleMeta {
+export const DOCS_HOST = 'docs.luradb.org'
+export const DOCS_SITE = `https://${DOCS_HOST}`
+
+export interface DocEntry {
   id: string
   category: string
   title: string
+}
+
+export interface ArticleMeta extends DocEntry {
   kicker: string
 }
 
-export type ArticleChip = { kind: 'console'; label: string; query: string } | { kind: 'related'; label: string; targetId: string }
+export type ArticleChip = { kind: 'related'; label: string; targetId: string }
 
 export interface Article extends ArticleMeta {
   /** Markdown-Rumpf ohne Frontmatter/Chip-Trailer — Eingabe für den Renderer (markdown.ts). */
   body: string
   chips: ArticleChip[]
+}
+
+export interface RemoteTopic extends DocEntry {
+  /** Path behind DOCS_SITE, without anchor. */
+  path: string
+  anchor?: string
 }
 
 interface RawSections {
@@ -70,9 +73,7 @@ function parseChips(trailer: string | undefined): ArticleChip[] {
   const chips: ArticleChip[] = []
   for (const line of trailer.split(/\r?\n/)) {
     const trimmed = line.trim()
-    if (trimmed.startsWith('try:')) {
-      chips.push({ kind: 'console', label: 'try in the console →', query: trimmed.slice('try:'.length).trim() })
-    } else if (trimmed.startsWith('related:')) {
+    if (trimmed.startsWith('related:')) {
       const [targetId, label] = trimmed
         .slice('related:'.length)
         .split('|')
@@ -88,28 +89,55 @@ function parseArticle(raw: string): Article {
   return { ...parseHeader(header), body: body.trim(), chips: parseChips(trailer) }
 }
 
-// Sidebar order follows the design; mcp is the addition after auth-permissions.
-const RAW_ARTICLES = [
-  gettingStartedRaw,
-  domainsIsolationRaw,
-  kvEngineRaw,
-  jsonDocumentsIndexesRaw,
-  lurasqlRaw,
-  crossEngineLinksRaw,
-  authPermissionsRaw,
-  mcpRaw,
-  backupRestoreRaw,
-  errorsStatusCodesRaw,
-]
-
-export const ARTICLES: Article[] = RAW_ARTICLES.map(parseArticle)
+export const ARTICLES: Article[] = [parseArticle(gettingStartedRaw)]
 
 export function getArticle(id: string): Article | undefined {
   return ARTICLES.find((article) => article.id === id)
 }
 
+export const REMOTE_TOPICS: RemoteTopic[] = [
+  { id: 'domains-isolation', category: 'Domains & isolation', title: 'Domains and engines', path: '/how-it-works/domains-and-engines/' },
+  { id: 'kv-engine', category: 'Key-Value engine', title: 'Key-value', path: '/using/key-value/' },
+  { id: 'json-documents-indexes', category: 'JSON documents & indexes', title: 'JSON documents', path: '/using/json-documents/' },
+  { id: 'lurasql', category: 'LuraSQL (rel engine)', title: 'LuraSQL', path: '/using/lurasql/' },
+  {
+    id: 'cross-engine-links',
+    category: 'Cross-engine links',
+    title: 'KVREF & JSONREF columns',
+    path: '/using/lurasql/',
+    anchor: 'a-reference-can-embed-the-row-it-points-to',
+  },
+  { id: 'auth-permissions', category: 'Auth & permissions', title: 'Security', path: '/operating/security/' },
+  { id: 'mcp', category: 'MCP', title: 'MCP server', path: '/using/mcp-server/' },
+  { id: 'backup-restore', category: 'Backup & restore', title: 'Backup and restore', path: '/operating/backup-and-restore/' },
+  { id: 'errors-status-codes', category: 'Errors & status codes', title: 'Status codes', path: '/reference/status-codes/' },
+]
+
+export function getRemoteTopic(id: string): RemoteTopic | undefined {
+  return REMOTE_TOPICS.find((topic) => topic.id === id)
+}
+
+// Sidebar order of the design: the bundled article first, then the nine topics served from DOCS_SITE.
+export const DOC_ENTRIES: DocEntry[] = [...ARTICLES, ...REMOTE_TOPICS]
+
+export function getDocEntry(id: string): DocEntry | undefined {
+  return DOC_ENTRIES.find((entry) => entry.id === id)
+}
+
+/** Page of DOCS_SITE for a topic id, or for an id that is itself a site path (starts with `/`). */
+export function resolveSitePage(id: string): { path: string; anchor?: string } | undefined {
+  const topic = getRemoteTopic(id)
+  if (topic) return topic.anchor === undefined ? { path: topic.path } : { path: topic.path, anchor: topic.anchor }
+  return id.startsWith('/') ? { path: id } : undefined
+}
+
+/** The topic id whose page (without anchor) is `path`, otherwise the path itself. */
+export function docsIdForSitePath(path: string): string {
+  return REMOTE_TOPICS.find((topic) => topic.anchor === undefined && topic.path === path)?.id ?? path
+}
+
 export interface SearchHit {
-  article: Article
+  entry: DocEntry
   context: string
 }
 
@@ -122,16 +150,20 @@ function contextAround(haystack: string, index: number, matchLength: number): st
   return `${start > 0 ? '…' : ''}${snippet}${end < haystack.length ? '…' : ''}`
 }
 
-/** Clientseitige Volltextsuche über Titel + Rohtext (spec docs/001 §5); Treffer inkl. Kontextzeile. */
+/** Full text of the bundled article; remote topics match by title or category only, with the site as context. */
 export function searchArticles(query: string): SearchHit[] {
   const needle = query.trim().toLowerCase()
   if (needle === '') return []
   const hits: SearchHit[] = []
-  for (const article of ARTICLES) {
-    const haystack = `${article.title}\n${article.body}`
-    const index = haystack.toLowerCase().indexOf(needle)
-    if (index === -1) continue
-    hits.push({ article, context: contextAround(haystack, index, needle.length) })
+  for (const entry of DOC_ENTRIES) {
+    const article = getArticle(entry.id)
+    if (article) {
+      const haystack = `${article.title}\n${article.body}`
+      const index = haystack.toLowerCase().indexOf(needle)
+      if (index !== -1) hits.push({ entry, context: contextAround(haystack, index, needle.length) })
+    } else if (entry.title.toLowerCase().includes(needle) || entry.category.toLowerCase().includes(needle)) {
+      hits.push({ entry, context: DOCS_HOST })
+    }
   }
   return hits
 }
