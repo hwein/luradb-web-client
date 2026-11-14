@@ -31,12 +31,14 @@ function renderDocsScreen(initialEntries: Array<string | { pathname: string; sta
   )
 }
 
-function stubScrollIntoView(): Element[] {
+function stubScrollIntoView(): { scrolled: Element[]; scrolledTabs: Element[] } {
   const scrolled: Element[] = []
+  const scrolledTabs: Element[] = []
   Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
-    scrolled.push(this)
+    const list = this.classList.contains('docs__tab') ? scrolledTabs : scrolled
+    list.push(this)
   }
-  return scrolled
+  return { scrolled, scrolledTabs }
 }
 
 afterEach(() => {
@@ -106,7 +108,7 @@ describe('DocsScreen', () => {
   })
 
   it('a site link with an anchor opens the page and scrolls to the anchor', async () => {
-    const scrolled = stubScrollIntoView()
+    const { scrolled } = stubScrollIntoView()
     serve('/using/key-value/', '<p>See <a href="/operating/configuration/#rel-enabled">rel.enabled</a>.</p>')
     serve('/operating/configuration/', '<dl><dt id="rel-enabled">rel.enabled</dt><dd>Switches the engine.</dd></dl>')
     renderDocsScreen()
@@ -121,7 +123,7 @@ describe('DocsScreen', () => {
   })
 
   it('a hash link scrolls to the heading inside the article', async () => {
-    const scrolled = stubScrollIntoView()
+    const { scrolled } = stubScrollIntoView()
     serve('/using/key-value/', '<h2 id="views">Views</h2><p>Jump to <a href="#views">views</a>.</p>')
     renderDocsScreen()
     fireEvent.click(screen.getByRole('button', { name: 'Key-Value engine' }))
@@ -138,7 +140,7 @@ describe('DocsScreen', () => {
   })
 
   it('scrolls to the section of the cross-engine-links topic', async () => {
-    const scrolled = stubScrollIntoView()
+    const { scrolled } = stubScrollIntoView()
     serve('/using/lurasql/', '<p>Intro</p><h2 id="a-reference-can-embed-the-row-it-points-to">References</h2><p>Text</p>')
     act(() => openDocs('cross-engine-links'))
 
@@ -151,7 +153,7 @@ describe('DocsScreen', () => {
   })
 
   it('switching from the cross-engine-links topic to the lurasql topic scrolls back to the top', async () => {
-    const scrolled = stubScrollIntoView()
+    const { scrolled } = stubScrollIntoView()
     serve('/using/lurasql/', '<p>Intro</p><h2 id="a-reference-can-embed-the-row-it-points-to">References</h2><p>Text</p>')
     act(() => openDocs('cross-engine-links'))
     const { container } = renderDocsScreen()
@@ -164,6 +166,28 @@ describe('DocsScreen', () => {
 
     expect(screen.getByText('◈ docs://lurasql')).toBeInTheDocument()
     await waitFor(() => expect(article.scrollTop).toBe(0))
+  })
+
+  it('scrolls the active tab into view when a tab opens and when it is activated', async () => {
+    const { scrolledTabs } = stubScrollIntoView()
+    const { container } = renderDocsScreen()
+    const lastScrolledIsActive = () => {
+      const active = container.querySelector('.docs__tab--active')
+      expect(active).not.toBeNull()
+      expect(scrolledTabs.at(-1)).toBe(active)
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: 'Key-Value engine' }))
+    await waitFor(lastScrolledIsActive)
+    expect(container.querySelector('.docs__tab--active')).toHaveTextContent('◈ docs://kv-engine')
+
+    fireEvent.click(screen.getByRole('button', { name: 'JSON documents & indexes' }))
+    await waitFor(lastScrolledIsActive)
+    expect(container.querySelector('.docs__tab--active')).not.toHaveTextContent('◈ docs://kv-engine')
+
+    fireEvent.click(screen.getByRole('button', { name: '◈ docs://kv-engine' }))
+    await waitFor(lastScrolledIsActive)
+    expect(container.querySelector('.docs__tab--active')).toHaveTextContent('◈ docs://kv-engine')
   })
 
   it('switching from the scrolled local article to a fetched page scrolls back to the top', async () => {

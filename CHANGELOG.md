@@ -68,6 +68,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Admin: errors when granting or revoking a permission show the server's message.
 - What's-new dialog shows text between `**` as bold and gives code spans a border; the status bar server label stays on one line.
 - REST explorer: only the endpoint list scrolls; the request line and the response stay in view.
+- Docs: many open tabs no longer make the content area scroll sideways; the tab strip scrolls on its own and keeps the active tab in view.
 
 ### Changed
 

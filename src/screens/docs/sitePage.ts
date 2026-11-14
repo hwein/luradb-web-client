@@ -92,6 +92,8 @@ function rebuild(node: Node, target: Node, pagePath: string, inParagraph: boolea
   const id = element.getAttribute('id')
   if (id) rebuilt.dataset.docsId = id
   for (const child of Array.from(element.childNodes)) rebuild(child, rebuilt, pagePath, inParagraph || name === 'p')
+  // Anchor icons (empty after the rebuild) would be invisible tab stops.
+  if (name === 'a' && rebuilt.textContent?.trim() === '') return
 
   if (name === 'table') {
     const wrapper = document.createElement('div')

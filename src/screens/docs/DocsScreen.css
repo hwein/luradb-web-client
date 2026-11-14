@@ -14,9 +14,13 @@
   background: var(--panel);
   border-bottom: 1px solid var(--bord);
   padding: 6px 8px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .docs__tab {
+  flex-shrink: 0;
+  white-space: nowrap;
   display: flex;
   align-items: stretch;
   gap: 2px;

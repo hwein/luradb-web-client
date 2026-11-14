@@ -161,6 +161,24 @@ describe('fetchSitePage', () => {
     expect(content.querySelector('svg')).toBeNull()
   })
 
+  it('drops a link that has no text after the rebuild', async () => {
+    serve(
+      '/using/lurasql/',
+      sitePage(
+        '<h3 id="server-swagger_enabled"><code>swagger_enabled</code><a class="anc" href="#server-swagger_enabled" aria-label="Link to server.swagger_enabled"></a> <span class="sec-name" aria-hidden="true">[server]</span></h3><p><a href="/using/key-value/"> </a><a href="/using/json-documents/"><svg viewBox="0 0 1 1"></svg></a><a href="#views">Views</a></p>',
+      ),
+    )
+
+    const { content } = await fetchSitePage('/using/lurasql/')
+
+    const links = content.querySelectorAll('a')
+    expect(links).toHaveLength(1)
+    expect(links[0]?.textContent).toBe('Views')
+    const heading = content.querySelector('h3[data-docs-id="server-swagger_enabled"]')
+    expect(heading).not.toBeNull()
+    expect(heading?.textContent).toContain('swagger_enabled')
+  })
+
   it('rejects a page without .sl-markdown-content', async () => {
     serve('/using/lurasql/', '<!doctype html><html><body><h1>No content</h1></body></html>')
 

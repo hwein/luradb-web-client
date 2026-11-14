@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { getDocEntry, resolveSitePage } from './articles/articles'
 import { activateTab, closeTab } from './docsStore'
 
@@ -8,7 +9,14 @@ interface DocsTabsProps {
 
 /** Tab-Strip (spec docs/001 §3): `◈ docs://<id>`, aktiver Tab `--edbg`. */
 export function DocsTabs({ tabs, activeId }: DocsTabsProps) {
-  if (tabs.length === 0) return null
+  const activeRef = useRef<HTMLDivElement>(null)
+  const visible = tabs.length > 0
+  // 'nearest' leaves the content area's vertical position alone; the optional call is for jsdom.
+  useEffect(() => {
+    activeRef.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [activeId, visible])
+
+  if (!visible) return null
 
   return (
     <div className="docs__tabs">
@@ -16,7 +24,7 @@ export function DocsTabs({ tabs, activeId }: DocsTabsProps) {
         if (!getDocEntry(id) && !resolveSitePage(id)) return null
         const active = id === activeId
         return (
-          <div key={id} className={`docs__tab${active ? ' docs__tab--active' : ''}`}>
+          <div key={id} ref={active ? activeRef : undefined} className={`docs__tab${active ? ' docs__tab--active' : ''}`}>
             <button type="button" className="docs__tab-label" onClick={() => activateTab(id)}>
               ◈ docs://{id.replace(/^\/+|\/+$/g, '')}
             </button>
