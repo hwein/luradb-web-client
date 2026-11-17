@@ -256,6 +256,23 @@ describe('Explorer', () => {
     expect(screen.getByText('KEY-VALUE')).toBeInTheDocument()
   })
 
+  it('keeps the section when an engine endpoint answers 503 with Retry-After on first load', async () => {
+    server.use(
+      domainsHandler([domainResponse('alpha')]),
+      http.get(`${ORIGIN}/store-api/rel/alpha/tables`, () =>
+        HttpResponse.text('503 Service Unavailable', { status: 503, headers: { 'Retry-After': '1' } }),
+      ),
+    )
+
+    const { queryClient } = await connectAndRender()
+
+    expect(await screen.findByText(expandedHeader('alpha'))).toBeInTheDocument()
+    await waitFor(() => expect(queryClient.getQueryState(['rel-tables', 'alpha'])?.status).toBe('error'))
+
+    expect(screen.getByText('RELATIONAL')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'new table' })).toBeInTheDocument()
+  })
+
   it('keeps the section when an engine endpoint answers 503 after an earlier success', async () => {
     let relDisabled = false
     let relDisabledAnswers = 0

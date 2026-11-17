@@ -3,10 +3,18 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
-import { createApi, type ApiClient, type CallInfo } from '../api'
+import { ApiError, createApi, type ApiClient, type CallInfo } from '../api'
 import { createAppQueryClient } from '../app/queryClient'
 import { server } from '../test/msw'
-import { jsonDocumentCountQueryOptions, kvKeyCountQueryOptions, relTableRowCountQueryOptions, relTablesQueryOptions } from './domainDetails'
+import {
+  isEngineOff,
+  jsonDocumentCountQueryOptions,
+  jsonIndexesQueryOptions,
+  kvKeyCountQueryOptions,
+  relTableRowCountQueryOptions,
+  relTablesQueryOptions,
+  relViewsQueryOptions,
+} from './domainDetails'
 
 const BASE_URL = 'http://127.0.0.1:3000'
 
@@ -109,6 +117,37 @@ describe('engine queries of a switched-off engine', () => {
     await waitFor(() => expect(requests).toBeGreaterThanOrEqual(3))
     expect(calls).toHaveLength(1)
     expect(calls[0]?.status).toBe(503)
+  })
+
+  it('does not count a 503 with Retry-After as a switched-off engine', () => {
+    expect(isEngineOff([{ isLoadingError: true, error: new ApiError(503, 'overloaded', undefined, 1) }])).toBe(false)
+    expect(isEngineOff([{ isLoadingError: true, error: new ApiError(503, 'Relational engine disabled') }])).toBe(true)
+  })
+
+  it('passes Retry-After of a 503 to the error of every engine query', async () => {
+    const overloaded = () => HttpResponse.text('503 Service Unavailable', { status: 503, headers: { 'Retry-After': '1' } })
+    server.use(
+      http.get(`${BASE_URL}/store-api/rel/shop/tables`, overloaded),
+      http.get(`${BASE_URL}/store-api/rel/shop/views`, overloaded),
+      http.get(`${BASE_URL}/store-api/json/shop/documents/count`, overloaded),
+      http.get(`${BASE_URL}/store-api/json/shop/indexes`, overloaded),
+    )
+    const apiClient = makeApiClient()
+    const queryClient = createAppQueryClient()
+    const errors = await Promise.all(
+      [
+        queryClient.fetchQuery(relTablesQueryOptions(apiClient, 'shop', true)),
+        queryClient.fetchQuery(relViewsQueryOptions(apiClient, 'shop', true)),
+        queryClient.fetchQuery(jsonDocumentCountQueryOptions(apiClient, 'shop', true)),
+        queryClient.fetchQuery(jsonIndexesQueryOptions(apiClient, 'shop', true)),
+      ].map((fetched) => fetched.then(() => undefined, (error: unknown) => error)),
+    )
+
+    for (const error of errors) {
+      expect(error).toBeInstanceOf(ApiError)
+      expect((error as ApiError).status).toBe(503)
+      expect((error as ApiError).retryAfterSecs).toBe(1)
+    }
   })
 })
 

@@ -43,11 +43,38 @@ export function normalizeColumnName(raw: string, index: number, seen: Set<string
   return name
 }
 
+/** Only a `"` at the very start of a field quotes it (measured against the server, 2026-11-17). */
+function splitHeaderLine(line: string, delimiter: string): string[] {
+  const fields: string[] = []
+  let field = ''
+  let quoted = false
+  let atFieldStart = true
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    if (quoted) {
+      if (char !== '"') field += char
+      else if (line[i + 1] === '"') {
+        field += '"'
+        i++
+      } else quoted = false
+    } else if (char === delimiter) {
+      fields.push(field)
+      field = ''
+      atFieldStart = true
+      continue
+    } else if (char === '"' && atFieldStart) quoted = true
+    else field += char
+    atFieldStart = false
+  }
+  fields.push(field)
+  return fields
+}
+
 export function pkCandidates(text: string, format: FileFormat, header: boolean): { name: string; source: string }[] {
   if (text === '') return []
   const newline = text.indexOf('\n')
   const line = (newline === -1 ? text : text.slice(0, newline)).replace(/\r$/, '')
-  const fields = line.split(format === 'tsv' ? '\t' : ',')
+  const fields = splitHeaderLine(line, format === 'tsv' ? '\t' : ',')
   const seen = new Set<string>()
   return fields.map((field, index) =>
     header

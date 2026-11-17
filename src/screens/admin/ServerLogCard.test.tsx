@@ -27,8 +27,8 @@ function ConnectedServerLogCard() {
   return <ServerLogCard apiClient={apiClient} />
 }
 
-function versionHandler(serverVersion = '0.7.1') {
-  return http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: serverVersion }))
+function versionHandler() {
+  return http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' }))
 }
 
 function tailBody(overrides: { file?: string; lines?: string[]; truncated?: boolean } = {}) {
@@ -199,7 +199,7 @@ describe('ServerLogCard keepPreviousData', () => {
   })
 })
 
-describe('ServerLogCard disabled / old-server states', () => {
+describe('ServerLogCard disabled and 404 states', () => {
   it('shows the disabled notice for 503 and hides the controls', async () => {
     server.use(
       versionHandler(),
@@ -212,22 +212,27 @@ describe('ServerLogCard disabled / old-server states', () => {
     expect(screen.queryByLabelText('lines')).not.toBeInTheDocument()
   })
 
-  it('reports an old server from the tail 404 (no file param)', async () => {
-    server.use(versionHandler('0.7.1'), emptyFiles(), http.get(LOGS_URL, () => HttpResponse.text('404 Not Found', { status: 404 })))
+  it('shows the server text when the tail answers 404 without a file', async () => {
+    server.use(versionHandler(), emptyFiles(), http.get(LOGS_URL, () => HttpResponse.text('404 Not Found', { status: 404 })))
     await renderConnected()
 
-    expect(await screen.findByText('requires LuraDB ≥ 0.3.0 (server is 0.7.1)')).toBeInTheDocument()
+    const foot = await screen.findByText('404 Not Found')
+    expect(foot.className).toContain('admin-log__foot-line--err')
+    expect(screen.getByLabelText('lines')).toBeInTheDocument()
   })
 
-  it('reports an old server from the unambiguous files-listing 404, even while the tail request never settles', async () => {
+  it('keeps the tail and hides the file select when the files listing answers 404', async () => {
     server.use(
-      versionHandler('0.7.1'),
+      versionHandler(),
       http.get(FILES_URL, () => HttpResponse.text('404 Not Found', { status: 404 })),
-      http.get(LOGS_URL, () => new Promise(() => {})),
+      http.get(LOGS_URL, () => HttpResponse.json(tailBody({ lines: ['tail line'] }))),
     )
-    await renderConnected()
+    const queryClient = await renderConnected()
 
-    expect(await screen.findByText('requires LuraDB ≥ 0.3.0 (server is 0.7.1)')).toBeInTheDocument()
+    expect(await screen.findByText('tail line')).toBeInTheDocument()
+    await waitFor(() => expect(queryClient.getQueryState(['server-log', 'files'])?.status).toBe('error'))
+    expect(screen.getByText('tail line')).toBeInTheDocument()
+    expect(screen.queryByLabelText('log file')).not.toBeInTheDocument()
   })
 })
 

@@ -9,7 +9,7 @@ import { connect, disconnect } from '../../app/session'
 import { SelectedDomainProvider } from '../../shell/SelectedDomainContext'
 import { domainResponse, server } from '../../test/msw'
 import { SqlScreen } from './SqlScreen'
-import { resetSqlState } from './sqlStore'
+import { addTab, resetSqlState } from './sqlStore'
 
 const ORIGIN = window.location.origin
 const SQL_URL = `${ORIGIN}/store-api/rel/shop/sql`
@@ -52,13 +52,14 @@ function baseHandlers() {
   ]
 }
 
-async function connectAndRender(state?: unknown) {
+async function connectAndRender(sql?: string) {
   server.use(...baseHandlers())
   await act(() => connect(makeConnection()))
+  if (sql !== undefined) addTab(sql)
   const queryClient = createAppQueryClient()
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[{ pathname: '/sql', state }]}>
+      <MemoryRouter initialEntries={['/sql']}>
         <SelectedDomainProvider>
           <SqlScreen />
         </SelectedDomainProvider>
@@ -84,7 +85,7 @@ afterEach(() => {
 })
 
 describe('SqlScreen', () => {
-  it('seeds a tab from the insertQuery router state and runs it', async () => {
+  it('runs the statement of the active tab', async () => {
     let requestBody: unknown
     server.use(
       http.post(SQL_URL, async ({ request }) => {
@@ -103,7 +104,7 @@ describe('SqlScreen', () => {
         })
       }),
     )
-    const { container } = await connectAndRender({ insertQuery: 'SELECT id, customer_ref FROM orders' })
+    const { container } = await connectAndRender('SELECT id, customer_ref FROM orders')
 
     fireEvent.click(await findEnabledRun())
 
@@ -124,7 +125,7 @@ describe('SqlScreen', () => {
         return HttpResponse.json({ columns: [{ name: 'id', type: 'INTEGER' }], rows: [[1]], row_count: 1, limit_applied: false })
       }),
     )
-    await connectAndRender({ insertQuery: 'SELECT id, customer_ref FROM orders' })
+    await connectAndRender('SELECT id, customer_ref FROM orders')
 
     fireEvent.click(await screen.findByRole('button', { name: 'add expand customer_ref' }))
     expect(screen.getByRole('button', { name: 'remove expand customer_ref' })).toBeInTheDocument()
@@ -155,7 +156,7 @@ describe('SqlScreen', () => {
         }),
       ),
     )
-    await connectAndRender({ insertQuery: 'SELECT id, customer_ref FROM orders' })
+    await connectAndRender('SELECT id, customer_ref FROM orders')
 
     fireEvent.click(await findEnabledRun())
 
@@ -168,7 +169,7 @@ describe('SqlScreen', () => {
 
   it('shows a DDL confirmation for schema statements', async () => {
     server.use(http.post(SQL_URL, () => HttpResponse.json({ ok: true })))
-    await connectAndRender({ insertQuery: 'CREATE TABLE t (id INTEGER PRIMARY KEY)' })
+    await connectAndRender('CREATE TABLE t (id INTEGER PRIMARY KEY)')
 
     fireEvent.click(await findEnabledRun())
 
@@ -177,7 +178,7 @@ describe('SqlScreen', () => {
 
   it('shows a DML confirmation with affected rows and last_pk', async () => {
     server.use(http.post(SQL_URL, () => HttpResponse.json({ affected: 2, last_pk: 7 })))
-    await connectAndRender({ insertQuery: 'INSERT INTO orders (id) VALUES (1)' })
+    await connectAndRender('INSERT INTO orders (id) VALUES (1)')
 
     fireEvent.click(await findEnabledRun())
 
@@ -195,21 +196,21 @@ describe('SqlScreen', () => {
     )
     const countKey = ['rel-table-count', 'shop', 'orders']
 
-    const { queryClient, unmount } = await connectAndRender({ insertQuery: 'INSERT INTO orders (id) VALUES (1)' })
+    const { queryClient, unmount } = await connectAndRender('INSERT INTO orders (id) VALUES (1)')
     queryClient.setQueryData(countKey, 0)
     fireEvent.click(await findEnabledRun())
     await screen.findByText('1 rows affected · last_pk 1')
     await waitFor(() => expect(queryClient.getQueryState(countKey)?.isInvalidated).toBe(true))
     unmount()
 
-    const ddl = await connectAndRender({ insertQuery: 'CREATE TABLE t (id INTEGER PRIMARY KEY)' })
+    const ddl = await connectAndRender('CREATE TABLE t (id INTEGER PRIMARY KEY)')
     ddl.queryClient.setQueryData(countKey, 0)
     fireEvent.click(await findEnabledRun())
     await screen.findByText('ok · CREATE TABLE')
     await waitFor(() => expect(ddl.queryClient.getQueryState(countKey)?.isInvalidated).toBe(true))
     ddl.unmount()
 
-    const select = await connectAndRender({ insertQuery: 'SELECT id FROM orders' })
+    const select = await connectAndRender('SELECT id FROM orders')
     select.queryClient.setQueryData(countKey, 0)
     fireEvent.click(await findEnabledRun())
     await screen.findByRole('cell', { name: '1' })
@@ -222,7 +223,7 @@ describe('SqlScreen', () => {
         HttpResponse.text('syntax error at position 0: expected a statement', { status: 400 }),
       ),
     )
-    await connectAndRender({ insertQuery: 'SELEKT bad' })
+    await connectAndRender('SELEKT bad')
 
     fireEvent.click(await findEnabledRun())
 
@@ -238,7 +239,7 @@ describe('SqlScreen', () => {
         return HttpResponse.json({ ok: true })
       }),
     )
-    const { container } = await connectAndRender({ insertQuery: 'SELECT * FROM orders' })
+    const { container } = await connectAndRender('SELECT * FROM orders')
     await findEnabledRun()
 
     const content = container.querySelector('.cm-content')
@@ -276,7 +277,7 @@ describe('SqlScreen', () => {
         return HttpResponse.json({ columns: [{ name: 'id', type: 'INTEGER' }], rows: [[1042]], row_count: 1, limit_applied: false })
       }),
     )
-    await connectAndRender({ insertQuery: 'SELECT id FROM orders WHERE status = ?' })
+    await connectAndRender('SELECT id FROM orders WHERE status = ?')
 
     fireEvent.change(await screen.findByLabelText('params'), { target: { value: '["paid"]' } })
     fireEvent.click(await findEnabledRun())
@@ -285,7 +286,7 @@ describe('SqlScreen', () => {
   })
 
   it('locks Run and shows an inline error when params does not parse as a JSON array', async () => {
-    await connectAndRender({ insertQuery: 'SELECT 1' })
+    await connectAndRender('SELECT 1')
     const run = await findEnabledRun()
 
     fireEvent.change(await screen.findByLabelText('params'), { target: { value: '{}' } })
@@ -296,7 +297,7 @@ describe('SqlScreen', () => {
 
   it('renders a server 400 for a wrong params count the same way as other SQL errors', async () => {
     server.use(http.post(SQL_URL, () => HttpResponse.text('parameter count mismatch: expected 1, got 2', { status: 400 })))
-    await connectAndRender({ insertQuery: 'SELECT id FROM orders WHERE status = ?' })
+    await connectAndRender('SELECT id FROM orders WHERE status = ?')
 
     fireEvent.change(await screen.findByLabelText('params'), { target: { value: '["paid", "extra"]' } })
     fireEvent.click(await findEnabledRun())

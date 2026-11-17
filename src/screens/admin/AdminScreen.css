@@ -865,6 +865,16 @@
   overflow-wrap: anywhere;
 }
 
+.admin-backups__query-error {
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--bord);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-body);
+  color: var(--err);
+  overflow-wrap: anywhere;
+}
+
 .admin-backups__notice,
 .admin-backups__empty {
   padding: 11px 16px;

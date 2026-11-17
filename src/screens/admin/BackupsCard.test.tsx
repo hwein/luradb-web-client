@@ -147,11 +147,12 @@ describe('BackupsCard list', () => {
     expect(screen.queryByRole('button', { name: '▶ run backup now' })).not.toBeInTheDocument()
   })
 
-  it('reports an old server for 404 including its version', async () => {
+  it('shows the server text when the backup list fails', async () => {
     server.use(...baseHandlers(), http.get(BACKUPS_URL, () => HttpResponse.text('404 Not Found', { status: 404 })))
     await renderConnected()
 
-    expect(await screen.findByText('requires LuraDB ≥ 0.3.0 (server is 0.7.1)')).toBeInTheDocument()
+    expect(await screen.findByText('backups unavailable — 404 Not Found')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '▶ run backup now' })).toBeInTheDocument()
   })
 })
 

@@ -88,14 +88,6 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
   const [newTtlText, setNewTtlText] = useState('')
   const [newError, setNewError] = useState<string | undefined>(undefined)
 
-  // Moduswechsel (andere Auswahl, "+ new", Klick auf leer) verlässt Edit-/Bestätigungs-Zustände.
-  useEffect(() => {
-    setEditing(false)
-    setDeleteArmed(false)
-    setNullArmed(false)
-    setReloadedNote(undefined)
-  }, [mode])
-
   // Jeder Write ändert `last_modified_at` und setzt/löscht die TTL — die Meta-Query zieht mit dem Value mit (spec data/012 §4).
   function invalidate(key: string): void {
     void queryClient.invalidateQueries({ queryKey: ['kv-value', domain, key] })
@@ -142,6 +134,20 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
     },
   })
 
+  // A mode change (other selection, "+ new", click on empty) leaves edit and confirmation states and clears write errors.
+  const resetSave = saveMutation.reset
+  const resetSetNull = setNullMutation.reset
+  const resetDelete = deleteMutation.reset
+  useEffect(() => {
+    setEditing(false)
+    setDeleteArmed(false)
+    setNullArmed(false)
+    setReloadedNote(undefined)
+    resetSave()
+    resetSetNull()
+    resetDelete()
+  }, [mode, resetSave, resetSetNull, resetDelete])
+
   const createMutation = useMutation<string, unknown, { key: string; value: string; ttlSeconds: number | undefined }>({
     mutationFn: async ({ key, value, ttlSeconds }) => {
       if (!apiClient) throw new Error('no active connection')
@@ -159,11 +165,14 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
 
   // 404 ⇒ Key existiert nicht (gelöscht ist gelöscht, Autor-Entscheid 2026-07-18) — Liste invalidieren und die Auswahl räumen.
   // Die Liste selbst beweist mit Paginierung nichts mehr: ein fehlender Key kann jenseits der geladenen Seiten liegen (spec data/011 §6).
+  // The cached not-found goes too, so a key created again under that name reads fresh.
   useEffect(() => {
-    if (valueQuery.data?.state !== 'not-found') return
+    if (valueQuery.data?.state !== 'not-found' || viewKey === undefined) return
+    queryClient.removeQueries({ queryKey: ['kv-value', domain, viewKey] })
+    queryClient.removeQueries({ queryKey: ['kv-meta', domain, viewKey] })
     invalidateKvKeys(queryClient, domain)
     onClear()
-  }, [valueQuery.data, queryClient, domain, onClear])
+  }, [valueQuery.data, viewKey, queryClient, domain, onClear])
 
   function handleEditStart(): void {
     if (valueQuery.data === undefined) return
@@ -218,7 +227,7 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
     if (viewKey !== undefined) deleteMutation.mutate({ key: viewKey, etag: heldEtag })
   }
 
-  // Keeps editor text and armed state; only the held ETag moves to the freshly loaded one.
+  // Keeps editor text and armed state; only the held ETag moves to the freshly loaded one. A failed read changes nothing.
   async function handleReload(): Promise<void> {
     if (viewKey === undefined) return
     const note = editing
@@ -226,11 +235,9 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
       : nullArmed
         ? 'reloaded — setting null now overwrites the server version'
         : 'reloaded — deleting now removes the server version'
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['kv-value', domain, viewKey] }),
-      queryClient.invalidateQueries({ queryKey: ['kv-meta', domain, viewKey] }),
-    ])
-    setHeldEtag(etagOf(queryClient.getQueryData(kvValueQueryOptions(apiClient, domain, viewKey).queryKey)))
+    const [fresh] = await Promise.all([valueQuery.refetch(), metaQuery.refetch()])
+    if (fresh.isError) return
+    setHeldEtag(etagOf(fresh.data))
     saveMutation.reset()
     setNullMutation.reset()
     deleteMutation.reset()

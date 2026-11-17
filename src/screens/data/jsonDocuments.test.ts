@@ -30,6 +30,11 @@ describe('documentPreview', () => {
   it('unwraps _content documents instead of showing the server wrapper', () => {
     expect(documentPreview({ _key: 'scalar', _version: 1, _content: 42 })).toBe('42')
   })
+
+  it('keeps every field of an object document that carries _content next to other fields', () => {
+    expect(documentPreview({ _key: 'a', _version: 1, _content: 'x', title: 'y' })).toBe('{"_content":"x","title":"y"}')
+    expect(documentPreview({ _key: 'b', _version: 1, _content: 42 })).toBe('42')
+  })
 })
 
 describe('isJsonObject', () => {

@@ -33,11 +33,13 @@ function withoutMeta(doc: DocumentResponse): Record<string, unknown> {
 }
 
 /**
- * Inhalt eines Dokuments: nicht-objektartige Dokumente legt der Server als `{_content: …}` ab (Probe-Fakt) —
- * dann ist `_content` der Inhalt, sonst gilt das Dokument ohne `_key`/`_version`.
+ * Content of a document: the server stores a non-object document as `{_content: …}` (probe fact), so `_content` is the
+ * content when it is the only field; otherwise (also a legacy object with `_content`) the document without `_key`/`_version`.
  */
 function documentContent(doc: DocumentResponse): unknown {
-  return '_content' in doc ? doc._content : withoutMeta(doc)
+  const fields = withoutMeta(doc)
+  const names = Object.keys(fields)
+  return names.length === 1 && names[0] === '_content' ? fields._content : fields
 }
 
 /** Kompaktiertes JSON ohne Metafelder, erste ~60 Zeichen (spec §3). */

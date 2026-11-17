@@ -1,8 +1,7 @@
 import { keymap } from '@codemirror/view'
 import { Prec } from '@codemirror/state'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router'
+import { useMemo, useRef, useState } from 'react'
 import type { ApiClient } from '../../api'
 import { useSession } from '../../app/session'
 import { CodeEditor } from '../../lib'
@@ -26,12 +25,6 @@ import {
   updateTabText,
   useSqlState,
 } from './sqlStore'
-
-function insertQueryFrom(state: unknown): string | undefined {
-  if (state === null || typeof state !== 'object') return undefined
-  const value = (state as { insertQuery?: unknown }).insertQuery
-  return typeof value === 'string' ? value : undefined
-}
 
 function SaveViewBar({ onSubmit, onCancel }: { onSubmit: (name: string) => void; onCancel: () => void }) {
   const [name, setName] = useState('')
@@ -80,9 +73,6 @@ export function SqlScreen() {
   const [docsOpen, setDocsOpen] = useState(false)
   const [docsArticle, setDocsArticle] = useState('lurasql')
   const [savingView, setSavingView] = useState(false)
-
-  const location = useLocation()
-  const navigate = useNavigate()
 
   // Alle Request-Parameter als mutate-Variablen: TanStack aktualisiert die mutationFn erst im Effect —
   // eine Closure über apiClient/selected wäre direkt nach einem Commit einen Render alt (Muster: JsonDetail).
@@ -148,14 +138,6 @@ export function SqlScreen() {
     ],
     [],
   )
-
-  // {insertQuery} router state seeds a new tab; the state is cleared afterwards.
-  useEffect(() => {
-    const query = insertQueryFrom(location.state)
-    if (query === undefined) return
-    addTab(query)
-    void navigate('.', { replace: true, state: null })
-  }, [location, navigate])
 
   function openDocSplit(docId: string): void {
     setDocsArticle(docId)

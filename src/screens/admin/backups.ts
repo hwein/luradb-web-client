@@ -11,11 +11,8 @@ export type RestoreStatus = components['schemas']['RestoreStatusResponse']
 export type RestoreRequest = components['schemas']['RestoreRequest']
 type RestoreAccepted = components['schemas']['RestoreAcceptedResponse']
 
-/** 503 = Feature aus, 404 = Route fehlt (Server < 0.3.0) — beides sind Anzeigezustände, keine Fehler (spec §9). */
-export type BackupsResult =
-  | { kind: 'ok'; backups: BackupSummary[]; running: RunningBackupInfo | null }
-  | { kind: 'disabled' }
-  | { kind: 'unsupported' }
+/** 503 = feature off, a display state rather than an error. */
+export type BackupsResult = { kind: 'ok'; backups: BackupSummary[]; running: RunningBackupInfo | null } | { kind: 'disabled' }
 
 export type BackupDetailResult = { kind: 'ok'; detail: BackupDetail } | { kind: 'missing' }
 
@@ -50,7 +47,6 @@ export function backupsQueryOptions(apiClient: ApiClient | undefined, restoreRun
       const { data, error, response } = await apiClient.api.GET('/store-api/backups', { silentRecord: wasPolling(context) })
       if (response.status === 401) throw new ApiError(401, 'invalid api key')
       if (response.status === 503) return { kind: 'disabled' }
-      if (response.status === 404) return { kind: 'unsupported' }
       if (!response.ok || !data) throw apiError(response.status, error, 'backup list failed')
       return { kind: 'ok', backups: data.backups, running: data.running ?? null }
     },

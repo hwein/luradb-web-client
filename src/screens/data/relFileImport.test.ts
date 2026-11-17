@@ -89,6 +89,19 @@ describe('relFileImport', () => {
     expect(pkCandidates('', 'csv', true)).toEqual([])
   })
 
+  it('pkCandidates reads quoted header fields like the server', () => {
+    expect(pkCandidates('"id","last, first","say ""hi"""\n1,a,b\n', 'csv', true)).toEqual([
+      { name: 'id', source: 'id' },
+      { name: 'last__first', source: 'last, first' },
+      { name: 'say__hi_', source: 'say "hi"' },
+    ])
+    expect(pkCandidates('"id"\t"full name"\n1\ta\n', 'tsv', true)).toEqual([
+      { name: 'id', source: 'id' },
+      { name: 'full_name', source: 'full name' },
+    ])
+    expect(pkCandidates('id, "b c",x"y\n', 'csv', true).map((candidate) => candidate.name)).toEqual(['id', '_b_c_', 'x_y'])
+  })
+
   it('pkCandidates returns col_1 … col_n when the first line is not a header', () => {
     expect(pkCandidates('1,a,true\n2,b,false\n', 'csv', false)).toEqual([
       { name: 'col_1', source: 'col_1' },

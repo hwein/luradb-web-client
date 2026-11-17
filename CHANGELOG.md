@@ -23,6 +23,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Browser mode: a connection with a server URL connects directly if the server allows the origin via CORS; an empty URL keeps using the same-origin proxy.
 - Backups: relational data can be backed up (scopes `rel`, `rel:<domain>`) and restored under a new name; the restore dialog shows an archive's format version, shard count, log positions and relational snapshot.
 - Docs: new topic on connecting AI assistants over MCP.
+- Admin: BACKUPS card — list, run, download, upload, restore and delete backup archives (requires `backup.enabled` on the server).
+- Admin: SERVER LOG card — tail the server log with line count, substring filter and rotated-file selection (requires `log.http_access` on the server).
 
 ### Changed
 
@@ -40,6 +42,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Text is selectable only in editors, result grids, lists, detail panes, docs, logs, watch feeds, request and response text and error messages; the desktop app shows the browser context menu only in text fields and editors and ignores the browser shortcuts for reload, print and find.
 - Docs: every topic except "Connect to a running server" shows the content of its docs.luradb.org page and needs a network connection.
 - Docs: search finds these topics by title, no longer by their text.
+- RECENT REQUESTS no longer floods with background polling — only the first load of a screen/card and calls the user actually triggered (navigation, mutations, manual refreshes) are recorded; interval ticks and focus-refetches of background queries stay silent.
 
 ### Removed
 
@@ -69,15 +72,6 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - What's-new dialog shows text between `**` as bold and gives code spans a border; the status bar server label stays on one line.
 - REST explorer: only the endpoint list scrolls; the request line and the response stay in view.
 - Docs: many open tabs no longer make the content area scroll sideways; the tab strip scrolls on its own and keeps the active tab in view.
-
-### Changed
-
-- RECENT REQUESTS no longer floods with background polling — only the first load of a screen/card and calls the user actually triggered (navigation, mutations, manual refreshes) are recorded; interval ticks and focus-refetches of background queries stay silent.
-
-### Added
-
-- Admin: BACKUPS card — list, run, download, upload, restore and delete backup archives (requires LuraDB ≥ 0.3.0 with `backup.enabled`).
-- Admin: SERVER LOG card — tail the server log with line count, substring filter and rotated-file selection (requires LuraDB ≥ 0.3.0 with `log.http_access`).
 
 ## [0.1.0] - 2026-08-12
 

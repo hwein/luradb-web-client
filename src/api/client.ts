@@ -57,12 +57,7 @@ export interface ApiClient {
    * RECENT REQUESTS sonst fluten würden (data/008 §5); wirft nie auf Nicht-2xx, nur bei Netzfehlern.
    */
   fetchSilent: (path: string, init?: RequestInit) => Promise<Response>
-  /**
-   * Wie `fetchSilent`, aber ganz ohne Authorization-Header — für Proben, deren Semantik nur anonym
-   * funktioniert (admin/005: `auth.enabled`-Ableitung). Nutzt denselben `fetchImpl`/`baseUrl` wie der
-   * übrige Client, baut also keinen eigenen Transport auf. Bewusst stiller Pfad, ob er je im Recorder
-   * erscheint, entscheidet general/012.
-   */
+  /** Like `fetchSilent`, but without the Authorization header, for probes that only work anonymously. Never recorded. */
   fetchAnonymous: (path: string, init?: RequestInit) => Promise<Response>
 }
 

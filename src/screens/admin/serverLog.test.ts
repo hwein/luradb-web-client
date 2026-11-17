@@ -59,19 +59,17 @@ describe('describeTail', () => {
 })
 
 describe('tailRefetchInterval', () => {
-  it('stops on 503 regardless of the file param', () => {
-    expect(tailRefetchInterval(undefined)({ state: { error: new ApiError(503, 'disabled') } })).toBe(false)
-    expect(tailRefetchInterval('luradb.log.1')({ state: { error: new ApiError(503, 'disabled') } })).toBe(false)
+  it('stops on 503', () => {
+    expect(tailRefetchInterval({ state: { error: new ApiError(503, 'disabled') } })).toBe(false)
   })
 
-  it('stops on 404 only when no file param was sent (old-server heuristic)', () => {
-    expect(tailRefetchInterval(undefined)({ state: { error: new ApiError(404, 'not found') } })).toBe(false)
-    expect(tailRefetchInterval('luradb.log.1')({ state: { error: new ApiError(404, 'file gone') } })).toBe(10_000)
+  it('keeps the interval on a 404', () => {
+    expect(tailRefetchInterval({ state: { error: new ApiError(404, 'not found') } })).toBe(10_000)
   })
 
   it('keeps polling with no error and with unrelated errors', () => {
-    expect(tailRefetchInterval(undefined)({ state: { error: null } })).toBe(10_000)
-    expect(tailRefetchInterval(undefined)({ state: { error: new ApiError(500, 'boom') } })).toBe(10_000)
+    expect(tailRefetchInterval({ state: { error: null } })).toBe(10_000)
+    expect(tailRefetchInterval({ state: { error: new ApiError(500, 'boom') } })).toBe(10_000)
   })
 })
 
@@ -165,7 +163,7 @@ describe('fetchServerLogFiles', () => {
     await expect(fetchServerLogFiles(makeApi())).resolves.toEqual([{ file: 'luradb.log.2026-08-26', size: 3369, modified: 1787742615 }])
   })
 
-  it('throws ApiError(status, plaintextBody) on a 404 (old server, route missing)', async () => {
+  it('throws ApiError(status, plaintextBody) on a 404', async () => {
     server.use(http.get(`${BASE_URL}/store-api/logs/files`, () => HttpResponse.text('404 Not Found', { status: 404 })))
     await expect(fetchServerLogFiles(makeApi())).rejects.toMatchObject({ status: 404, message: '404 Not Found' })
   })

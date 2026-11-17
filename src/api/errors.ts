@@ -25,6 +25,12 @@ export function messageFromBody(body: unknown): string | undefined {
 // LuraDB-Plaintext ist einzeilig kurz; der Deckel hält Fremd-Bodies (Proxy-HTML-Fehlerseiten) aus den Inline-Meldungen.
 const MAX_PLAINTEXT_MESSAGE = 300
 
+/** Seconds of a numeric `Retry-After` header, otherwise undefined. */
+export function retryAfterSecs(response: Response): number | undefined {
+  const header = response.headers.get('Retry-After')?.trim() ?? ''
+  return /^\d+$/.test(header) ? Number(header) : undefined
+}
+
 /** Baut einen ApiError aus einer Nicht-2xx-Response; konsumiert den Body. LuraDB antwortet auf Fehler mit Plaintext `NNN Reason: Detail`. */
 export async function apiErrorFromResponse(response: Response): Promise<ApiError> {
   const text = await response.text().catch(() => '')
@@ -41,9 +47,8 @@ export async function apiErrorFromResponse(response: Response): Promise<ApiError
   const firstLine = (trimmed.split('\n', 1)[0] ?? '').slice(0, MAX_PLAINTEXT_MESSAGE)
   const plaintext = isJson || firstLine === '' ? undefined : firstLine
   const message = messageFromBody(body) ?? plaintext ?? statusText
-  const header = response.headers.get('Retry-After')?.trim() ?? ''
-  if (!/^\d+$/.test(header)) return new ApiError(response.status, message, body)
-  const secs = Number(header)
+  const secs = retryAfterSecs(response)
+  if (secs === undefined) return new ApiError(response.status, message, body)
   // 507 text already names the delay; repeating it would show the wait twice
   const named = message.includes(`retry in ${secs} s`)
   return new ApiError(response.status, named ? message : `${message} · retry in ${secs} s`, body, secs)

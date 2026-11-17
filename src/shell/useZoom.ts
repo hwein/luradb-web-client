@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { getEnvironment } from '../app/environment'
 import { applyZoom, readZoom, zoomIn, zoomOut, zoomReset } from './zoom'
 
+const WHEEL_STEP_MS = 150
+
 export interface ZoomCommand {
   factor: number
   step: number
@@ -36,10 +38,17 @@ export function useZoom(): ZoomCommand | null {
       event.preventDefault()
       execute(run)
     }
+    // A touchpad gesture fires ctrl-wheel events densely: at most one step per 150 ms in one direction.
+    let lastWheel = { direction: 0, at: Number.NEGATIVE_INFINITY }
     const onWheel = (event: WheelEvent) => {
       if (!hasModifier(event)) return
       event.preventDefault()
-      if (event.deltaY !== 0) execute(event.deltaY < 0 ? zoomIn : zoomOut)
+      if (event.deltaY === 0) return
+      const direction = Math.sign(event.deltaY)
+      const now = Date.now()
+      if (direction === lastWheel.direction && now - lastWheel.at < WHEEL_STEP_MS) return
+      lastWheel = { direction, at: now }
+      execute(direction < 0 ? zoomIn : zoomOut)
     }
     // Capture phase: the shortcuts must also work while the editor has focus
     window.addEventListener('keydown', onKeyDown, true)

@@ -10,7 +10,6 @@ import {
   createDocument,
   createDocumentWithKey,
   deleteDocument,
-  type DocumentDetail,
   isConflict,
   jsonDocumentQueryOptions,
   KeyExistsError,
@@ -154,13 +153,12 @@ export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOp
     if (viewKey !== undefined) deleteMutation.mutate({ key: viewKey, etag: heldEtag })
   }
 
-  // Keeps editor text and armed state; only the held ETag moves to the freshly loaded one.
+  // Keeps editor text and armed state; only the held ETag moves to the freshly loaded one. A failed read changes nothing.
   async function handleReload(): Promise<void> {
     if (viewKey === undefined) return
-    const queryKey = ['json-document', domain, viewKey]
-    await queryClient.invalidateQueries({ queryKey })
-    const fresh = queryClient.getQueryData<DocumentDetail>(queryKey)
-    if (fresh === undefined) return
+    const result = await detailQuery.refetch()
+    const fresh = result.data
+    if (result.isError || fresh === undefined) return
     setHeldEtag(fresh.etag)
     saveMutation.reset()
     deleteMutation.reset()

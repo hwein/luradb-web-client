@@ -347,6 +347,38 @@ describe('KvBrowser', () => {
     expect(screen.queryByText(/not found/)).not.toBeInTheDocument()
   })
 
+  it('keeps a key selected that is created again after its 404', async () => {
+    let beta: 'listed' | 'gone' | 'created' = 'listed'
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(beta === 'gone' ? ['alpha'] : ['alpha', 'beta']))),
+      http.get(keyUrl('alpha'), () => rawValue('a')),
+      http.get(keyUrl('beta'), () => {
+        if (beta === 'created') return rawValue('b')
+        beta = 'gone'
+        return new HttpResponse('not found', { status: 404 })
+      }),
+      http.put(keyUrl('beta'), () => {
+        beta = 'created'
+        return new HttpResponse(null, { status: 200 })
+      }),
+    )
+    await connectAndRender()
+    await screen.findByText('KEY alpha')
+
+    fireEvent.click(screen.getByRole('button', { name: 'beta' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'beta' })).not.toBeInTheDocument())
+    expect(await screen.findByText('KEY alpha')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '+ new' }))
+    fireEvent.change(screen.getByLabelText('new key name'), { target: { value: 'beta' } })
+    fireEvent.click(screen.getByRole('button', { name: 'create' }))
+
+    expect(await screen.findByText('KEY beta')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'beta' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('KEY beta')).toBeInTheDocument())
+    expect(screen.queryByText('KEY alpha')).not.toBeInTheDocument()
+  })
+
   it('arms and confirms delete, then removes the key from the invalidated list', async () => {
     let deleted = false
     server.use(
@@ -483,6 +515,24 @@ describe('KvBrowser', () => {
     expect(screen.queryByText(/save failed/)).not.toBeInTheDocument()
   })
 
+  it('drops the conflict line when another key is selected', async () => {
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha', 'beta']))),
+      http.get(keyUrl('alpha'), () => new HttpResponse('a', { headers: { ETag: '"e1"' } })),
+      http.get(keyUrl('beta'), () => rawValue('b')),
+      http.put(keyUrl('alpha'), () => HttpResponse.text('412 Precondition Failed: etag mismatch', { status: 412 })),
+    )
+    await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'save' }))
+    expect(await screen.findByText(/version conflict — the key changed on the server/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'beta' }))
+    expect(await screen.findByText('KEY beta')).toBeInTheDocument()
+    expect(screen.queryByText(/version conflict — the key changed on the server/)).not.toBeInTheDocument()
+  })
+
   it('shows the conflict line on 412 when deleting', async () => {
     let value = 'v1'
     let etag = '"e1"'
@@ -547,6 +597,32 @@ describe('KvBrowser', () => {
     await waitFor(() => expect(putBody).toBe('mine'))
     expect(ifMatch).toBe('"e2"')
     await waitFor(() => expect(screen.queryByText(/reloaded —/)).not.toBeInTheDocument())
+  })
+
+  it('keeps the conflict line when the reload fails', async () => {
+    let readFails = false
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['k']))),
+      http.get(keyUrl('k'), () =>
+        readFails ? HttpResponse.text('500 Internal Server Error', { status: 500 }) : new HttpResponse('v1', { headers: { ETag: '"e1"' } }),
+      ),
+      http.put(keyUrl('k'), () => HttpResponse.text('412 Precondition Failed: etag mismatch', { status: 412 })),
+    )
+    const { queryClient } = await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'save' }))
+    expect(await screen.findByText(/version conflict — the key changed on the server/)).toBeInTheDocument()
+
+    readFails = true
+    fireEvent.click(screen.getByRole('button', { name: 'reload' }))
+    expect(await screen.findByText('failed to load value')).toBeInTheDocument()
+
+    readFails = false
+    await act(() => queryClient.invalidateQueries({ queryKey: ['kv-value', DOMAIN, 'k'] }))
+    expect(await screen.findByLabelText('value editor')).toBeInTheDocument()
+    expect(screen.getByText(/version conflict — the key changed on the server/)).toBeInTheDocument()
+    expect(screen.queryByText(/^reloaded —/)).not.toBeInTheDocument()
   })
 
   it('passes the 428 text through', async () => {

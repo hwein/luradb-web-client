@@ -111,7 +111,7 @@ async function connectAndRender(initialPath = '/engines', extraHandlers: Request
   if (extraHandlers.length > 0) server.use(...extraHandlers)
   await act(() => connect(makeConnection()))
   const queryClient = createAppQueryClient()
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialPath]}>
         <SelectedDomainProvider>
@@ -124,6 +124,7 @@ async function connectAndRender(initialPath = '/engines', extraHandlers: Request
       </MemoryRouter>
     </QueryClientProvider>,
   )
+  return { queryClient, ...view }
 }
 
 function cardText(tone: 'kv' | 'json' | 'rel'): string {
@@ -180,6 +181,24 @@ describe('EnginesScreen', () => {
     expect(document.querySelector('.engines__card--kv .engines__dot--ok')).toBeInTheDocument()
   })
 
+  it('keeps the status dot of an engine on when its endpoints answer 503 with Retry-After', async () => {
+    const overloaded = () => HttpResponse.text('503 Service Unavailable', { status: 503, headers: { 'Retry-After': '1' } })
+    const { queryClient } = await connectAndRender('/engines', [
+      http.get(`${ORIGIN}/store-api/rel/:domain/tables`, overloaded),
+      http.get(`${ORIGIN}/store-api/rel/:domain/views`, overloaded),
+    ])
+
+    await waitFor(() => expect(document.querySelector('.engines__card--kv .engines__dot--ok')).toBeInTheDocument())
+    const relKeys = [
+      ['rel-tables', 'shop'],
+      ['rel-tables', 'sessions'],
+      ['rel-views', 'shop'],
+      ['rel-views', 'sessions'],
+    ]
+    await waitFor(() => expect(relKeys.map((key) => queryClient.getQueryState(key)?.status)).toEqual(['error', 'error', 'error', 'error']))
+    expect(document.querySelector('.engines__card--rel .engines__dot--ok')).toBeInTheDocument()
+  })
+
   it('"open in: <domain>" selects the domain and navigates into the matching data-browser engine mode', async () => {
     await connectAndRender()
     await waitFor(() => expect(cardText('json')).toContain('42'))
@@ -196,10 +215,9 @@ describe('EnginesScreen', () => {
     await connectAndRender()
 
     expect(await screen.findByText('no client-started tasks')).toBeInTheDocument()
-    await waitFor(() => expect(document.querySelector('.engines__tasks')?.textContent).toContain('compaction runs'))
-    expect(document.querySelector('.engines__tasks')?.textContent).toContain('3')
-    expect(document.querySelector('.engines__tasks')?.textContent).toContain('janitor runs')
-    expect(document.querySelector('.engines__tasks')?.textContent).toContain('5')
+    // metrics follow the role check, so the counters arrive after the labels
+    await waitFor(() => expect(document.querySelector('.engines__tasks')?.textContent).toContain('compaction runs3'))
+    expect(document.querySelector('.engines__tasks')?.textContent).toContain('janitor runs5')
   })
 
   it(
@@ -407,6 +425,34 @@ describe('EnginesScreen', () => {
       expect(shardsSeg).toHaveAttribute('title', 'shard 0: ok\nshard 1: timeout')
       const volumeSeg = await screen.findByRole('group', { name: '1.0 MB free of 2.0 MB' })
       expect(volumeSeg).toHaveAttribute('title', '/data')
+    })
+
+    it('does not request metrics for a key without the admin role', async () => {
+      let metricsCalls = 0
+      const { queryClient } = await connectAndRender('/engines', [
+        http.get(`${ORIGIN}/store-api/auth/whoami`, () => HttpResponse.json({ name: 'bob', role: 'User' })),
+        http.get(`${ORIGIN}/store-api/metrics`, () => {
+          metricsCalls += 1
+          return HttpResponse.json(METRICS)
+        }),
+      ])
+
+      await waitFor(() => expect(barText()).toContain('shards 0/0 ok'))
+      await waitFor(() => expect(queryClient.getQueryState(['capabilities', 'whoami'])?.status).toBe('success'))
+      expect(metricsCalls).toBe(0)
+    })
+
+    it('still requests metrics when the role check fails', async () => {
+      let metricsCalls = 0
+      await connectAndRender('/engines', [
+        http.get(`${ORIGIN}/store-api/auth/whoami`, () => HttpResponse.text('boom', { status: 500 })),
+        http.get(`${ORIGIN}/store-api/metrics`, () => {
+          metricsCalls += 1
+          return HttpResponse.json(METRICS)
+        }),
+      ])
+
+      await waitFor(() => expect(metricsCalls).toBeGreaterThanOrEqual(1))
     })
 
     it('shows metrics unavailable on 503', async () => {

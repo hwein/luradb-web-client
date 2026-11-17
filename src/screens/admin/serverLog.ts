@@ -60,9 +60,9 @@ function tailPath(lines: number, q: string, file: string | undefined): string {
 }
 
 /**
- * Tail-Fetch über `fetchSilent` (spec §Entscheidungen: 10s-Polling darf RECENT REQUESTS nicht fluten) — wirft bei
- * Nicht-2xx `ApiError(status, plaintextBody)`, damit die zuletzt erfolgreichen Zeilen als Query-`data` erhalten
- * bleiben; die Einordnung (disabled/Alt-Server/Datei weg/…) übernimmt die Karte anhand `status`/`message` (Präzedenz kvBulk.ts).
+ * Tail fetch via `fetchSilent` (10 s polling must not flood RECENT REQUESTS); throws `ApiError(status, plaintextBody)`
+ * on non-2xx so the last successful lines stay as query `data`. The card classifies the error (disabled, file gone, …)
+ * by `status`/`message` (precedent kvBulk.ts).
  */
 export async function fetchServerLogTail(apiClient: ApiClient, lines: number, q: string, file: string | undefined): Promise<LogTail> {
   const response = await apiClient.fetchSilent(tailPath(lines, q, file))
@@ -76,18 +76,10 @@ export async function fetchServerLogFiles(apiClient: ApiClient): Promise<LogFile
   return parseFilesResponse(await response.json(), response.status)
 }
 
-/**
- * 503 (Feature aus) und 404 ohne `file` (Alt-Server — die einzige dokumentierte 404-Bedeutung des Endpunkts
- * setzt einen `file`-Namen voraus) pausieren das Intervall; der Fokus-Refetch (TanStack-Default) bleibt aktiv
- * und heilt den Zustand, sobald der Operator das Feature einschaltet oder der Server aktualisiert wird (spec §5).
- */
-export function tailRefetchInterval(file: string | undefined) {
-  return (query: { state: { error: unknown } }): number | false => {
-    const error = query.state.error
-    const disabled = error instanceof ApiError && error.status === 503
-    const oldServer = error instanceof ApiError && error.status === 404 && file === undefined
-    return disabled || oldServer ? false : 10_000
-  }
+/** 503 (feature off) pauses the interval; the focus refetch stays active and heals once the operator switches the feature on. */
+export function tailRefetchInterval(query: { state: { error: unknown } }): number | false {
+  const error = query.state.error
+  return error instanceof ApiError && error.status === 503 ? false : 10_000
 }
 
 export function serverLogTailQueryOptions(apiClient: ApiClient | undefined, lines: number, q: string, file: string | undefined) {
@@ -99,7 +91,7 @@ export function serverLogTailQueryOptions(apiClient: ApiClient | undefined, line
     },
     enabled: apiClient !== undefined,
     placeholderData: keepPreviousData,
-    refetchInterval: tailRefetchInterval(file),
+    refetchInterval: tailRefetchInterval,
   })
 }
 

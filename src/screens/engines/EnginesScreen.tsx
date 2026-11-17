@@ -40,10 +40,12 @@ export function EnginesScreen() {
   const domainNames = (domainsQuery.data ?? []).map((domain) => domain.name)
 
   const healthQuery = useQuery(healthQueryOptions(apiClient))
-  const metricsQuery = useQuery(metricsQueryOptions(apiClient))
+  const admin = useCapabilities().admin
+  const isAdmin = admin === 'yes'
+  // Admin only (403 otherwise); a failed role check keeps the metrics of an admin.
+  const metricsQuery = useQuery({ ...metricsQueryOptions(apiClient), enabled: apiClient !== undefined && (isAdmin || admin === 'error') })
   const history = useEngineOpsHistory(metricsQuery.data, metricsQuery.dataUpdatedAt)
   const health = healthQuery.data
-  const isAdmin = useCapabilities().admin === 'yes'
 
   const jsonTotals = useJsonEngineTotals(apiClient, domainNames)
   const relTotals = useRelEngineTotals(apiClient, domainNames)

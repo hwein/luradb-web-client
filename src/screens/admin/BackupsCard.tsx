@@ -316,7 +316,6 @@ function UploadAction({ apiClient }: { apiClient: ApiClient | undefined }) {
 /** BACKUPS-Karte (spec admin/003, Prototyp Z. 225–231): Liste, laufende Jobs, Run/Upload, Restore-Einstieg. */
 export function BackupsCard({ apiClient }: { apiClient: ApiClient | undefined }) {
   const connected = useConnectedSession()
-  const serverVersion = connected?.serverVersion ?? 'unknown'
   const connectionId = connected?.connectionId
   const storedEntry = useRestoreEntry()
   // Einträge fremder Verbindungen ignorieren (nicht löschen — bei Rückkehr zur Ursprungsverbindung wieder gültig).
@@ -338,16 +337,12 @@ export function BackupsCard({ apiClient }: { apiClient: ApiClient | undefined })
   const backups = list?.kind === 'ok' ? [...list.backups].sort((a, b) => b.created_at - a.created_at) : []
   const jobBusy = running !== null || restoreRunning
 
-  const notice =
-    list?.kind === 'disabled'
-      ? 'backups disabled — set backup.enabled = true in luradb.toml'
-      : list?.kind === 'unsupported'
-        ? `requires LuraDB ≥ 0.3.0 (server is ${serverVersion})`
-        : undefined
+  const notice = list?.kind === 'disabled' ? 'backups disabled — set backup.enabled = true in luradb.toml' : undefined
 
   return (
     <div className="admin-card admin-backups">
       <div className="admin-card__head">BACKUPS</div>
+      {listQuery.isError && <div className="admin-backups__query-error">backups unavailable — {messageOf(listQuery.error)}</div>}
       {notice !== undefined ? (
         <>
           <div className="admin-backups__notice">{notice}</div>

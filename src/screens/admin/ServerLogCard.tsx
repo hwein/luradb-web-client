@@ -1,7 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, type ApiClient } from '../../api'
-import { useConnectedSession } from '../../app/session'
 import { formatBytes } from '../../lib'
 import { describeTail, serverLogFilesQueryOptions, serverLogTailQueryOptions, SERVER_LOG_FILES_KEY } from './serverLog'
 
@@ -25,8 +24,6 @@ function isNoLogFileYet(error: unknown): boolean {
 
 /** SERVER-LOG-Karte (spec admin/004, Prototyp Z. 232–235): Tail + Files-Listing über `fetchSilent`, Kopf bleibt Design-Copy. */
 export function ServerLogCard({ apiClient }: { apiClient: ApiClient | undefined }) {
-  const connected = useConnectedSession()
-  const serverVersion = connected?.serverVersion ?? 'unknown'
   const queryClient = useQueryClient()
 
   const [lines, setLines] = useState<LinesOption>(100)
@@ -91,9 +88,6 @@ export function ServerLogCard({ apiClient }: { apiClient: ApiClient | undefined 
   const filesData = filesQuery.data
   const showFileSelect = !filesQuery.isError && (filesData?.length ?? 0) > 0
 
-  const filesOldServer = filesQuery.error instanceof ApiError && filesQuery.error.status === 404
-  const tailOldServer = tailQuery.error instanceof ApiError && tailQuery.error.status === 404 && selectedFile === undefined
-  const oldServer = filesOldServer || tailOldServer
   const disabled =
     (tailQuery.error instanceof ApiError && tailQuery.error.status === 503) ||
     (filesQuery.error instanceof ApiError && filesQuery.error.status === 503)
@@ -103,8 +97,6 @@ export function ServerLogCard({ apiClient }: { apiClient: ApiClient | undefined 
       <div className="admin-card__head">SERVER LOG · GET /store-api/logs</div>
       {disabled ? (
         <div className="admin-log__notice">log access disabled — set log.http_access = true (requires log.path) in luradb.toml</div>
-      ) : oldServer ? (
-        <div className="admin-log__notice">requires LuraDB ≥ 0.3.0 (server is {serverVersion})</div>
       ) : (
         <>
           <div className="admin-log__controls">

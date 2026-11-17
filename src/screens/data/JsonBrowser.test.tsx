@@ -305,6 +305,37 @@ describe('JsonBrowser', () => {
     await waitFor(() => expect(screen.queryByText(/reloaded —/)).not.toBeInTheDocument())
   })
 
+  it('keeps the conflict line when the reload fails', async () => {
+    let readFails = false
+    server.use(
+      http.get(DOCS_URL, () =>
+        HttpResponse.json({ documents: [{ _key: 'cus_1', _version: 2, name: 'old' }], keys: ['cus_1'], total: 1, offset: 0, limit: 50 }),
+      ),
+      http.get(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_1`, () =>
+        readFails
+          ? HttpResponse.text('500 Internal Server Error', { status: 500 })
+          : HttpResponse.json({ _key: 'cus_1', _version: 2, name: 'old' }, { headers: { ETag: '"etag-2"' } }),
+      ),
+      http.put(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_1`, () => new HttpResponse(null, { status: 412 })),
+    )
+    const { queryClient } = await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    expect(await screen.findByLabelText('document editor')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+    expect(await screen.findByText(/version conflict — the document changed on the server/)).toBeInTheDocument()
+
+    readFails = true
+    fireEvent.click(screen.getByRole('button', { name: 'reload' }))
+    expect(await screen.findByText('failed to load document')).toBeInTheDocument()
+
+    readFails = false
+    await act(() => queryClient.invalidateQueries({ queryKey: ['json-document', DOMAIN, 'cus_1'] }))
+    expect(await screen.findByLabelText('document editor')).toBeInTheDocument()
+    expect(screen.getByText(/version conflict — the document changed on the server/)).toBeInTheDocument()
+    expect(screen.queryByText(/^reloaded —/)).not.toBeInTheDocument()
+  })
+
   it('keeps the ETag of the edit start when the document refetches meanwhile', async () => {
     let etag = '"etag-1"'
     let ifMatch: string | null = null

@@ -133,6 +133,23 @@ describe('useZoom', () => {
       expect(setZoom).toHaveBeenCalledTimes(2)
     })
 
+    it('steps once for a burst of ctrl-wheel events in one direction', () => {
+      vi.setSystemTime(new Date(2026, 5, 15, 12, 0, 0))
+      try {
+        desktop()
+        for (let i = 0; i < 20; i++) expect(fireEvent.wheel(window, { ctrlKey: true, deltaY: -4 })).toBe(false)
+        expect(setZoom).toHaveBeenCalledTimes(1)
+        expect(setZoom).toHaveBeenCalledWith(1.1)
+
+        vi.setSystemTime(new Date(2026, 5, 15, 12, 0, 0, 150))
+        expect(fireEvent.wheel(window, { ctrlKey: true, deltaY: -4 })).toBe(false)
+        expect(setZoom).toHaveBeenCalledTimes(2)
+        expect(setZoom).toHaveBeenLastCalledWith(1.25)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('a wheel event without Ctrl leaves the zoom untouched', () => {
       desktop()
       expect(fireEvent.wheel(window, { deltaY: -100 })).toBe(true)

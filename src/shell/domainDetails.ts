@@ -1,5 +1,5 @@
 import { queryOptions, type QueryFunctionContext } from '@tanstack/react-query'
-import { ApiError, type ApiClient } from '../api'
+import { ApiError, retryAfterSecs, type ApiClient } from '../api'
 import type { components } from '../api/schema'
 import { pollSilentRecord } from './pollSilentRecord'
 
@@ -13,9 +13,12 @@ interface EngineQueryState {
   error: unknown
 }
 
-/** An engine is switched off for a domain when one of its queries fails with 503 on first load; a 503 after a success (overload) does not count. */
+/** An engine is switched off for a domain when one of its queries fails with 503 on first load; a 503 after a success or with Retry-After (overload) does not count. */
 export function isEngineOff(queries: EngineQueryState[]): boolean {
-  return queries.some((query) => query.isLoadingError && query.error instanceof ApiError && query.error.status === 503)
+  return queries.some(
+    (query) =>
+      query.isLoadingError && query.error instanceof ApiError && query.error.status === 503 && query.error.retryAfterSecs === undefined,
+  )
 }
 
 /** pollSilentRecord, plus silent after a failed attempt (a switched-off engine answers 503 on every tick). `errorUpdatedAt`, not `error`: a refetch without data clears `error` before the query function runs. */
@@ -39,7 +42,7 @@ export function relTablesQueryOptions(apiClient: ApiClient | undefined, domain: 
         params: { path: { domain } },
         silentRecord: engineSilentRecord(context),
       })
-      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load tables')
+      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load tables', undefined, retryAfterSecs(response))
       return data
     },
     enabled: enabled && apiClient !== undefined,
@@ -61,7 +64,7 @@ export function relViewsQueryOptions(apiClient: ApiClient | undefined, domain: s
         params: { path: { domain } },
         silentRecord: engineSilentRecord(context),
       })
-      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load views')
+      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load views', undefined, retryAfterSecs(response))
       return data
     },
     enabled: enabled && apiClient !== undefined,
@@ -95,7 +98,7 @@ export function jsonDocumentCountQueryOptions(apiClient: ApiClient | undefined, 
         params: { path: { domain } },
         silentRecord: engineSilentRecord(context),
       })
-      if (!response.ok || !data) throw new ApiError(response.status, 'failed to count documents')
+      if (!response.ok || !data) throw new ApiError(response.status, 'failed to count documents', undefined, retryAfterSecs(response))
       return data.count
     },
     enabled: enabled && apiClient !== undefined,
@@ -117,7 +120,7 @@ export function jsonIndexesQueryOptions(apiClient: ApiClient | undefined, domain
         params: { path: { domain } },
         silentRecord: engineSilentRecord(context),
       })
-      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load indexes')
+      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load indexes', undefined, retryAfterSecs(response))
       return data
     },
     enabled: enabled && apiClient !== undefined,
