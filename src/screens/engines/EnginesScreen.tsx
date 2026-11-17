@@ -1,19 +1,22 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, type NavigateFunction } from 'react-router'
+import { ApiError } from '../../api'
+import { useCapabilities } from '../../app/capabilities'
 import { useSession } from '../../app/session'
+import { formatBytes } from '../../lib'
 import { useSelectedDomain } from '../../shell'
-import { jsonDomainsQueryOptions, kvDomainsQueryOptions, relDomainsQueryOptions } from '../../shell/domains'
+import { domainsQueryOptions } from '../../shell/domains'
 import { useJsonEngineTotals, useRelEngineTotals } from './domainMetrics'
-import { EngineCard, type EngineCardRow, type EngineTone } from './EngineCard'
+import { EngineCard, type EngineCardRow } from './EngineCard'
 import './EnginesScreen.css'
-import { formatBytes, formatNumber } from './format'
+import { formatNumber } from '../../lib'
+import { NUMBER_PLACEHOLDER } from './format'
 import { healthQueryOptions } from './health'
-import { metricsQueryOptions } from './metrics'
+import { HealthBar } from './HealthBar'
+import { metricsQueryOptions, type EngineTone } from './metrics'
+import { useEngineOpsHistory } from './rate'
 import { RecentRequestsCard } from './RecentRequestsCard'
-import { SystemThroughput } from './SystemThroughput'
 import { TasksJobsCard } from './TasksJobsCard'
-
-const NUMBER_PLACEHOLDER = '…'
 
 function numberOrPlaceholder(loaded: boolean, value: number): string {
   return loaded ? formatNumber(value) : NUMBER_PLACEHOLDER
@@ -25,33 +28,30 @@ export function openDomainIn(navigate: NavigateFunction, select: (name: string) 
   void navigate(`/data?engine=${engine}`)
 }
 
-/** Übersichts-Screen (spec engines/001): SYSTEM-Durchsatz, drei Engine-Karten, Tasks & Jobs, Recent Requests. */
+/** Overview screen: three engine cards, Tasks & Jobs, Recent Requests. */
 export function EnginesScreen() {
   const navigate = useNavigate()
   const session = useSession()
   const apiClient = session.status === 'connected' ? session.apiClient : undefined
   const { select } = useSelectedDomain()
 
-  // Geteilte Query-Options mit Explorer/useConnection (shell/002): gleicher Key + gleiche queryFn, ein Cache-Eintrag.
-  const kvDomainsQuery = useQuery(kvDomainsQueryOptions(apiClient))
-  const jsonDomainsQuery = useQuery(jsonDomainsQueryOptions(apiClient))
-  const relDomainsQuery = useQuery(relDomainsQueryOptions(apiClient))
-  const kvDomains = kvDomainsQuery.data ?? []
-  const jsonDomains = jsonDomainsQuery.data ?? []
-  const relDomains = relDomainsQuery.data ?? []
+  // Shared query options with the Explorer (shell/002): same key and queryFn, one cache entry for all three cards.
+  const domainsQuery = useQuery(domainsQueryOptions(apiClient))
+  const domainNames = (domainsQuery.data ?? []).map((domain) => domain.name)
 
   const healthQuery = useQuery(healthQueryOptions(apiClient))
-  const metricsQuery = useQuery(metricsQueryOptions(apiClient))
+  const admin = useCapabilities().admin
+  const isAdmin = admin === 'yes'
+  // Admin only (403 otherwise); a failed role check keeps the metrics of an admin.
+  const metricsQuery = useQuery({ ...metricsQueryOptions(apiClient), enabled: apiClient !== undefined && (isAdmin || admin === 'error') })
+  const noMetrics = admin === 'no'
+  // No cached figures next to the dashes after a role change in a running session.
+  const metrics = noMetrics ? undefined : metricsQuery.data
+  const history = useEngineOpsHistory(metricsQuery.data, metricsQuery.dataUpdatedAt)
   const health = healthQuery.data
 
-  const jsonTotals = useJsonEngineTotals(
-    apiClient,
-    jsonDomains.map((domain) => domain.name),
-  )
-  const relTotals = useRelEngineTotals(
-    apiClient,
-    relDomains.map((domain) => domain.name),
-  )
+  const jsonTotals = useJsonEngineTotals(apiClient, domainNames)
+  const relTotals = useRelEngineTotals(apiClient, domainNames)
 
   const kvRows: EngineCardRow[] = [
     { label: 'domains', value: health ? formatNumber(health.domainCount) : NUMBER_PLACEHOLDER },
@@ -61,48 +61,63 @@ export function EnginesScreen() {
   ]
 
   const jsonRows: EngineCardRow[] = [
-    { label: 'domains', value: numberOrPlaceholder(jsonDomainsQuery.isSuccess, jsonDomains.length) },
+    { label: 'domains', value: numberOrPlaceholder(domainsQuery.isSuccess, domainNames.length) },
     { label: 'documents', value: numberOrPlaceholder(jsonTotals.loaded, jsonTotals.documentCount) },
     { label: 'indexes', value: numberOrPlaceholder(jsonTotals.loaded, jsonTotals.indexCount) },
   ]
 
   const relRows: EngineCardRow[] = [
-    { label: 'domains', value: numberOrPlaceholder(relDomainsQuery.isSuccess, relDomains.length) },
+    { label: 'domains', value: numberOrPlaceholder(domainsQuery.isSuccess, domainNames.length) },
     { label: 'tables', value: numberOrPlaceholder(relTotals.loaded, relTotals.tableCount) },
     { label: 'views', value: numberOrPlaceholder(relTotals.loaded, relTotals.viewCount) },
   ]
 
   return (
     <div className="engines">
-      <SystemThroughput metrics={metricsQuery.data} />
+      {health && (
+        <HealthBar
+          health={health}
+          resources={isAdmin ? metricsQuery.data?.resources : undefined}
+          metricsUnavailable={isAdmin && metricsQuery.error instanceof ApiError && metricsQuery.error.status === 503}
+        />
+      )}
       <div className="engines__cards">
         <EngineCard
           tone="kv"
           title="KV ENGINE"
-          online={kvDomainsQuery.isSuccess}
+          online={domainsQuery.isSuccess}
           rows={kvRows}
-          domains={kvDomains.map((domain) => domain.name)}
+          domains={domainNames}
           onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'kv')}
+          metrics={metrics?.engines.kv}
+          noMetrics={noMetrics}
+          spark={history.kv}
         />
         <EngineCard
           tone="json"
           title="JSON ENGINE"
-          online={jsonDomainsQuery.isSuccess}
+          online={domainsQuery.isSuccess && !jsonTotals.off}
           rows={jsonRows}
-          domains={jsonDomains.map((domain) => domain.name)}
+          domains={domainNames}
           onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'json')}
+          metrics={metrics?.engines.json}
+          noMetrics={noMetrics}
+          spark={history.json}
         />
         <EngineCard
           tone="rel"
           title="REL ENGINE"
-          online={relDomainsQuery.isSuccess}
+          online={domainsQuery.isSuccess && !relTotals.off}
           rows={relRows}
-          domains={relDomains.map((domain) => domain.name)}
+          domains={domainNames}
           onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'rel')}
+          metrics={metrics?.engines.rel}
+          noMetrics={noMetrics}
+          spark={history.rel}
         />
       </div>
       <div className="engines__bottom">
-        <TasksJobsCard apiClient={apiClient} system={metricsQuery.data?.system} />
+        <TasksJobsCard apiClient={apiClient} system={metrics?.system} noMetrics={noMetrics} />
         <RecentRequestsCard />
       </div>
     </div>

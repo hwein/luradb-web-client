@@ -2,7 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { BASE_PATH, type ApiClient } from '../../api'
-import { CallLine } from '../../lib'
+import { CallLine, formatNumber } from '../../lib'
 import { jsonIndexesQueryOptions } from '../../shell/domainDetails'
 import { BulkImportModal } from './BulkImportModal'
 import { DataHeader } from './DataHeader'
@@ -17,15 +17,11 @@ interface JsonBrowserProps {
   initialKey: string | undefined
 }
 
-function formatNumber(value: number): string {
-  return value.toLocaleString('en-US')
-}
-
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'request failed'
 }
 
-/** Blob+Anchor-Download-Muster wie SqlScreen.tsx/ConfigScreen.tsx — lokal, kein Shared-Util (spec data/005). */
+/** Blob+Anchor-Download-Muster wie SqlScreen.tsx — lokal, kein Shared-Util (spec data/005). */
 function downloadNdjson(domain: string, text: string): void {
   const blob = new Blob([text], { type: 'application/x-ndjson' })
   const url = URL.createObjectURL(blob)

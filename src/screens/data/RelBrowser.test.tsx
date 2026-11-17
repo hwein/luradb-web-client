@@ -7,7 +7,7 @@ import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect } from '../../app/session'
 import { SelectedDomainProvider } from '../../shell/SelectedDomainContext'
-import { server } from '../../test/msw'
+import { domainResponse, kvKeyScan, server } from '../../test/msw'
 import { resetDocsState, useDocsState } from '../docs/docsStore'
 import { DataScreen } from './DataScreen'
 
@@ -34,23 +34,21 @@ function makeConnection(): Connection {
   return {
     id: 'conn-1',
     name: 'local',
-    type: { kind: 'rest', url: 'http://127.0.0.1:3000' },
+    type: { kind: 'rest', url: '' },
     auth: { kind: 'api-key', key: 'lura_secret' },
   }
 }
 
 function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
-    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([{ name: DOMAIN, created_at: 1, state: 'active' }])),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
+    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([domainResponse(DOMAIN)])),
     http.get(TABLE_URL, () =>
       HttpResponse.json({ name: TABLE, created_at: 1, indexes: [{ name: 'idx_label', column: 'label', unique: false }], _links: { self: '', rows: '' }, columns: COLUMNS }),
     ),
     // Ref-Picker-Quellen (spec 004 §2) — Default leer, einzelne Tests überschreiben mit echtem Bestand.
     http.get(`${ORIGIN}/store-api/json/${DOMAIN}/documents`, () => HttpResponse.json({ documents: [], keys: [], total: 0, offset: 0, limit: 50 })),
-    http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json(kvKeyScan([]))),
   ]
 }
 
@@ -65,7 +63,7 @@ async function connectAndRender(initialPath = `/data?engine=rel&table=${TABLE}`,
   if (extraHandlers.length > 0) server.use(...extraHandlers)
   await act(() => connect(makeConnection()))
   const queryClient = createAppQueryClient()
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialPath]}>
         <SelectedDomainProvider>
@@ -77,6 +75,7 @@ async function connectAndRender(initialPath = `/data?engine=rel&table=${TABLE}`,
       </MemoryRouter>
     </QueryClientProvider>,
   )
+  return { queryClient, ...view }
 }
 
 function footerText(): string {
@@ -342,8 +341,10 @@ describe('RelBrowser', () => {
       }),
     )
     await connectAndRender(`/data?engine=rel&table=${TABLE}`, [
-      http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json(['cart_1', 'cart_2'])),
+      http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json(kvKeyScan(['cart_1', 'cart_2']))),
       http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys/cart_1`, () => new HttpResponse('cart-contents', { headers: { 'content-type': 'application/octet-stream' } })),
+      // Das KV-Detail liest seit data/012 auch /meta — unbehandelt ginge der Request an die echte Instanz (401 ⇒ globaler Disconnect).
+      http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys/cart_1/meta`, () => HttpResponse.text('404 Not Found', { status: 404 })),
     ])
     await screen.findByText('ROW 1')
 
@@ -366,8 +367,10 @@ describe('RelBrowser', () => {
         return HttpResponse.json({ affected: 1, last_pk: 3 }, { status: 201 })
       }),
     )
-    await connectAndRender()
+    const { queryClient } = await connectAndRender()
     await screen.findByText('no rows')
+    const countKey = ['rel-table-count', DOMAIN, TABLE]
+    queryClient.setQueryData(countKey, 0)
 
     fireEvent.click(screen.getByRole('button', { name: '+ new row' }))
     fireEvent.change(screen.getByLabelText('total'), { target: { value: '99.5' } })
@@ -375,6 +378,8 @@ describe('RelBrowser', () => {
 
     await waitFor(() => expect(postBody).toEqual({ total: 99.5 }))
     expect(await screen.findByText('ROW 3')).toBeInTheDocument()
+    // Der Explorer-Row-Count der Tabelle zieht mit (spec shell/010 §9).
+    await waitFor(() => expect(queryClient.getQueryState(countKey)?.isInvalidated).toBe(true))
   })
 
   it('edits a row via PUT (partial body, PK excluded) and supports the null-checkbox for a nullable column', async () => {
@@ -533,7 +538,7 @@ describe('RelBrowser', () => {
           limit: 50,
         }),
       ),
-      http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json(['cart_1', 'cart_2'])),
+      http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json(kvKeyScan(['cart_1', 'cart_2']))),
     ])
     await screen.findByText('no rows')
 

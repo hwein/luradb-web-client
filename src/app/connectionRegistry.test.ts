@@ -9,6 +9,7 @@ import {
   buildTransport,
   connectionFormFields,
   connectionHostLabel,
+  connectionServerUrl,
 } from './connectionRegistry'
 
 vi.mock('@tauri-apps/plugin-http', () => ({ fetch: vi.fn() }))
@@ -19,11 +20,14 @@ afterEach(() => {
 })
 
 describe('connection-type registry (rest)', () => {
-  it('shows the URL field in browser mode too, but disabled with an honest hint (one gate for both modes)', () => {
+  it('offers an editable, optional url field in browser mode whose hint names the proxy and [cors]', () => {
     const fields = connectionFormFields('rest', 'browser')
     expect(fields).toHaveLength(1)
-    expect(fields[0]).toMatchObject({ name: 'url', label: 'Server URL', disabled: true })
+    expect(fields[0]).toMatchObject({ name: 'url', label: 'Server URL', kind: 'text' })
+    expect(fields[0]?.disabled).toBeUndefined()
+    expect(fields[0]?.required).toBeUndefined()
     expect(fields[0]?.hint).toContain('proxy')
+    expect(fields[0]?.hint).toContain('[cors]')
   })
 
   it('exposes the URL field in desktop mode as a required input without any prefill, plus an accept-invalid-certs checkbox', () => {
@@ -34,9 +38,21 @@ describe('connection-type registry (rest)', () => {
     expect(fields[1]?.hint).toContain('TLS')
   })
 
-  it('builds a same-origin transport in browser mode, ignoring the stored url', () => {
-    const transport = buildTransport({ kind: 'rest', url: 'http://example.invalid' }, 'browser')
+  it('resolves the effective server url per environment', () => {
+    expect(connectionServerUrl({ kind: 'rest', url: 'http://luradb.test:3000' }, 'desktop')).toBe('http://luradb.test:3000')
+    expect(connectionServerUrl({ kind: 'rest', url: '' }, 'browser')).toBe(window.location.origin)
+    expect(connectionServerUrl({ kind: 'rest', url: 'http://luradb.test:3000' }, 'browser')).toBe('http://luradb.test:3000')
+  })
+
+  it('builds a same-origin transport in browser mode for an empty url', () => {
+    const transport = buildTransport({ kind: 'rest', url: '' }, 'browser')
     expect(transport.baseUrl).toBe(window.location.origin)
+    expect(transport.fetchImpl).toBe(fetch)
+  })
+
+  it('builds a direct transport to the stored url in browser mode', () => {
+    const transport = buildTransport({ kind: 'rest', url: 'http://luradb.test:3000' }, 'browser')
+    expect(transport.baseUrl).toBe('http://luradb.test:3000')
     expect(transport.fetchImpl).toBe(fetch)
   })
 
@@ -66,8 +82,12 @@ describe('connection-type registry (rest)', () => {
     expect(vi.mocked(pluginFetch).mock.calls[0]?.[1]).toBeUndefined()
   })
 
-  it('reports the window host in browser mode', () => {
-    expect(connectionHostLabel({ kind: 'rest', url: 'http://example.invalid' }, 'browser')).toBe(window.location.host)
+  it('reports the window host in browser mode for an empty url', () => {
+    expect(connectionHostLabel({ kind: 'rest', url: '' }, 'browser')).toBe(window.location.host)
+  })
+
+  it('reports the host of the stored url in browser mode', () => {
+    expect(connectionHostLabel({ kind: 'rest', url: 'http://luradb.test:3000' }, 'browser')).toBe('luradb.test:3000')
   })
 
   it('reports the connection host in desktop mode', () => {

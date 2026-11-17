@@ -7,18 +7,17 @@ export function isTauri(): boolean {
 
 export interface EnvTransport {
   fetchImpl: typeof fetch
-  defaultBaseUrl: string
 }
 
 /**
- * Desktop: Plugin-http (Rust-Schicht, kein CORS, freie Server-URL). Browser: natives fetch, Same-Origin/Proxy.
+ * Desktop: plugin-http (Rust layer, no CORS, any server URL). Browser: native fetch — same-origin via proxy, or cross-origin when the server allows it (CORS).
  * `acceptInvalidCerts: true` wrapt `pluginFetch` mit `danger` (deaktiviert TLS-Prüfung inkl. Hostname komplett,
  * siehe rustls-Verhalten in spec 009); sonst (auch im Browser) bleibt die Option wirkungslos.
  */
 export function getTransport(options?: { acceptInvalidCerts?: boolean }): EnvTransport {
-  if (!isTauri()) return { fetchImpl: fetch, defaultBaseUrl: '' }
-  if (options?.acceptInvalidCerts !== true) return { fetchImpl: pluginFetch, defaultBaseUrl: '' }
+  if (!isTauri()) return { fetchImpl: fetch }
+  if (options?.acceptInvalidCerts !== true) return { fetchImpl: pluginFetch }
   const danger = { acceptInvalidCerts: true, acceptInvalidHostnames: true }
   // Frisches init pro Aufruf: das Plugin mutiert das übergebene init-Objekt per `delete`.
-  return { fetchImpl: (input, init) => pluginFetch(input, { ...init, danger }), defaultBaseUrl: '' }
+  return { fetchImpl: (input, init) => pluginFetch(input, { ...init, danger }) }
 }

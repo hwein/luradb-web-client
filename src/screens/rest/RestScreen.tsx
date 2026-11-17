@@ -2,6 +2,8 @@ import { json } from '@codemirror/lang-json'
 import { useMutation } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { ApiError, BASE_PATH } from '../../api'
+import { connectionServerUrl } from '../../app/connectionRegistry'
+import { getEnvironment } from '../../app/environment'
 import { useSession } from '../../app/session'
 import { CodeEditor, StatusCode, noteReindexStart } from '../../lib'
 import { useSelectedDomain } from '../../shell'
@@ -88,7 +90,7 @@ function errorResult(error: ApiError, ms: number, curl: string): SendResult {
 export function RestScreen() {
   const session = useSession()
   const apiClient = session.status === 'connected' ? session.apiClient : undefined
-  const serverUrl = session.status === 'connected' ? session.connection.type.url : window.location.origin
+  const serverUrl = session.status === 'connected' ? connectionServerUrl(session.connection.type, getEnvironment()) : window.location.origin
   const { selected } = useSelectedDomain()
 
   const [method, setMethod] = useState<HttpMethod>('GET')
@@ -257,10 +259,6 @@ export function RestScreen() {
             </div>
           ))}
         </div>
-
-        <a className="rest__swagger" href={`${serverUrl}/test-ui`} target="_blank" rel="noreferrer">
-          see also: /test-ui ↗
-        </a>
       </div>
 
       <div className="rest__response">
@@ -283,7 +281,7 @@ export function RestScreen() {
           ) : null}
         </div>
         {result !== undefined ? (
-          <pre className="rest__response-body">{result.bodyText}</pre>
+          <pre className="rest__response-body selectable">{result.bodyText}</pre>
         ) : (
           <div className="rest__response-empty">send a request to see the response</div>
         )}

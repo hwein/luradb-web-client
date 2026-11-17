@@ -1,34 +1,70 @@
-import { queryOptions } from '@tanstack/react-query'
-import { ApiError, type ApiClient } from '../api'
+import { queryOptions, type QueryFunctionContext } from '@tanstack/react-query'
+import { ApiError, retryAfterSecs, type ApiClient } from '../api'
 import type { components } from '../api/schema'
+import { pollSilentRecord } from './pollSilentRecord'
 
 type TableSummary = components['schemas']['TableSummary']
 type ViewSummary = components['schemas']['ViewSummary']
 type TableDetail = components['schemas']['TableDetail']
-type JsonDomainDetail = components['schemas']['JsonDomainResponse']
 type IndexResponse = components['schemas']['IndexResponse']
 
-/** Detail-Queries der expandierten Domäne (spec shell/002 §3/§5) — nur aktiv, wenn `enabled` (Domäne expandiert + Engine vorhanden). */
+interface EngineQueryState {
+  isLoadingError: boolean
+  error: unknown
+}
+
+/** An engine is switched off for a domain when one of its queries fails with 503 on first load; a 503 after a success or with Retry-After (overload) does not count. */
+export function isEngineOff(queries: EngineQueryState[]): boolean {
+  return queries.some(
+    (query) =>
+      query.isLoadingError && query.error instanceof ApiError && query.error.status === 503 && query.error.retryAfterSecs === undefined,
+  )
+}
+
+/** pollSilentRecord, plus silent after a failed attempt (a switched-off engine answers 503 on every tick). `errorUpdatedAt`, not `error`: a refetch without data clears `error` before the query function runs. */
+function engineSilentRecord(context: Pick<QueryFunctionContext, 'client' | 'queryKey'>): boolean {
+  return pollSilentRecord(context) || (context.client.getQueryState(context.queryKey)?.errorUpdatedAt ?? 0) > 0
+}
+
+export const REL_TABLES_PREFIX = ['rel-tables'] as const
+
+export function relTablesKey(domain: string) {
+  return [...REL_TABLES_PREFIX, domain] as const
+}
+
+/** Detail queries of a domain (spec shell/002 §3/§5) — active only when `enabled`. */
 export function relTablesQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
-    queryKey: ['rel-tables', domain] as const,
-    queryFn: async (): Promise<TableSummary[]> => {
+    queryKey: relTablesKey(domain),
+    queryFn: async (context): Promise<TableSummary[]> => {
       if (!apiClient) throw new Error('rel tables query requires an active connection')
-      const { data, response } = await apiClient.api.GET('/store-api/rel/{domain}/tables', { params: { path: { domain } } })
-      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load tables')
+      const { data, response } = await apiClient.api.GET('/store-api/rel/{domain}/tables', {
+        params: { path: { domain } },
+        silentRecord: engineSilentRecord(context),
+      })
+      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load tables', undefined, retryAfterSecs(response))
       return data
     },
     enabled: enabled && apiClient !== undefined,
   })
 }
 
+export const REL_VIEWS_PREFIX = ['rel-views'] as const
+
+export function relViewsKey(domain: string) {
+  return [...REL_VIEWS_PREFIX, domain] as const
+}
+
 export function relViewsQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
-    queryKey: ['rel-views', domain] as const,
-    queryFn: async (): Promise<ViewSummary[]> => {
+    queryKey: relViewsKey(domain),
+    queryFn: async (context): Promise<ViewSummary[]> => {
       if (!apiClient) throw new Error('rel views query requires an active connection')
-      const { data, response } = await apiClient.api.GET('/store-api/rel/{domain}/views', { params: { path: { domain } } })
-      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load views')
+      const { data, response } = await apiClient.api.GET('/store-api/rel/{domain}/views', {
+        params: { path: { domain } },
+        silentRecord: engineSilentRecord(context),
+      })
+      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load views', undefined, retryAfterSecs(response))
       return data
     },
     enabled: enabled && apiClient !== undefined,
@@ -49,47 +85,96 @@ export function relTableDetailQueryOptions(apiClient: ApiClient | undefined, dom
   })
 }
 
-/** `document_count` steht nur am Detail-Endpunkt (nicht in der Liste) — eigene Query je expandierter Domäne. */
-export function jsonDomainDetailQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
+export function jsonCountKey(domain: string) {
+  return ['json-count', domain] as const
+}
+
+export function jsonDocumentCountQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
-    queryKey: ['json-domain-detail', domain] as const,
-    queryFn: async (): Promise<JsonDomainDetail> => {
-      if (!apiClient) throw new Error('json domain detail query requires an active connection')
-      const { data, response } = await apiClient.api.GET('/store-api/json/domains/{name}', { params: { path: { name: domain } } })
-      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load json domain detail')
-      return data
+    queryKey: jsonCountKey(domain),
+    queryFn: async (context): Promise<number> => {
+      if (!apiClient) throw new Error('json count query requires an active connection')
+      const { data, response } = await apiClient.api.GET('/store-api/json/{domain}/documents/count', {
+        params: { path: { domain } },
+        silentRecord: engineSilentRecord(context),
+      })
+      if (!response.ok || !data) throw new ApiError(response.status, 'failed to count documents', undefined, retryAfterSecs(response))
+      return data.count
     },
     enabled: enabled && apiClient !== undefined,
   })
+}
+
+export const JSON_INDEXES_PREFIX = ['json-indexes'] as const
+
+export function jsonIndexesKey(domain: string) {
+  return [...JSON_INDEXES_PREFIX, domain] as const
 }
 
 export function jsonIndexesQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
-    queryKey: ['json-indexes', domain] as const,
-    queryFn: async (): Promise<IndexResponse[]> => {
+    queryKey: jsonIndexesKey(domain),
+    queryFn: async (context): Promise<IndexResponse[]> => {
       if (!apiClient) throw new Error('json indexes query requires an active connection')
-      const { data, response } = await apiClient.api.GET('/store-api/json/{domain}/indexes', { params: { path: { domain } } })
-      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load indexes')
+      const { data, response } = await apiClient.api.GET('/store-api/json/{domain}/indexes', {
+        params: { path: { domain } },
+        silentRecord: engineSilentRecord(context),
+      })
+      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load indexes', undefined, retryAfterSecs(response))
       return data
     },
     enabled: enabled && apiClient !== undefined,
   })
 }
 
+export function kvCountKey(domain: string) {
+  return ['kv-count', domain] as const
+}
+
 /**
- * Stiller Key-Scan für die Aktivitäts-Ableitung (spec shell/004 §1) — kein `withCall`, da Explorer-Detail-Queries
- * nicht durch den Recorder laufen; der KV-Browser (data/002) nutzt für seine Anzeige einen eigenen recorded Scan
- * (kvEntries.ts). Kein `limit`/`count` im Contract (Backlog server-repo) — voller Scan ist die Zwischenlösung.
+ * Domänen-Key-Zähler für die Aktivitäts-Ableitung (spec shell/004 §1) über `GET …/kv/{domain}/count` (Contract 0.6.1,
+ * spec shell/010 §1) — ohne `prefix`, ohne Key-Transfer. Erst-Load aufgezeichnet, Folge-Ticks still (general/012);
+ * der KV-Browser (data/002) nutzt einen eigenen recorded Scan (kvEntries.ts).
  */
-export function kvKeysProbeQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
+export function kvKeyCountQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
-    queryKey: ['kv-keys-probe', domain] as const,
-    queryFn: async (): Promise<string[]> => {
-      if (!apiClient) throw new Error('kv keys probe query requires an active connection')
-      const { data, response } = await apiClient.api.GET('/store-api/kv/{domain}/keys', { params: { path: { domain } } })
-      if (!response.ok || !data) throw new ApiError(response.status, 'failed to load keys')
-      return data
+    queryKey: kvCountKey(domain),
+    queryFn: async (context): Promise<number> => {
+      if (!apiClient) throw new Error('kv count query requires an active connection')
+      const { data, response } = await apiClient.api.GET('/store-api/kv/{domain}/count', {
+        params: { path: { domain } },
+        silentRecord: pollSilentRecord(context),
+      })
+      if (!response.ok || !data) throw new ApiError(response.status, 'failed to count keys')
+      return data.count
     },
     enabled: enabled && apiClient !== undefined,
+  })
+}
+
+const REL_TABLE_COUNT_PREFIX = ['rel-table-count'] as const
+
+export function relTableCountDomainPrefix(domain: string) {
+  return [...REL_TABLE_COUNT_PREFIX, domain] as const
+}
+
+export function relTableCountKey(domain: string, table: string) {
+  return [...REL_TABLE_COUNT_PREFIX, domain, table] as const
+}
+
+/** Row-Count je Tabelle (spec shell/010 §4) — nur die Tabellenzeilen der expandierten Domäne halten diese Query. */
+export function relTableRowCountQueryOptions(apiClient: ApiClient | undefined, domain: string, table: string) {
+  return queryOptions({
+    queryKey: relTableCountKey(domain, table),
+    queryFn: async (context): Promise<number> => {
+      if (!apiClient) throw new Error('rel table count query requires an active connection')
+      const { data, response } = await apiClient.api.GET('/store-api/rel/{domain}/tables/{table}/count', {
+        params: { path: { domain, table } },
+        silentRecord: pollSilentRecord(context),
+      })
+      if (!response.ok || !data) throw new ApiError(response.status, 'failed to count rows')
+      return data.count
+    },
+    enabled: apiClient !== undefined,
   })
 }

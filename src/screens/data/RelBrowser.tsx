@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import type { ApiClient } from '../../api'
 import type { components } from '../../api/schema'
-import { CallLine } from '../../lib'
+import { CallLine, formatNumber } from '../../lib'
 import { relTableDetailQueryOptions } from '../../shell/domainDetails'
 import { useDomainSummaries } from '../../shell/domains'
 import { openDocs } from '../docs/openDocs'
@@ -24,10 +24,6 @@ interface RelBrowserProps {
   filterVal: string | undefined
 }
 
-function formatNumber(value: number): string {
-  return value.toLocaleString('en-US')
-}
-
 function refTone(column: ColumnInfo): 'json' | 'kv' | undefined {
   if (column.type === 'JSONREF') return 'json'
   if (column.type === 'KVREF') return 'kv'
@@ -43,8 +39,8 @@ export function RelBrowser({ domain, apiClient, table, filterCol, filterVal }: R
   const [mode, setMode] = useState<RelDetailMode>({ kind: 'empty' })
   const [alterModalOpen, setAlterModalOpen] = useState(false)
 
-  // Gecachte Liste (Explorer nutzt denselben Query-Key) — nur für die KVREF/JSONREF-Engine-Führung im Alter-Table-Assistenten (spec sql/004 §3).
-  const domainSummary = useDomainSummaries(apiClient).find((entry) => entry.name === domain) ?? { name: domain, engines: {} }
+  // Cached list (same query key as the Explorer) for the alter-table assistant (spec sql/004 §3).
+  const domainSummary = useDomainSummaries(apiClient).find((entry) => entry.name === domain) ?? { name: domain, conditionalWrites: [] }
 
   const schemaQuery = useQuery(relTableDetailQueryOptions(apiClient, domain, table, apiClient !== undefined))
   const rowsQuery = useInfiniteQuery(relRowsQueryOptions(apiClient, domain, table, expandOn, !filterActive))

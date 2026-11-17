@@ -50,7 +50,7 @@
 
 .ctm__label {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-label);
   color: var(--mut);
 }
 
@@ -62,14 +62,14 @@
   border-radius: var(--rad-input);
   color: var(--tx);
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   padding: 7px 10px;
   outline: none;
 }
 
 .ctm__error {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   color: var(--err);
 }
 
@@ -104,7 +104,7 @@
   border-radius: var(--rad-input);
   color: var(--tx);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-data);
   padding: 6px 9px;
   outline: none;
 }
@@ -115,7 +115,7 @@
   border-radius: var(--rad-input);
   color: var(--tx);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--fs-meta);
   padding: 5px 6px;
 }
 
@@ -124,7 +124,7 @@
   align-items: center;
   gap: 4px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   color: var(--mut);
   white-space: nowrap;
 }
@@ -133,8 +133,9 @@
   margin-left: auto;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--mut);
-  font-size: 14px;
+  font-size: var(--fs-body);
   line-height: 1;
   cursor: pointer;
   padding: 2px 4px;
@@ -142,6 +143,7 @@
 
 .ctm__row-remove:hover:not(:disabled) {
   color: var(--err);
+  background: var(--panel);
 }
 
 .ctm__row-remove:disabled {
@@ -161,7 +163,7 @@
   align-items: center;
   gap: 4px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   color: var(--mut);
   white-space: nowrap;
 }
@@ -184,43 +186,52 @@
   border-radius: var(--rad-input);
   color: var(--tx);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   padding: 4px 7px;
 }
 
 .ctm__row-error {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-label);
   color: var(--err);
 }
 
 .ctm__hint {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-label);
   color: var(--eng-json-label);
 }
 
 .ctm__hint-link {
   background: none;
   border: none;
-  padding: 0;
-  color: inherit;
-  text-decoration: underline;
+  border-radius: var(--rad);
+  padding: 0 4px;
+  color: var(--acc);
   font-family: inherit;
   font-size: inherit;
   cursor: pointer;
 }
 
+.ctm__hint-link:hover {
+  background: var(--panel);
+}
+
 .ctm__add-column {
   align-self: flex-start;
-  padding: 6px 2px;
+  padding: 6px 8px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   color: var(--acc);
   background: transparent;
   border: none;
+  border-radius: var(--rad);
   cursor: pointer;
   text-align: left;
+}
+
+.ctm__add-column:hover {
+  background: var(--panel2);
 }
 
 .ctm__preview {
@@ -231,7 +242,7 @@
 
 .ctm__preview-label {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-label);
   color: var(--mut);
 }
 
@@ -254,6 +265,23 @@
   flex-shrink: 0;
 }
 
+.ctm__from-file {
+  margin-right: auto;
+  background: transparent;
+  border: none;
+  border-radius: var(--rad);
+  color: var(--mut);
+  padding: 7px 8px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-data);
+  cursor: pointer;
+}
+
+.ctm__from-file:hover {
+  color: var(--acc);
+  background: var(--panel2);
+}
+
 .ctm__cancel {
   background: transparent;
   border: 1px solid var(--bord);
@@ -261,7 +289,7 @@
   border-radius: var(--rad-input);
   padding: 7px 14px;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-data);
   cursor: pointer;
 }
 
@@ -273,7 +301,7 @@
   padding: 7px 16px;
   font-family: var(--font-sans);
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--fs-data);
   cursor: pointer;
 }
 

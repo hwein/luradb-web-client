@@ -16,15 +16,12 @@ interface LinkEntry {
 
 /** "LINKS IN {DOMAIN}" (spec shell/002 §5): KVREF-/JSONREF-Spalten aller rel-Tabellen der expandierten Domäne. */
 export function DomainLinksPanel({ apiClient, domain }: DomainLinksPanelProps) {
-  const hasRel = domain.engines.rel !== undefined
-  const tablesQuery = useQuery(relTablesQueryOptions(apiClient, domain.name, hasRel))
+  const tablesQuery = useQuery(relTablesQueryOptions(apiClient, domain.name, true))
   const tables = tablesQuery.data ?? []
 
   const detailQueries = useQueries({
-    queries: tables.map((table) => relTableDetailQueryOptions(apiClient, domain.name, table.name, hasRel)),
+    queries: tables.map((table) => relTableDetailQueryOptions(apiClient, domain.name, table.name, true)),
   })
-
-  if (!hasRel) return null
 
   const links: LinkEntry[] = tables.flatMap((table, index) => {
     const detail = detailQueries[index]?.data

@@ -27,7 +27,7 @@ function makeConnection(): Connection {
   return {
     id: 'conn-1',
     name: 'local',
-    type: { kind: 'rest', url: 'http://127.0.0.1:3000' },
+    type: { kind: 'rest', url: '' },
     auth: { kind: 'api-key', key: 'lura_secret' },
   }
 }
@@ -45,7 +45,7 @@ function Harness({ columns, onClose }: { columns: ColumnInfo[]; onClose: () => v
 
 /** Rendert `DanglingReportContent` ohne die native `<dialog>`-Hülle (showModal() ist in diesem jsdom nicht implementiert). */
 async function renderContent(onClose: () => void = () => {}, columns: ColumnInfo[] = COLUMNS) {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
+  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })))
   await act(() => connect(makeConnection()))
 
   const queryClient = createAppQueryClient()

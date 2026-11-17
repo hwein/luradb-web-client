@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { RefObject } from 'react'
-import { ARTICLES, searchArticles } from './articles/articles'
+import { DOC_ENTRIES, searchArticles } from './articles/articles'
 import { openDocs } from './openDocs'
 import { setSearch } from './docsStore'
 
@@ -8,11 +8,10 @@ interface DocsSidebarProps {
   search: string
   activeId: string | undefined
   searchInputRef: RefObject<HTMLInputElement | null>
-  serverUrl: string
 }
 
-/** Linke Spalte 250px (spec docs/001 §3): Suche + Kategorienliste, bei Suchtext stattdessen Treffer-Liste. */
-export function DocsSidebar({ search, activeId, searchInputRef, serverUrl }: DocsSidebarProps) {
+/** Left column, 270px: search and category list; with a search text the hit list instead. */
+export function DocsSidebar({ search, activeId, searchInputRef }: DocsSidebarProps) {
   const hits = useMemo(() => searchArticles(search), [search])
   const isSearching = search.trim() !== ''
 
@@ -36,8 +35,8 @@ export function DocsSidebar({ search, activeId, searchInputRef, serverUrl }: Doc
             <div className="docs__results-empty">no matches</div>
           ) : (
             hits.map((hit) => (
-              <button key={hit.article.id} type="button" className="docs__result" onClick={() => openDocs(hit.article.id)}>
-                <span className="docs__result-title">{hit.article.title}</span>
+              <button key={hit.entry.id} type="button" className="docs__result" onClick={() => openDocs(hit.entry.id)}>
+                <span className="docs__result-title">{hit.entry.title}</span>
                 <span className="docs__result-context">{hit.context}</span>
               </button>
             ))
@@ -45,26 +44,18 @@ export function DocsSidebar({ search, activeId, searchInputRef, serverUrl }: Doc
         </div>
       ) : (
         <nav className="docs__nav">
-          {ARTICLES.map((article) => (
+          {DOC_ENTRIES.map((entry) => (
             <button
-              key={article.id}
+              key={entry.id}
               type="button"
-              className={`docs__nav-item${article.id === activeId ? ' docs__nav-item--active' : ''}`}
-              onClick={() => openDocs(article.id)}
+              className={`docs__nav-item${entry.id === activeId ? ' docs__nav-item--active' : ''}`}
+              onClick={() => openDocs(entry.id)}
             >
-              {article.category}
+              {entry.category}
             </button>
           ))}
         </nav>
       )}
-
-      <div className="docs__footer">
-        API reference:
-        <br />
-        <a href={`${serverUrl}/test-ui`} target="_blank" rel="noreferrer">
-          swagger /test-ui ↗
-        </a>
-      </div>
     </div>
   )
 }

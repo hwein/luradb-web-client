@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router'
 import { AdminScreen } from '../screens/admin'
-import { ConfigScreen } from '../screens/config'
 import { DataScreen } from '../screens/data'
 import { DocsScreen } from '../screens/docs'
 import { EnginesScreen } from '../screens/engines'
@@ -13,6 +12,7 @@ import { Explorer } from './Explorer'
 import { Rail } from './Rail'
 import { SelectedDomainProvider } from './SelectedDomainContext'
 import { Statusbar } from './Statusbar'
+import { useStoreEvents } from './useStoreEvents'
 
 /** F1 ist global für die Docs-Suche reserviert. Hook-Punkt für sql/001: CodeMirror fängt F1 im Editor-Fokus selbst ab. */
 function useDocsShortcut(): void {
@@ -49,6 +49,7 @@ function useCommandPalette(): { open: boolean; close: () => void } {
 
 export function AppShell() {
   useDocsShortcut()
+  useStoreEvents()
   const commandPalette = useCommandPalette()
 
   return (
@@ -67,7 +68,6 @@ export function AppShell() {
               <Route path="/rest" element={<RestScreen />} />
               <Route path="/engines" element={<EnginesScreen />} />
               <Route path="/admin/*" element={<AdminScreen />} />
-              <Route path="/config" element={<ConfigScreen />} />
               <Route path="/docs" element={<DocsScreen />} />
             </Routes>
           </div>

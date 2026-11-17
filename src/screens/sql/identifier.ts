@@ -67,10 +67,14 @@ const RESERVED_WORDS = new Set([
   'jsonref',
 ])
 
+export function isReservedWord(value: string): boolean {
+  return RESERVED_WORDS.has(value)
+}
+
 /** Identifier-Regel (api/LURASQL.md): `[a-z_][a-z0-9_]{0,49}`, alle Keywords/Typnamen reserviert. `undefined` = gültig. */
 export function identifierError(value: string): string | undefined {
   if (value === '') return 'name is required'
   if (!IDENTIFIER_PATTERN.test(value)) return 'must be lowercase, start with a letter or _, only [a-z0-9_], max 50 chars'
-  if (RESERVED_WORDS.has(value)) return `"${value}" is a reserved word`
+  if (isReservedWord(value)) return `"${value}" is a reserved word`
   return undefined
 }

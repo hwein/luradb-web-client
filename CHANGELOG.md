@@ -5,6 +5,77 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-17
+
+### Added
+
+- REST Explorer lists the endpoints added in LuraDB 0.4.0.
+- KV browser pages keys server-side, shows loaded vs. total, and filters by a case-sensitive `contains` substring (also in the bulk panel).
+- Explorer shows the row count next to each table of the expanded domain.
+- KV key detail shows the remaining TTL and the last modification time.
+- KV watch feed shows key expiry as a `delete` event and refreshes the key list.
+- Status bar and Engines screen show server health (shards, disk, memory, I/O); write errors under overload or low resources name the server's retry delay.
+- KV writes in the data browser are conditional; domains can be created with require conditional writes and are tagged in the explorer.
+- Desktop: UI zoom from 80% to 200% with Ctrl+Plus, Ctrl+Minus, Ctrl+0 (reset) and Ctrl+mouse wheel; the zoom level is kept across restarts.
+- Create a relational table from a CSV/TSV file (schema is derived, rows are imported).
+- Admin: the permission matrix shows the permissions the server has stored and grants them for the whole domain or for its keys, documents and tables separately.
+- Admin: the permissions card scrolls sideways when its domain columns do not fit; column heads stay above their chips.
+- Rail: a disconnect button below the theme toggle.
+- Status bar: the server label opens a what's-new dialog with the LuraDB changes up to the release the client is built against.
+- Browser mode: a connection with a server URL connects directly if the server allows the origin via CORS; an empty URL keeps using the same-origin proxy.
+- Backups: relational data can be backed up (scopes `rel`, `rel:<domain>`) and restored under a new name; the restore dialog shows an archive's format version, shard count, log positions and relational snapshot.
+- Docs: new topic on connecting AI assistants over MCP.
+- Admin: BACKUPS card — list, run, download, upload, restore and delete backup archives (requires `backup.enabled` on the server).
+- Admin: SERVER LOG card — tail the server log with line count, substring filter and rotated-file selection (requires `log.http_access` on the server).
+
+### Changed
+
+- Requires LuraDB 0.7.1 or newer.
+- Domains are created and deleted in one step for key-value, JSON and relational data; a domain being deleted leaves the lists at once.
+- Restore dialog: the replace warning says that the domain and its permissions are kept.
+- KV bulk delete with a prefix runs as a single server-side operation; a selection over the server cap is rejected as a whole (413).
+- The explorer now updates from a live server event stream instead of waiting for the next poll.
+- Status bar shows the signed-in user; the role now comes from /auth/whoami.
+- JSON browser: deleting a JSON document fails on a version conflict if it changed since it was loaded.
+- Engine cards show per-engine ops/s and read/write latency percentiles from the server's 60s metrics window.
+- Text is larger throughout the app (body 14px, data 13px, labels 11px); explorer, side panels and status bar grow to match.
+- Clickable rows and text actions show a hover surface, the selected entry keeps it (the explorer marks the object open in the data browser), and list rows are taller.
+- Desktop app: the window has its own title bar in the app theme with minimize, maximize and close buttons.
+- Text is selectable only in editors, result grids, lists, detail panes, docs, logs, watch feeds, request and response text and error messages; the desktop app shows the browser context menu only in text fields and editors and ignores the browser shortcuts for reload, print and find.
+- Docs: every topic except "Connect to a running server" shows the content of its docs.luradb.org page and needs a network connection.
+- Docs: search finds these topics by title, no longer by their text.
+- RECENT REQUESTS no longer floods with background polling — only the first load of a screen/card and calls the user actually triggered (navigation, mutations, manual refreshes) are recorded; interval ticks and focus-refetches of background queries stay silent.
+
+### Removed
+
+- Links to the server's /test-ui (Swagger is now behind auth and off by default).
+- Configuration: the screen is gone — LuraDB is configured in `luradb.toml` on the server.
+- Create-domain form: the hint that the name "domains" is reserved.
+- System-wide throughput bar on the Engines screen.
+- Docs: the "try in the console" examples.
+
+### Security
+
+- Configuration: the loaded `luradb.toml` (including masked keys) is no longer stored in the browser; an existing stored copy is removed on app start.
+
+### Fixed
+
+- Creating a domain no longer logs a console error about an invalid pattern attribute.
+- The About dialog no longer lists an unused third-party library.
+- RECENT REQUESTS no longer mixes calls from a previous connection after switching servers.
+- Admin cards surface server errors instead of silently showing an empty list or matrix.
+- Admin no longer flashes a false "admin role required" gate while the admin check is still loading, and shows a distinct message when the check itself fails.
+- KV watch reconnects resume from the last received event instead of losing the events of the gap.
+- KV watch no longer retries endlessly when the key has no permission for the stream (403).
+- KV watch detects a silently dropped connection within 45 s and reconnects instead of staying on "live".
+- Creating a KV key no longer overwrites an existing key.
+- Creating a JSON document under a chosen key can no longer overwrite an existing one.
+- Admin: errors when granting or revoking a permission show the server's message.
+- What's-new dialog shows text between `**` as bold and gives code spans a border; the status bar server label stays on one line.
+- REST explorer: only the endpoint list scrolls; the request line and the response stay in view.
+- Docs: many open tabs no longer make the content area scroll sideways; the tab strip scrolls on its own and keeps the active tab in view.
+- Engines: a key without the admin role sees a dash instead of 0 for the compaction and janitor runs.
+
 ## [0.1.0] - 2026-08-12
 
 ### Added
@@ -84,7 +155,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   permissions, key rotation); configuration; and built-in docs. Packaged as a
   Tauri 2 desktop app.
 
-[unreleased]: https://github.com/hwein/luradb-web-client/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/hwein/luradb-web-client/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/hwein/luradb-web-client/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/hwein/luradb-web-client/compare/v0.0.3...v0.1.0
 [0.0.3]: https://github.com/hwein/luradb-web-client/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/hwein/luradb-web-client/compare/v0.0.1...v0.0.2

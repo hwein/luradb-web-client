@@ -1,16 +1,11 @@
 import { BASE_PATH, type ApiClient } from '../../api'
 import { messageFromError } from '../sql/sqlRun'
-import { kvKeyPath } from './kvEntries'
+import { kvKeyPath, type KvKeyFilter } from './kvEntries'
 
 export type KvBulkAction = 'delete' | 'clear' | 'set-null'
 
 /** Feste Schranke, schont das Request-Budget je Domäne (spec §5) — kein UI zum Verstellen. */
 export const KV_BULK_CONCURRENCY = 8
-
-/** Zusatzfilter über dem committeten Scan-Ergebnis (spec §2): Substring, case-sensitiv wie Keys selbst. */
-export function filterByContains(keys: string[], contains: string): string[] {
-  return contains === '' ? keys : keys.filter((key) => key.includes(contains))
-}
 
 const METHOD_BY_ACTION: Record<KvBulkAction, string> = {
   delete: 'DELETE',
@@ -30,10 +25,39 @@ const VERB_BY_ACTION: Record<KvBulkAction, string> = {
   'set-null': 'set null on',
 }
 
-/** Bestätigungstext (spec §4), z. B. `delete 138 keys in "sessions"?`. */
+/** Bestätigungstext (spec §4), z. B. `delete 138 keys in "sessions"?` — Fanout-Wege (clear, set null, delete ohne Prefix). */
 export function kvBulkConfirmText(action: KvBulkAction, count: number, domain: string): string {
   return `${VERB_BY_ACTION[action]} ${count} keys in "${domain}"?`
 }
+
+/** Einzige Stelle, die den Weg entscheidet (spec data/013 §1): der Server-Endpunkt verlangt einen nicht-leeren Prefix. */
+export function usesServerDelete(action: KvBulkAction, filter: KvKeyFilter): boolean {
+  return action === 'delete' && filter.prefix !== ''
+}
+
+/** `DELETE …/keys?prefix=…[&contains=…]` — Anzeige und Call nutzen denselben String (spec data/013 §2/§5). */
+export function kvBulkDeletePath(domain: string, filter: KvKeyFilter): string {
+  const search = new URLSearchParams({ prefix: filter.prefix })
+  if (filter.contains !== '') search.set('contains', filter.contains)
+  return `${BASE_PATH}/kv/${encodeURIComponent(domain)}/keys?${search.toString()}`
+}
+
+/** Server-Weg nennt das Kriterium statt einer Zahl — der Endpunkt löscht auch Keys, die seit dem Scan dazukamen (spec data/013 §4). */
+export function kvBulkServerDeleteConfirmText(domain: string, filter: KvKeyFilter): string {
+  const containing = filter.contains === '' ? '' : ` containing "${filter.contains}"`
+  return `delete all keys with prefix "${filter.prefix}"${containing} in "${domain}"?`
+}
+
+/** Ein Call über `fetchRaw` — aufgezeichnet (bewusste Mutation, general/012); Nicht-2xx (413/400/404) wirft dort bereits den ApiError mit dem Servertext. */
+export async function runKvBulkDelete(apiClient: ApiClient, domain: string, filter: KvKeyFilter): Promise<number> {
+  const response = await apiClient.fetchRaw(kvBulkDeletePath(domain, filter), { method: 'DELETE' })
+  const body: unknown = await response.json()
+  const deleted = typeof body === 'object' && body !== null ? (body as Record<string, unknown>).deleted : undefined
+  if (typeof deleted !== 'number') throw new Error('unexpected bulk delete response')
+  return deleted
+}
+
+export type KvBulkOutcome = { kind: 'server'; deleted: number } | { kind: 'fanout'; okCount: number; failures: KvBulkFailure[] }
 
 function requestFor(action: KvBulkAction, domain: string, key: string): { path: string; init: RequestInit } {
   const path = kvKeyPath(domain, key)
@@ -76,10 +100,9 @@ function messageOf(error: unknown): string {
 }
 
 /**
- * UI-freier Fanout-Kern (spec §5): `concurrency` parallele Worker ziehen von derselben Key-Liste,
- * `allSettled`-Semantik wie die Löschkaskade (engineCascade.ts) — ein Fehlschlag bricht die übrigen
- * Keys nicht ab. `executeOp` ist injiziert, damit Tests die Parallelitäts-Schranke ohne Fake-Timer
- * über gezielt aufgelöste Promises prüfen können (spec §7).
+ * UI-free fan-out core (spec §5): `concurrency` parallel workers pull from the same key list with
+ * `allSettled` semantics — one failure does not stop the remaining keys. `executeOp` is injected so tests
+ * can check the concurrency limit without fake timers via deliberately resolved promises (spec §7).
  */
 export async function runKvBulk(
   keys: string[],

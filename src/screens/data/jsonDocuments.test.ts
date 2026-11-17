@@ -1,6 +1,18 @@
+import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
-import { documentPreview, isJsonObject, isConflict, jsonDocumentsQueryOptions, safeJsonParse, type DocumentPage } from './jsonDocuments'
+import {
+  createDocumentWithKey,
+  documentPreview,
+  isJsonObject,
+  isConflict,
+  jsonDocumentsQueryOptions,
+  KeyExistsError,
+  safeJsonParse,
+  type DocumentPage,
+} from './jsonDocuments'
 import { ApiError } from '../../api'
+import { createApi } from '../../api/client'
+import { server } from '../../test/msw'
 
 describe('documentPreview', () => {
   it('compacts the document and strips _key/_version', () => {
@@ -10,9 +22,18 @@ describe('documentPreview', () => {
   })
 
   it('truncates to ~60 chars with an ellipsis', () => {
-    const long = documentPreview({ _key: 'x', text: 'a'.repeat(80) })
+    const long = documentPreview({ _key: 'x', _version: 1, text: 'a'.repeat(80) })
     expect(long.endsWith('…')).toBe(true)
     expect(long.length).toBe(61)
+  })
+
+  it('unwraps _content documents instead of showing the server wrapper', () => {
+    expect(documentPreview({ _key: 'scalar', _version: 1, _content: 42 })).toBe('42')
+  })
+
+  it('keeps every field of an object document that carries _content next to other fields', () => {
+    expect(documentPreview({ _key: 'a', _version: 1, _content: 'x', title: 'y' })).toBe('{"_content":"x","title":"y"}')
+    expect(documentPreview({ _key: 'b', _version: 1, _content: 42 })).toBe('42')
   })
 })
 
@@ -40,14 +61,32 @@ describe('safeJsonParse', () => {
 })
 
 describe('isConflict', () => {
-  it('treats 409 and 412 as a version conflict', () => {
-    expect(isConflict(new ApiError(409, 'conflict'))).toBe(true)
+  it('treats 412 as a version conflict and 409 not', () => {
     expect(isConflict(new ApiError(412, 'precondition failed'))).toBe(true)
+    expect(isConflict(new ApiError(409, 'conflict'))).toBe(false)
   })
 
   it('treats other statuses and non-ApiErrors as not conflicting', () => {
     expect(isConflict(new ApiError(404, 'not found'))).toBe(false)
     expect(isConflict(new Error('boom'))).toBe(false)
+  })
+})
+
+describe('createDocumentWithKey', () => {
+  const BASE_URL = 'http://127.0.0.1:3000'
+  const URL = `${BASE_URL}/store-api/json/shop/documents/cus_1`
+  const apiClient = createApi({ baseUrl: BASE_URL, fetchImpl: (input, init) => fetch(input, init), getAuthHeader: () => 'Bearer test-key' })
+
+  it('maps 412 from createDocumentWithKey to KeyExistsError', async () => {
+    server.use(http.put(URL, () => new HttpResponse(null, { status: 412 })))
+    await expect(createDocumentWithKey(apiClient, 'shop', 'cus_1', {})).rejects.toBeInstanceOf(KeyExistsError)
+  })
+
+  it('passes other errors from createDocumentWithKey through unchanged', async () => {
+    for (const status of [400, 404, 500]) {
+      server.use(http.put(URL, () => new HttpResponse(null, { status })))
+      await expect(createDocumentWithKey(apiClient, 'shop', 'cus_1', {})).rejects.toMatchObject({ name: 'ApiError', status })
+    }
   })
 })
 

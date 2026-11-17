@@ -31,6 +31,10 @@
   color: var(--mut);
 }
 
+.rail__button:not(.rail__button--active):hover {
+  background: var(--panel2);
+}
+
 .rail__button--active {
   background: var(--acc);
   color: var(--accT);
@@ -48,6 +52,17 @@
   border-radius: var(--rad-pill);
   font-family: var(--font-mono);
   font-weight: 500;
-  font-size: 10px;
+  font-size: var(--fs-label);
   padding: 5px 7px;
+}
+
+.rail__disconnect {
+  border: none;
+  border-radius: var(--rad);
+  padding: 0;
+  cursor: pointer;
+}
+
+.rail__disconnect:hover {
+  background: var(--panel2);
 }

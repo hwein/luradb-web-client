@@ -14,10 +14,24 @@ describe('listEndpointGroups', () => {
     expect(tags).toContain('Key-Value Store')
     expect(tags).toContain('JSON Document Store')
     expect(tags).toContain('Domains')
+    // Neu mit Contract 0.6.1 (general/013 §9).
+    expect(tags).toContain('Relational Import')
+    expect(tags).toContain('Events')
 
     expect(find('GET', '/store-api/kv/{domain}/keys/{key}')).toBeDefined()
     expect(find('POST', '/store-api/json/{domain}/search')).toBeDefined()
     expect(find('GET', '/store-api/domains')).toBeDefined()
+  })
+
+  it('carries the operations added in contract 0.6.1', () => {
+    expect(find('GET', '/store-api/auth/whoami')?.tag).toBe('Auth')
+    expect(find('GET', '/store-api/config')?.tag).toBe('Metrics')
+    expect(find('GET', '/store-api/events')?.tag).toBe('Events')
+    expect(find('GET', '/store-api/kv/{domain}/count')?.tag).toBe('Key-Value Store')
+    expect(find('GET', '/store-api/kv/{domain}/keys/{key}/meta')?.tag).toBe('Key-Value Store')
+    expect(find('DELETE', '/store-api/kv/{domain}/keys')?.tag).toBe('Key-Value Store')
+    expect(find('POST', '/store-api/rel/{domain}/tables/from-file')?.tag).toBe('Relational Import')
+    expect(find('GET', '/store-api/rel/{domain}/tables/{table}/count')?.tag).toBe('Relational Browse')
   })
 
   it('shortens the display path by stripping the BASE_PATH prefix', () => {

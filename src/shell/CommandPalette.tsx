@@ -1,22 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useSession } from '../app/session'
-import { ARTICLES } from '../screens/docs/articles/articles'
+import { DOC_ENTRIES } from '../screens/docs/articles/articles'
 import { openDocs } from '../screens/docs/openDocs'
 import { openDomainIn } from '../screens/engines/EnginesScreen'
 import './CommandPalette.css'
-import { useDomainSummaries, type DomainSummary } from './domains'
+import { useDomainSummaries } from './domains'
 import { paletteEntries, type PaletteEntry, type PaletteGroup } from './paletteEntries'
 import { ROUTES } from './Rail'
 import { useSelectedDomain } from './SelectedDomainContext'
-
-/** T/J/K-Vokabular wie ExpandedDomain/Explorer (spec shell/008 §3) — Priorität fürs Ziel, wenn eine Domäne mehrere Engines hat. */
-function primaryEngine(domain: DomainSummary): 'rel' | 'json' | 'kv' | undefined {
-  if (domain.engines.rel) return 'rel'
-  if (domain.engines.json) return 'json'
-  if (domain.engines.kv) return 'kv'
-  return undefined
-}
 
 function entryKey(entry: PaletteEntry): string {
   if (entry.kind === 'screen') return `screen:${entry.path}`
@@ -32,9 +24,9 @@ function PaletteRow({ entry, active, onRun }: { entry: PaletteEntry; active: boo
         <>
           <span className="cmdk__row-name">{entry.domain.name}</span>
           <span className="cmdk__chips">
-            {entry.domain.engines.rel && <span className="cmdk__chip cmdk__chip--rel">T</span>}
-            {entry.domain.engines.json && <span className="cmdk__chip cmdk__chip--json">J</span>}
-            {entry.domain.engines.kv && <span className="cmdk__chip cmdk__chip--kv">K</span>}
+            <span className="cmdk__chip cmdk__chip--rel">T</span>
+            <span className="cmdk__chip cmdk__chip--json">J</span>
+            <span className="cmdk__chip cmdk__chip--kv">K</span>
           </span>
         </>
       )}
@@ -64,7 +56,7 @@ export function CommandPaletteContent({ onClose }: CommandPaletteContentProps) {
   const [selectedIndex, setSelectedIndex] = useState(0)
 
   const screens = ROUTES.map((route) => ({ path: route.path, title: route.title }))
-  const groups: PaletteGroup[] = paletteEntries(query, screens, domains, ARTICLES, apiClient !== undefined)
+  const groups: PaletteGroup[] = paletteEntries(query, screens, domains, DOC_ENTRIES, apiClient !== undefined)
   const flatEntries = groups.flatMap((group) => group.entries)
   const activeIndex = flatEntries.length === 0 ? 0 : Math.min(selectedIndex, flatEntries.length - 1)
 
@@ -72,8 +64,7 @@ export function CommandPaletteContent({ onClose }: CommandPaletteContentProps) {
     if (entry.kind === 'screen') {
       void navigate(entry.path)
     } else if (entry.kind === 'domain') {
-      const engine = primaryEngine(entry.domain)
-      if (engine !== undefined) openDomainIn(navigate, select, entry.domain.name, engine)
+      openDomainIn(navigate, select, entry.domain.name, 'rel')
     } else {
       openDocs(entry.id)
       void navigate('/docs')

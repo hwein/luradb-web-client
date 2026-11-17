@@ -10,9 +10,9 @@ const sqlHighlightStyle = HighlightStyle.define([
   { tag: tags.string, color: 'var(--eng-json-label)' },
 ])
 
-// Editor-Fläche: mono 13px, line-height 2, Innenabstand wie im Prototyp (Z. 76).
+// Editor surface: mono, line-height 2, inner padding as in the prototype (l. 76).
 const sqlSizingTheme = EditorView.theme({
-  '.cm-scroller': { fontSize: '13px', lineHeight: '2' },
+  '.cm-scroller': { fontSize: 'var(--fs-body)', lineHeight: '2' },
   '.cm-content': { padding: '16px 20px' },
 })
 

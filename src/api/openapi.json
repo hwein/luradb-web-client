@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LuraDB API",
-    "description": "REST-native multi-model database — KeyValue and JSON engines. `version` is the API contract version (see API_VERSION), independent of the server version; the latter is in the `x-luradb-server-version` extension. Runtime check: GET /version.",
+    "description": "REST-native multi-model database — key-value, JSON document and relational (LuraSQL) engines; every domain holds data in all three. `version` is the API contract version (see API_VERSION), independent of the server version; the latter is in the `x-luradb-server-version` extension. Runtime check: GET /version. Under overload, any endpoint may answer 503 Service Unavailable (text/plain) with `Retry-After: 1`; the request was not processed and may be retried. While disk space or memory runs short, writes answer 507 Insufficient Storage (text/plain) with `Retry-After: 5` and are not applied; reads go on.",
     "contact": {
       "name": "Heiko Wein"
     },
@@ -10,8 +10,8 @@
       "name": "FSL-1.1-ALv2",
       "identifier": "FSL-1.1-ALv2"
     },
-    "version": "0.2.0",
-    "x-luradb-server-version": "0.2.2-dev"
+    "version": "0.17.0",
+    "x-luradb-server-version": "0.7.1"
   },
   "paths": {
     "/health": {
@@ -20,11 +20,28 @@
           "Metrics"
         ],
         "summary": "`GET /health` — public heartbeat endpoint.",
-        "description": "Returns a JSON snapshot of system vitals. No authentication required.",
+        "description": "Returns a JSON snapshot of system vitals, summed over the data shards, in\n`shards` the status of each data shard: `ok` once it answered, `timeout`\nwhen it did not within 250 ms, in `resources` the state of disk space\n(the worst of all data volumes) and of the server's own memory, and in\n`io`, while writes of a data file fail, their failures in a row. It names\nno path and gives no size; `GET /store-api/metrics` does. No\nauthentication required.",
         "operationId": "health",
         "responses": {
           "200": {
-            "description": "System is healthy"
+            "description": "Every data shard answered. Status `ok`, or `degraded` while disk space or memory runs short: below a warn threshold (`warning`), or below a block threshold (`blocked`), while writes answer 507 and reads go on; `resources` gives the state of the disk space and of the memory, without volume, path or number. Also `degraded` while writes of a data file fail; `io` gives their failures in a row, without the file (the server stops at the third, or at the first on a read-only file system)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartbeatMetrics"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A data shard did not answer within 250 ms; the full report with status `degraded`; its `shards` list names the shard with status `timeout`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartbeatMetrics"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -37,11 +54,12 @@
         "tags": [
           "Auth"
         ],
-        "summary": "Returns all created users (admins and regular users).\nAPI keys are not included — only name, role, and creation timestamp.",
+        "summary": "Returns all created users (admins and regular users) with their domain\npermission matrix. API keys are not included.",
+        "description": "For `role == \"Admin\"`, `permissions` is meaningless for access control:\nadmins have unconditional access regardless of its contents. It\nis usually empty for an admin but not guaranteed to be — e.g. a user\npromoted to admin via `luradb.toml` keeps any permissions set before the\npromotion. Never read an empty array as \"no access\" or a non-empty one as\na restriction on an Admin row.\n\nThe list reflects the permission table as stored — it is not cross-checked\nagainst existing domains, so an entry set with `?allow_missing=true` for a\ndomain not created yet is shown too. Deleting a domain removes the\npermissions on it.",
         "operationId": "list_users",
         "responses": {
           "200": {
-            "description": "List of all users (without API keys)",
+            "description": "List of all users (without API keys), including their domain permissions",
             "content": {
               "application/json": {
                 "schema": {
@@ -83,10 +101,24 @@
             }
           },
           "400": {
-            "description": "Invalid name"
+            "description": "Invalid name",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "409": {
-            "description": "User already exists"
+            "description": "User already exists",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -114,7 +146,14 @@
             "description": "User and all permissions deleted"
           },
           "404": {
-            "description": "User not found"
+            "description": "User not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -124,7 +163,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "Sets or overwrites a user's access permission on a domain.\n`access` must be `\"read\"`, `\"write\"`, or `\"ddl\"` — each level includes the\nlower ones. For `kv` the domain must exist; `json`/`rel` only check the name.",
+        "summary": "Sets or overwrites a user's access permission on a domain: without\n`engine` on the whole domain (keys, documents and tables), with `engine`\non that engine only. `access` must be `\"read\"`, `\"write\"`, or `\"ddl\"` —\neach level includes the lower ones; `\"ddl\"` acts as `\"write\"` on keys and\ndocuments. A user holds either a permission on the whole domain or\npermissions on engines: one on the whole domain replaces the user's engine\npermissions on it, and one on an engine turns a permission on the whole\ndomain into one of the same level per engine first, then sets the named\nengine. The domain must exist and be active, whatever its engines;\n`?allow_missing=true` skips that check.",
         "operationId": "set_permission",
         "parameters": [
           {
@@ -134,6 +173,15 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "allow_missing",
+            "in": "query",
+            "description": "Skip the domain existence check (pre-provisioning). Default false.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -152,10 +200,24 @@
             "description": "Permission set"
           },
           "400": {
-            "description": "Invalid access or domain value"
+            "description": "Invalid access, engine or domain value, an unknown field, or `store_type`, which is no longer accepted (use `engine`)",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
-            "description": "User or domain not found"
+            "description": "User or domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -165,7 +227,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "Revokes a user's access permission on a specific domain.\n`?store_type=json`/`rel` revokes a JSON/rel domain permission (default: kv).\nAfter this call, the user's requests to this domain get `403 Forbidden`.",
+        "summary": "Revokes a user's permissions on a domain: without `engine` every one —\non the whole domain and on its engines —, with `?engine=` the one on that\nengine. A permission on the whole domain then becomes one of the same\nlevel on each of the other two engines. Afterwards, the user's requests\nto what was revoked get `403 Forbidden`.",
         "operationId": "remove_permission",
         "parameters": [
           {
@@ -187,9 +249,9 @@
             }
           },
           {
-            "name": "store_type",
+            "name": "engine",
             "in": "query",
-            "description": "'kv' (default), 'json' or 'rel'",
+            "description": "'kv', 'json' or 'rel': revoke the permission on that engine only. Without it, every permission of the user on the domain.",
             "required": false,
             "schema": {
               "type": "string"
@@ -200,8 +262,25 @@
           "204": {
             "description": "Permission revoked"
           },
+          "400": {
+            "description": "Invalid engine, or `store_type`, which is no longer accepted (use `engine`)",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "404": {
-            "description": "Permission not found"
+            "description": "Neither a permission on the domain nor on the engine",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -236,9 +315,580 @@
             }
           },
           "404": {
-            "description": "User not found"
+            "description": "User not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
+      }
+    },
+    "/store-api/auth/whoami": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Returns the caller's own identity. Unlike every other endpoint under this\ntag, reachable by any authenticated caller — not admin-only (the\n`auth_layer` middleware whitelists this path, see `middleware.rs`).",
+        "description": "Checked in order: `auth.enabled = false` → `Disabled`; a `TrustedPeer`\n(UDS peer authenticated by the kernel) → `TrustedPeer`;\notherwise the Bearer key is resolved to its `UserRecord` → `Admin`/`User`.\nA `401` past the `auth_layer` middleware (which already validates the key)\ncan only mean a middleware bug — fail-closed, analogous to `enforce_sql_level`.",
+        "operationId": "whoami",
+        "responses": {
+          "200": {
+            "description": "Caller identity — name (if any) and role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhoamiResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/store-api/backups": {
+      "get": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Lists every backup archive in `backup.dir`, plus the currently running\nbackup job (if any) separately in `running`.",
+        "operationId": "list_backups",
+        "responses": {
+          "200": {
+            "description": "Backup list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupListResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Backup is disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Starts an on-demand backup job.",
+        "operationId": "create_backup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBackupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Backup job started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupAcceptedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid scope",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Scope targets a missing domain",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A backup or restore job is already running",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Backup is disabled, or scope requires the JSON or relational engine, which is disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/store-api/backups/upload": {
+      "post": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Streams the request body to `backup.dir`, verifies its checksum and\nmanifest, then assigns it a fresh server-side id (`bk_..._upload[_N]`) —\nthe id in the manifest is never adopted. Invalid archives are discarded.",
+        "operationId": "upload_backup",
+        "requestBody": {
+          "description": "NDJSON backup archive, raw bytes streamed to disk (no multipart)",
+          "content": {
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Archive accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid backup file — checksum/manifest verification failed",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Backup is disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/store-api/backups/{id}": {
+      "get": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Manifest fields + state + size for one backup. A backup whose job is\nstill running (no `.ndjson` file yet, only `.part`) reports `state:\n\"running\"` from the in-RAM job slot instead of 404.",
+        "operationId": "get_backup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Backup id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Backup details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid backup id",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Backup not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Backup is disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Deletes a backup archive file. Refuses while the id is the currently\nrunning job (or a stale `.part` leftover still exists for it).",
+        "operationId": "delete_backup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Backup id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Backup deleted"
+          },
+          "400": {
+            "description": "Invalid backup id",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Backup not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The backup job for this id is still running",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Backup is disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/store-api/backups/{id}/download": {
+      "get": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Streams the archive with HTTP Range support for resumable downloads.",
+        "description": "The archive is NDJSON. Its first line is the manifest, format version 2:\n`format_version`, `id`, `created_at`, `luradb_version`, `scope`,\n`include_auth`, `encoding`, `schedule`, and\n- `shards`: data shards of the server that wrote it. Informational only:\n  a restore places every domain by the shard count of the server it runs\n  on, so an archive restores into any shard count.\n- `lsn_cut`: `{kv, json, rel}`, per engine a write-ahead-log position that\n  every write in the archive is at or below (a lower bound of the cut);\n  0 for an engine outside the scope. Positions keep growing across\n  restarts, so they compare across runs of the server.\n- `kv_snapshot_ts`, `json_snapshot_ts`, `rel_snapshot_ts`: per engine,\n  the newest read-snapshot stamp among the data shards; 0 for an engine\n  outside the scope.\n\nAll shards of one engine are read at one consistent cut: an archive that\nholds a write holds every write confirmed before it. The relational cut\nis taken before the KV and JSON cuts. Domain lines carry their domain's\nname; sections follow in the order KV, JSON, relational, auth; the last\nline is the checksum.\n\nA relational domain is a `rel-domain` line (`name`, `created_at`), then\nits tables by creation, its views, and per table its rows and\nAUTOINCREMENT state:\n- `rel-table`: `domain`, `name`, `columns` (each `name`, `type` as SQL\n  type name, `nullable`, `primary_key`, `autoincrement`, `unique`, an\n  optional `default` of `{\"kind\": \"null\"}`, `{\"kind\":\n  \"current_timestamp\"}` or `{\"kind\": \"literal\", \"value\": …}`, an optional\n  `references` naming the target table) and `indexes` (`name`, `column`,\n  `unique`; every index under its stored name).\n- `rel-view`: `domain`, `name`, `sql`, the stored SELECT text.\n- `rel-row`: `domain`, `table`, `row`, every column by name, NULL as\n  `null`, KVREF/JSONREF links as stored.\n- `rel-seq`: `domain`, `table`, `hw`: the next insert without a key gets\n  `hw + 1`.\n\nValues are JSON numbers (INTEGER, REAL), booleans, strings (TEXT, KVREF,\nJSONREF) and, for TIMESTAMP, integer milliseconds since the Unix epoch.\nArchives of format version 1, which lack `shards` and `lsn_cut`, and\narchives without relational lines remain restorable.",
+        "operationId": "download_backup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Backup id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full NDJSON archive",
+            "content": {
+              "application/x-ndjson": {}
+            }
+          },
+          "206": {
+            "description": "Partial content (Range request)",
+            "content": {
+              "application/x-ndjson": {}
+            }
+          },
+          "400": {
+            "description": "Invalid backup id",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Backup not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The backup job for this id is still running",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Backup is disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/store-api/backups/{id}/restore": {
+      "post": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Starts a restore job from an existing backup archive. The single-domain\nremap and format-version checks happen synchronously here; a domain\nalready existing (`fail_if_exists`) only surfaces asynchronously via\n`GET /restores/{id}`.",
+        "operationId": "restore_backup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Backup id to restore from",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Restore job started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreAcceptedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid id/mode, remap requires a single domain, unsupported format version, or invalid backup file",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Backup not found, or scope targets a missing domain",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A backup or restore job is already running",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Backup is disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/store-api/config": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "`GET /config` — effective configuration of the running process. Admin only.",
+        "description": "The path carries no `{domain}` segment, so `extract_domain` returns `None`\nand the auth layer's None-branch requires an admin role. The admin API\nkey never appears in the body — redaction happens at the field level\n(`AdminEntry.api_key`'s `#[serde(skip_serializing)]` in config.rs), not\nin this handler.",
+        "operationId": "get_config",
+        "responses": {
+          "200": {
+            "description": "config_path (resolved path, always set), config_file_loaded (whether a file existed there), and config (the effective LuraConfig — see config.rs for field docs)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — Admin only",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
       }
     },
     "/store-api/domains": {
@@ -246,11 +896,11 @@
         "tags": [
           "Domains"
         ],
-        "summary": "Returns all active domains with their names and creation timestamps.",
+        "summary": "Returns the active domains, by name. Admin keys see all of them; any other\nkey sees the domains it holds a permission on in any engine (an empty list\nwithout any).",
         "operationId": "list_domains",
         "responses": {
           "200": {
-            "description": "List of active domains",
+            "description": "The active domains the key holds any permission on",
             "content": {
               "application/json": {
                 "schema": {
@@ -268,7 +918,7 @@
         "tags": [
           "Domains"
         ],
-        "summary": "Creates a new logical domain (isolated KV namespace).\nDomain names must be unique, max 50 chars, and match `[a-zA-Z0-9_-]`.",
+        "summary": "Creates a domain, which holds keys, documents and tables in the key-value,\nJSON and relational engines. With `require_conditional_writes`,\nsingle-object writes over REST of the engines it names must carry\n`If-Match` or `If-None-Match: *`; bulk operations and other write paths\nare not affected.",
         "operationId": "create_domain",
         "requestBody": {
           "content": {
@@ -282,7 +932,7 @@
         },
         "responses": {
           "201": {
-            "description": "Domain created",
+            "description": "Domain created in every engine",
             "content": {
               "application/json": {
                 "schema": {
@@ -292,10 +942,51 @@
             }
           },
           "400": {
-            "description": "Invalid domain name"
+            "description": "Invalid domain name, unusable body, or `require_conditional_writes` not an object",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "409": {
-            "description": "Domain already exists"
+            "description": "Domain exists, also while it is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An engine could not create its part; the domain is deleted again",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -305,7 +996,7 @@
         "tags": [
           "Domains"
         ],
-        "summary": "Returns metadata for a single domain by name. Returns 404 if it does not exist.",
+        "summary": "Returns a domain. Needs a permission on the domain in any engine (admin\nkeys always pass). A domain in `deleting` state answers 410 Gone.",
         "operationId": "get_domain",
         "parameters": [
           {
@@ -329,8 +1020,35 @@
               }
             }
           },
+          "403": {
+            "description": "Forbidden — no permission on the domain in any engine (also when it does not exist)",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "404": {
-            "description": "Domain not found"
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted (background purge running)",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -338,7 +1056,7 @@
         "tags": [
           "Domains"
         ],
-        "summary": "Schedules a domain and all its data for deletion.\nThe domain becomes immediately inaccessible; the actual purge runs in the background.",
+        "summary": "Deletes a domain with its keys, documents, tables and views. The domain\nbecomes inaccessible immediately; the purge runs in the background, and\nthe name stays taken until it is done.",
         "operationId": "delete_domain",
         "parameters": [
           {
@@ -353,145 +1071,105 @@
         ],
         "responses": {
           "202": {
-            "description": "Deletion accepted — background purge started"
+            "description": "Deletion accepted — background purge of every engine follows"
           },
           "404": {
-            "description": "Domain not found"
-          }
-        }
-      }
-    },
-    "/store-api/json/domains": {
-      "get": {
-        "tags": [
-          "JSON Document Store"
-        ],
-        "summary": "Returns all active JSON domains.",
-        "operationId": "list_domains",
-        "responses": {
-          "200": {
-            "description": "List of active JSON domains",
+            "description": "Domain not found",
             "content": {
-              "application/json": {
+              "text/plain": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/JsonDomainResponse"
-                  }
+                  "type": "string"
                 }
               }
             }
-          },
-          "503": {
-            "description": "JSON engine disabled"
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "JSON Document Store"
-        ],
-        "summary": "Creates a new JSON domain (isolated document namespace, separate from KV domains).",
-        "operationId": "create_domain",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateJsonDomainRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "JSON domain created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JsonDomainResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid domain name"
-          },
-          "409": {
-            "description": "Domain already exists"
-          },
-          "503": {
-            "description": "JSON engine disabled"
-          }
-        }
-      }
-    },
-    "/store-api/json/domains/{name}": {
-      "get": {
-        "tags": [
-          "JSON Document Store"
-        ],
-        "summary": "Returns metadata for a single JSON domain, including its document count.\nDomains in `deleting` state answer with 410 Gone.",
-        "operationId": "get_domain",
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "description": "JSON domain name",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Domain found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JsonDomainResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Domain not found"
           },
           "410": {
-            "description": "Domain is being deleted (background purge running)"
+            "description": "Domain is already being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
-          "503": {
-            "description": "JSON engine disabled"
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
-      },
-      "delete": {
+      }
+    },
+    "/store-api/events": {
+      "get": {
         "tags": [
-          "JSON Document Store"
+          "Events"
         ],
-        "summary": "Marks a JSON domain as deleting. Documents become inaccessible immediately.",
-        "operationId": "delete_domain",
+        "summary": "Opens a Server-Sent Events stream of global lifecycle/DDL events: domains created, deleted and\npurged across all three engines, plus relational table/view/index DDL and JSON index DDL.\nAdmin-only — the path carries no domain segment, so the standard auth middleware rejects any\nnon-admin caller.",
+        "description": "A `Last-Event-ID` (header or `?last_event_id=`, header wins) resumes gaplessly from an in-memory\nreplay ring when possible; otherwise the server emits `event: reset` before continuing live. This\nstream has its own tag (`g`) and sequence, entirely independent of `GET /store-api/kv/{domain}/watch`'s\n(`w`) — an id from one stream is `unknown_id` at the other.",
+        "operationId": "get_events",
         "parameters": [
           {
-            "name": "name",
-            "in": "path",
-            "description": "JSON domain name",
-            "required": true,
+            "name": "last_event_id",
+            "in": "query",
+            "description": "Resume id from a previous `id:` (or `event: reset`) — for callers that cannot set headers. Ignored when the `Last-Event-ID` header is present.",
+            "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "description": "Resume id from a previous `id:` (or `event: reset`); set automatically by a native `EventSource`'s auto-reconnect. Takes precedence over `?last_event_id=`.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         ],
         "responses": {
-          "202": {
-            "description": "Deletion accepted — background purge follows"
+          "200": {
+            "description": "SSE stream of lifecycle/DDL events across the KV, JSON and relational engines: domains created/deleted/purged, and (rel) table/view/index DDL, (json) index DDL. No per-key data events — use a domain's `watch` for those. Every event carries an `id:`; `event:` matches its `type` field (e.g. `domain_created`, `table_altered`). `data:` is JSON `{engine?, type, domain, object?, ts}` — `engine` (`kv`, `json` or `rel`) and `object`, the table/view/index/field name, are absent for domain events, which come once per domain. `event: reset` (`data: {\"reason\": ...}`) is emitted whenever gapless resume cannot be guaranteed.",
+            "content": {
+              "text/event-stream": {}
+            }
           },
-          "404": {
-            "description": "Domain not found"
+          "401": {
+            "description": "Missing or invalid API key",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
-          "503": {
-            "description": "JSON engine disabled"
+          "403": {
+            "description": "Non-admin caller — this endpoint has no `{domain}` segment, so it is admin-only",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -501,7 +1179,7 @@
         "tags": [
           "JSON Document Store"
         ],
-        "summary": "Imports documents from an NDJSON body in atomic batches.",
+        "summary": "Imports documents from an NDJSON body in atomic batches; bulk writes take\nno preconditions and are not subject to `require_conditional_writes`.",
         "operationId": "bulk_load",
         "parameters": [
           {
@@ -537,10 +1215,51 @@
             }
           },
           "404": {
-            "description": "Domain not found"
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "JSON engine disabled"
+            "description": "JSON engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -606,10 +1325,34 @@
             }
           },
           "404": {
-            "description": "Domain not found"
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "JSON engine disabled"
+            "description": "JSON engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -642,16 +1385,81 @@
         },
         "responses": {
           "201": {
-            "description": "Document created with generated UUIDv4 key"
+            "description": "Document created with generated UUIDv4 key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Reserved top-level field (_key, _version, _content)",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Domain not found"
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "413": {
-            "description": "Payload too large"
+            "description": "Payload too large",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "JSON engine disabled"
+            "description": "JSON engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -686,10 +1494,34 @@
             }
           },
           "404": {
-            "description": "Domain not found"
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "JSON engine disabled"
+            "description": "JSON engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -699,7 +1531,7 @@
         "tags": [
           "JSON Document Store"
         ],
-        "summary": "Reads a document; `_key`/`_version` are top-level fields and an opaque\n`ETag` is exposed for use with `If-Match` (json/011).",
+        "summary": "Reads a document; `_key`/`_version` are top-level fields and an opaque\n`ETag` is exposed for use with `If-Match`.",
         "operationId": "get_document",
         "parameters": [
           {
@@ -723,13 +1555,52 @@
         ],
         "responses": {
           "200": {
-            "description": "Document content with _key/_version metadata"
+            "description": "Document content with _key/_version metadata",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Opaque version tag for If-Match / If-None-Match"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Document or domain not found"
+            "description": "Document or domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "JSON engine disabled"
+            "description": "JSON engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -737,7 +1608,7 @@
         "tags": [
           "JSON Document Store"
         ],
-        "summary": "Upserts a document. With an `If-Match: \"<etag>\"` header the write is a\nconditional update that fails with 409 on a version mismatch.",
+        "summary": "Upserts a document. With an `If-Match: \"<etag>\"` header the write is a\nconditional update; with `If-None-Match: *` it is create-only. Both may\nbe combined and are evaluated in that order; a failed precondition\nanswers 412 with the current `ETag`.",
         "operationId": "put_document",
         "parameters": [
           {
@@ -757,6 +1628,30 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Opaque ETag from a prior read: write only if it is still the document's current version, else 412",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "Only `*` is supported: create-only write, 412 if the document exists. Evaluated after If-Match",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "requestBody": {
@@ -771,22 +1666,117 @@
         },
         "responses": {
           "200": {
-            "description": "Document updated"
+            "description": "Document updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            }
           },
           "201": {
-            "description": "Document created"
+            "description": "Document created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            }
           },
           "400": {
-            "description": "Invalid key or If-Match header"
+            "description": "Invalid key, reserved top-level field (_key, _version, _content), or invalid If-Match or If-None-Match header",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Domain not found, or If-Match on missing document"
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
-          "409": {
-            "description": "Version conflict (If-Match mismatch)"
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "If-Match or If-None-Match does not hold (version mismatch, missing document, or document already exists); nothing was written",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "ETag of the document's current version; absent when the document does not exist"
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "The domain requires conditional writes and neither If-Match nor If-None-Match is set",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "no-store"
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "JSON engine disabled"
+            "description": "JSON engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -794,7 +1784,7 @@
         "tags": [
           "JSON Document Store"
         ],
-        "summary": "Deletes a document and its index entries. Supports conditional delete via\n`If-Match: \"<etag>\"`.",
+        "summary": "Deletes a document and its index entries. Supports conditional delete via\n`If-Match: \"<etag>\"`; a failed precondition answers 412 with the current\n`ETag`.",
         "operationId": "delete_document",
         "parameters": [
           {
@@ -814,20 +1804,128 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Opaque ETag from a prior read: delete only if it is still the document's current version, else 412",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "Only `*` is supported: 412 if the document exists. Evaluated after If-Match",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "responses": {
           "204": {
             "description": "Document deleted"
           },
-          "404": {
-            "description": "Document or domain not found"
+          "400": {
+            "description": "Invalid key, or invalid If-Match or If-None-Match header",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
-          "409": {
-            "description": "Version conflict (If-Match mismatch)"
+          "404": {
+            "description": "Document or domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "If-Match or If-None-Match does not hold (version mismatch, missing document, or document exists); nothing was deleted",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "ETag of the document's current version; absent when the document does not exist"
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "The domain requires conditional writes and neither If-Match nor If-None-Match is set",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "no-store"
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "JSON engine disabled"
+            "description": "JSON engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -837,7 +1935,7 @@
         "tags": [
           "JSON Document Store"
         ],
-        "summary": "Streams all documents of a domain as NDJSON without full buffering.",
+        "summary": "Streams all documents of a domain as NDJSON without full buffering. A\nlegacy document that still carries a top-level\n`_key`/`_version`/`_content` field exports lossy, same as before — no\nmigration reshapes existing data.",
         "operationId": "export_documents",
         "parameters": [
           {
@@ -858,10 +1956,34 @@
             }
           },
           "404": {
-            "description": "Domain not found"
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "JSON engine disabled"
+            "description": "JSON engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -899,10 +2021,34 @@
             }
           },
           "404": {
-            "description": "Domain not found"
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "JSON engine disabled"
+            "description": "JSON engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -945,13 +2091,61 @@
             }
           },
           "400": {
-            "description": "Invalid field or type"
+            "description": "Invalid field or type",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "409": {
-            "description": "Index already exists"
+            "description": "Index already exists",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "JSON engine disabled"
+            "description": "JSON engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -988,10 +2182,51 @@
             "description": "Index definition removed"
           },
           "404": {
-            "description": "Index or domain not found"
+            "description": "Index or domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "JSON engine disabled"
+            "description": "JSON engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -1037,16 +2272,71 @@
             }
           },
           "400": {
-            "description": "Malformed request body"
+            "description": "Malformed request body",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Domain not found"
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "409": {
-            "description": "Re-index already running for this domain"
+            "description": "Re-index already running for this domain",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "JSON engine disabled"
+            "description": "JSON engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -1083,10 +2373,24 @@
             "description": "Current re-index status"
           },
           "404": {
-            "description": "Unknown task id for this domain"
+            "description": "Unknown task id for this domain",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "JSON engine disabled"
+            "description": "JSON engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -1131,24 +2435,55 @@
             }
           },
           "400": {
-            "description": "Invalid filter or unindexed field"
+            "description": "Invalid filter or unindexed field",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Domain not found"
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "JSON engine disabled"
+            "description": "JSON engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/store-api/kv/{domain}/keys": {
+    "/store-api/kv/{domain}/count": {
       "get": {
         "tags": [
           "Key-Value Store"
         ],
-        "summary": "Lists all keys in the domain, optionally filtered by a prefix. Returns an empty array if no keys match.",
-        "operationId": "scan_keys",
+        "summary": "Counts live keys in the domain, optionally filtered by a prefix — the same\nsemantics as `GET …/keys?prefix=`, without transferring the keys themselves.",
+        "operationId": "count_keys",
         "parameters": [
           {
             "name": "domain",
@@ -1171,20 +2506,24 @@
         ],
         "responses": {
           "200": {
-            "description": "List of matching keys",
+            "description": "Number of live keys matching the prefix. A full key scan under the hood (same cost as the equivalent `keys?prefix=` call) — cost grows linearly with domain size, so this is meant for on-demand use, not high-frequency polling.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                  "$ref": "#/components/schemas/CountResponse"
                 }
               }
             }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded",
@@ -1194,6 +2533,236 @@
                   "type": "integer",
                   "format": "int64",
                   "minimum": 0
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/store-api/kv/{domain}/keys": {
+      "get": {
+        "tags": [
+          "Key-Value Store"
+        ],
+        "summary": "Lists one page of keys in the domain, optionally filtered by a prefix and/or a case-sensitive `contains` substring.\n`total` counts matches after filtering, before `offset`/`limit` are applied; an out-of-range `offset` yields an empty `keys` array with `total` unchanged.",
+        "operationId": "scan_keys",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "description": "Domain name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "description": "Key prefix filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contains",
+            "in": "query",
+            "description": "Case-sensitive substring filter on the user key, applied before total/offset/limit",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (default 1000, max 10000; over-max is silently capped)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Keys to skip",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of matching keys",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyScanResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 0
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Key-Value Store"
+        ],
+        "summary": "Deletes every live key whose raw form starts with `prefix`, optionally narrowed by a case-sensitive\n`contains` substring filter on the key — the same selection `GET …/keys?prefix=&contains=` would show.\nAtomic: either every matched key is gone, or (a 413) none is. Returns the number of keys deleted.",
+        "operationId": "delete_keys_by_prefix",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "description": "Domain name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "description": "Key prefix — required, must not be empty. A domain-emptying request needs the admin-only DELETE /store-api/domains/{name} instead.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contains",
+            "in": "query",
+            "description": "Case-sensitive substring filter on the user key, applied to the prefix scan's results before the cap check",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matched keys deleted atomically (one write batch); an empty selection is a no-op",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or empty prefix",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The selection exceeds max_bulk_delete_keys; no key was deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 0
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -1206,7 +2775,7 @@
         "tags": [
           "Key-Value Store"
         ],
-        "summary": "Retrieves the raw byte value for a key. Returns 204 for a key in the null state and 404 if the key does not exist or has expired.",
+        "summary": "Retrieves the raw byte value for a key. Returns 204 for a key in the null state and 404 if the key does not exist or has expired.\nWhen the key has a TTL, the response carries an `X-Expires-At` header with the absolute Unix-seconds expiry.\n200 and 204 carry an `ETag` identifying the version read, for a later conditional write.",
         "operationId": "get_key",
         "parameters": [
           {
@@ -1230,22 +2799,66 @@
         ],
         "responses": {
           "200": {
-            "description": "Value (raw bytes; an empty value yields an empty body)",
+            "description": "Value (raw bytes; an empty value yields an empty body). The `X-Expires-At` header (absolute Unix seconds) is present only when the key has a TTL.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong, opaque version tag for If-Match / If-None-Match"
+              },
+              "X-Expires-At": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 0
+                }
+              }
+            },
             "content": {
               "application/octet-stream": {}
             }
           },
           "204": {
-            "description": "Key exists in the explicit null state (set via PATCH …/null)"
+            "description": "Key exists in the explicit null state (set via PATCH …/null)",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong, opaque version tag for If-Match / If-None-Match"
+              }
+            }
           },
           "400": {
-            "description": "Invalid key"
+            "description": "Invalid key",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Key or domain not found"
+            "description": "Key or domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded",
@@ -1257,6 +2870,13 @@
                   "minimum": 0
                 }
               }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
             }
           }
         }
@@ -1265,7 +2885,7 @@
         "tags": [
           "Key-Value Store"
         ],
-        "summary": "Inserts or updates a value for the given key (upsert semantics).\nThe optional `ttl` query parameter sets an expiry in seconds; omitting it stores the key indefinitely.",
+        "summary": "Inserts or updates a value for the given key (upsert semantics).\nThe optional `ttl` query parameter sets an expiry in seconds; omitting it stores the key indefinitely.\n`If-Match` (an ETag from a prior read) or `If-None-Match: *` (create only) make the write conditional;\nwithout them the last writer wins.",
         "operationId": "put_key",
         "parameters": [
           {
@@ -1296,6 +2916,30 @@
               "format": "int64",
               "minimum": 0
             }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "ETag from a prior read: write only if it is still the key's current version, else 412",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "Only `*`: write only if the key does not exist, else 412. Evaluated after If-Match",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "requestBody": {
@@ -1313,13 +2957,80 @@
             "description": "Key upserted"
           },
           "400": {
-            "description": "Invalid key"
+            "description": "Invalid key, or invalid If-Match / If-None-Match header",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Domain not found"
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "If-Match or If-None-Match does not hold; nothing was written",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "ETag of the key's current version; absent when the key does not exist"
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The value exceeds lsm.max_value_size; nothing was written",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "The domain requires conditional writes and neither If-Match nor If-None-Match is set",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "no-store"
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded",
@@ -1331,6 +3042,30 @@
                   "minimum": 0
                 }
               }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
             }
           }
         }
@@ -1339,7 +3074,7 @@
         "tags": [
           "Key-Value Store"
         ],
-        "summary": "Permanently removes a key from the domain. The operation is idempotent; deleting a non-existent key still returns 204.",
+        "summary": "Permanently removes a key from the domain. The operation is idempotent; deleting a non-existent key still returns 204.\n`If-Match` makes the delete conditional on the version read.",
         "operationId": "delete_key",
         "parameters": [
           {
@@ -1359,6 +3094,30 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "ETag from a prior read: delete only if it is still the key's current version, else 412",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "Only `*`: delete only if the key does not exist, else 412. Evaluated after If-Match",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "responses": {
@@ -1366,10 +3125,60 @@
             "description": "Key deleted"
           },
           "400": {
-            "description": "Invalid key"
+            "description": "Invalid key, or invalid If-Match / If-None-Match header",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "If-Match or If-None-Match does not hold; nothing was deleted",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "ETag of the key's current version; absent when the key does not exist"
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "The domain requires conditional writes and neither If-Match nor If-None-Match is set",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "no-store"
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded",
@@ -1381,18 +3190,42 @@
                   "minimum": 0
                 }
               }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
             }
           }
         }
       }
     },
-    "/store-api/kv/{domain}/keys/{key}/null": {
-      "patch": {
+    "/store-api/kv/{domain}/keys/{key}/meta": {
+      "get": {
         "tags": [
           "Key-Value Store"
         ],
-        "summary": "Sets the key to an explicit null value (upsert): the key stays registered and appears in scans,\nbut carries no data — GET answers 204. A write like any other; it resets a previously set TTL.",
-        "operationId": "set_null",
+        "summary": "Returns a key's TTL expiry and last-modified time without reading its value (no VLog dereference).\n`last_modified_at` is the write time of the newest visible version (PUT, or PATCH …/null) — not a\ncreation timestamp; every overwrite advances it.",
+        "operationId": "get_key_meta",
         "parameters": [
           {
             "name": "domain",
@@ -1415,13 +3248,44 @@
         ],
         "responses": {
           "200": {
-            "description": "Key set to the null value state"
+            "description": "Key metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyMetaResponse"
+                }
+              }
+            }
           },
           "400": {
-            "description": "Invalid key"
+            "description": "Invalid key",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Key or domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limit exceeded",
@@ -1431,6 +3295,163 @@
                   "type": "integer",
                   "format": "int64",
                   "minimum": 0
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/store-api/kv/{domain}/keys/{key}/null": {
+      "patch": {
+        "tags": [
+          "Key-Value Store"
+        ],
+        "summary": "Sets the key to an explicit null value (upsert): the key stays registered and appears in scans,\nbut carries no data — GET answers 204. A write like any other; it resets a previously set TTL,\nand takes the same `If-Match` / `If-None-Match: *` preconditions as PUT.",
+        "operationId": "set_null",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "description": "Domain name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "description": "Key (valid UTF-8, max 256 bytes)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "ETag from a prior read: write only if it is still the key's current version, else 412",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "Only `*`: write only if the key does not exist, else 412. Evaluated after If-Match",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Key set to the null value state"
+          },
+          "400": {
+            "description": "Invalid key, or invalid If-Match / If-None-Match header",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "If-Match or If-None-Match does not hold; nothing was written",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "ETag of the key's current version; absent when the key does not exist"
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "The domain requires conditional writes and neither If-Match nor If-None-Match is set",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "no-store"
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 0
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -1444,6 +3465,7 @@
           "Key-Value Store"
         ],
         "summary": "Opens a Server-Sent Events stream that delivers real-time change events (`set` / `delete`) for keys matching the optional prefix.\nThe connection stays open until the client disconnects; a keep-alive ping is sent automatically.",
+        "description": "A `Last-Event-ID` (header or `?last_event_id=`) resumes gaplessly from an in-memory\nreplay ring when possible; otherwise the server emits `event: reset` before continuing live. A\nclient that ignores `id:`/`reset` behaves exactly as before this was added.",
         "operationId": "watch",
         "parameters": [
           {
@@ -1463,17 +3485,177 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "last_event_id",
+            "in": "query",
+            "description": "Resume id from a previous `id:` (or `event: reset`) — for callers that cannot set headers. Ignored when the `Last-Event-ID` header is present.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "description": "Resume id from a previous `id:` (or `event: reset`); set automatically by a native `EventSource`'s auto-reconnect. Takes precedence over `?last_event_id=`.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "SSE stream of key change events",
+            "description": "SSE stream of key change events. Every event carries an `id:`. Event types: `set` / `delete` (data: the key) and `reset` (data: `{\"reason\": ...}`, emitted whenever gapless resume cannot be guaranteed — the client should re-read the domain, then keep applying events normally).",
             "content": {
               "text/event-stream": {}
             }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/store-api/logs": {
+      "get": {
+        "tags": [
+          "Logs"
+        ],
+        "summary": "Reads the last N lines of a log file.",
+        "operationId": "get_logs",
+        "parameters": [
+          {
+            "name": "lines",
+            "in": "query",
+            "description": "Tail line count from file end (default 100, capped at 1000). 0 is rejected.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Case-sensitive substring filter; only matching lines count toward `lines`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "file",
+            "in": "query",
+            "description": "Name of a file listed by GET /logs/files. Defaults to the newest luradb.log* file.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tail of the selected log file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "lines = 0, or invalid file name",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "file does not exist",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "log directory unreadable, no luradb.log* file found, or read failed",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Log HTTP access is disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/store-api/logs/files": {
+      "get": {
+        "tags": [
+          "Logs"
+        ],
+        "summary": "Lists every `luradb.log*` file in the log directory.\n`files[0]` is exactly the file `GET /logs` reads without a `file` param.",
+        "operationId": "list_files",
+        "responses": {
+          "200": {
+            "description": "All luradb.log* files, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogFilesResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "log directory unreadable",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Log HTTP access is disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -1484,16 +3666,41 @@
           "Metrics"
         ],
         "summary": "`GET /metrics` — system + all domain metrics. Admin only.",
+        "description": "`engines` is an additive block, one entry per storage\nengine (`kv`/`json`/`rel`), each with the same nine fields: `read_ops`,\n`write_ops`, `read_latency_us_p50/p95/p99`, `write_latency_us_p50/p95/p99`,\n`window_secs`. Clients compute `read_ops / window_secs` for ops/s — the\nrate is a `window_secs`-wide average, not an instantaneous value, since\n`read_ops`/`write_ops` only count fully ticked seconds (the running\nsecond is excluded). A disabled engine still gets its block, all zero —\n`0` for a latency percentile means no op landed in the window, not an\nunmeasurably fast one.\n\n`shm` covers the shared-memory snapshot publisher, all zero while SHM is\noff: `snapshot_publishes_total`, `snapshot_publish_skips_total` (a client\nwas still reading the buffer due for overwriting),\n`snapshot_consecutive_skips` (the current run of skips; above 0 the snapshot\nis not being updated) and `clients_kicked_total` (clients disconnected after\n`shm.kick_blocking_client_after_secs`).\n\n`resources` is the full disk and memory report, of which `GET /health`\ngives the states only: per data volume `path`, `size_bytes`, `free_bytes`\nand `state`, and for the memory `rss_anon_bytes`, `budget_bytes` and\n`state`. `io` appears only while writes of a data file fail: the file\nwith the most failures in a row, `path` and `failures`.",
         "operationId": "get_metrics",
         "responses": {
           "200": {
             "description": "Metrics snapshot"
           },
           "401": {
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Forbidden — Admin only"
+            "description": "Forbidden — Admin only",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A data shard is not running",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -1526,10 +3733,24 @@
             "description": "Domain metrics snapshot"
           },
           "401": {
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
             "description": "Domain not found or no metrics yet"
@@ -1540,144 +3761,6 @@
             "bearer_auth": []
           }
         ]
-      }
-    },
-    "/store-api/rel/domains": {
-      "get": {
-        "tags": [
-          "Relational Domains"
-        ],
-        "summary": "Returns all active relational domains.",
-        "operationId": "list_domains",
-        "responses": {
-          "200": {
-            "description": "List of active relational domains",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RelDomainResponse"
-                  }
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Relational engine disabled"
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Relational Domains"
-        ],
-        "summary": "Creates a new relational domain (isolated table/view namespace, separate\nfrom KV and JSON domains).",
-        "operationId": "create_domain",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateRelDomainRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Relational domain created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RelDomainResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid domain name"
-          },
-          "409": {
-            "description": "Domain already exists"
-          },
-          "503": {
-            "description": "Relational engine disabled"
-          }
-        }
-      }
-    },
-    "/store-api/rel/domains/{name}": {
-      "get": {
-        "tags": [
-          "Relational Domains"
-        ],
-        "summary": "Returns metadata for a single relational domain. A domain in `deleting`\nstate answers 410 Gone (rel/013 finishes the physical purge).",
-        "operationId": "get_domain",
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "description": "Relational domain name",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Domain found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RelDomainResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Domain not found"
-          },
-          "410": {
-            "description": "Domain is being deleted (background purge running)"
-          },
-          "503": {
-            "description": "Relational engine disabled"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Relational Domains"
-        ],
-        "summary": "Marks a relational domain as deleting. Its tables/views become\ninaccessible immediately; physical cleanup follows in rel/013.",
-        "operationId": "delete_domain",
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "description": "Relational domain name",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "202": {
-            "description": "Deletion accepted — background purge follows (rel/013)"
-          },
-          "404": {
-            "description": "Domain not found"
-          },
-          "410": {
-            "description": "Domain is already being deleted"
-          },
-          "503": {
-            "description": "Relational engine disabled"
-          }
-        }
       }
     },
     "/store-api/rel/{domain}/sql": {
@@ -1720,28 +3803,101 @@
             }
           },
           "400": {
-            "description": "Syntax, type, parameter-count, or expand error"
+            "description": "Syntax, type, parameter-count, or expand error",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Access level too low for this statement (rel/011)"
+            "description": "Access level too low for this statement",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Domain, table, column, or index not found"
+            "description": "Domain, table, column, or index not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "409": {
-            "description": "Conflict — duplicate key, unique violation, name collision, …"
+            "description": "Conflict — duplicate key, unique violation, name collision, …",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "413": {
-            "description": "Response exceeds max_response_bytes"
+            "description": "Response exceeds max_response_bytes",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
-            "description": "Per-domain request budget exceeded"
+            "description": "Per-domain request budget exceeded",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "Relational engine disabled"
+            "description": "Relational engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -1779,16 +3935,221 @@
             }
           },
           "404": {
-            "description": "Domain not found"
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
-            "description": "Per-domain request budget exceeded"
+            "description": "Per-domain request budget exceeded",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "Relational engine disabled"
+            "description": "Relational engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/store-api/rel/{domain}/tables/from-file": {
+      "post": {
+        "tags": [
+          "Relational Import"
+        ],
+        "summary": "Creates a table from an uploaded CSV/TSV file, with one type per column\ninferred from its values, and imports its rows; a row that fails is logged\nand the import continues. Requires DDL access.",
+        "description": "Recommended headers: lowercase letters `a`-`z`, digits and `_`, starting\nwith a letter, at most 50 characters, each used only once, and not a LuraSQL\nkeyword (for example `key`, `order`, `count`, `text`, `timestamp`). If every\nheader of a file follows this, each column is named exactly like its header\nand `pk` is the header itself.\n\nEvery header is turned into a column name by these rules, applied in this\norder; a header that follows the recommendation only changes when an\nearlier column already has its name:\n\n- The header is trimmed and lowercased.\n- An empty header becomes `col_<n>`, where `n` is its 1-based position.\n- Every character other than `a`-`z`, `0`-`9` and `_` becomes `_`.\n- A leading digit gets a `c` in front.\n- A name longer than 50 characters is cut to 50 characters; otherwise a\n  name that is a LuraSQL keyword gets a `_` appended (`key` becomes `key_`).\n- A name that an earlier column already has gets the first free suffix of\n  `_2`, `_3`, ... appended, from left to right, with the name shortened so\n  the result stays within 50 characters; the first column keeps the plain\n  name.\n\nThe name `_row` is reserved for the generated primary key column: a header\nthat becomes `_row` is only accepted together with `pk=_row`, which makes\nthat file column the primary key.\n\nExample: the header line `SKU,Product Name,2024 Price,,sku,Order` gives the\ncolumns `sku`, `product_name`, `c2024_price`, `col_4`, `sku_2` and `order_`.\nThe response shows each column's `name` and its `source_header`.",
+        "operationId": "create_table_from_file",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "description": "Relational domain",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "Name of the table to create; a LuraSQL keyword (for example `select`) is rejected with 400",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "\"csv\" or \"tsv\" -- no format sniffing",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "header",
+            "in": "query",
+            "description": "Whether the first line is a header row (default true); without one the columns are named `col_1`, `col_2`, ...",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "pk",
+            "in": "query",
+            "description": "Column to use as primary key, named as the response shows it in `name`. Only upper/lower case is ignored, and for a LuraSQL keyword the trailing `_` may be left out (`key` matches `key_`); any other difference gives 400. Omitted -> the generated `_row` column",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Raw CSV/TSV file bytes -- Content-Type is not enforced, `format` decides",
+          "content": {
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Table created and its rows imported (imported/failed counts, per-row error log)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateFromFileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing/invalid name or format, a `header` value other than `true` or `false`, a table name that is a LuraSQL keyword, empty file, too many columns, invalid UTF-8 in the first line (the header row, or the first row with `header=false`), an unknown pk column, or a header that becomes `_row` without `pk=_row`",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing DDL access on the domain",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A table or view with that name already exists",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body exceeds rel.import_body_limit_bytes",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-domain request budget exceeded",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Relational engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -1832,16 +4193,125 @@
             }
           },
           "404": {
-            "description": "Domain or table not found (a view is not a table)"
+            "description": "Domain or table not found (a view is not a table)",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
-            "description": "Per-domain request budget exceeded"
+            "description": "Per-domain request budget exceeded",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "Relational engine disabled"
+            "description": "Relational engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/store-api/rel/{domain}/tables/{table}/count": {
+      "get": {
+        "tags": [
+          "Relational Browse"
+        ],
+        "summary": "Counts the rows of `table` — the same residual-free access path `SELECT\nCOUNT(*) FROM table` would use via `/sql`, without a SQL round trip. A\nview answers 404 here, same as `GET …/rows` (no row-level resource in v1).",
+        "operationId": "count_rows",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "description": "Relational domain",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "table",
+            "in": "path",
+            "description": "Table name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Row count. A full key scan under the hood — cost grows linearly with table size; meant for on-demand use, not high-frequency polling.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain or table not found (a view has no count resource, same as `rows`)",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-domain request budget exceeded",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Relational engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -1914,22 +4384,64 @@
             }
           },
           "400": {
-            "description": "Unknown filter column, or a filter/limit/offset parse/type error"
+            "description": "Unknown filter column, or a filter/limit/offset parse/type error",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Domain or table not found"
+            "description": "Domain or table not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "413": {
-            "description": "Response exceeds max_response_bytes"
+            "description": "Response exceeds max_response_bytes",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
-            "description": "Per-domain request budget exceeded"
+            "description": "Per-domain request budget exceeded",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "Relational engine disabled"
+            "description": "Relational engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -1937,7 +4449,7 @@
         "tags": [
           "Relational Rows"
         ],
-        "summary": "Inserts one row from a JSON object body (`{column: value, …}`). An omitted\nAUTOINCREMENT primary key is assigned the next sequence value (rel/005\n§9); this compiles onto the exact same bound INSERT plan `/sql` would use.",
+        "summary": "Inserts one row from a JSON object body (`{column: value, …}`). An omitted\nAUTOINCREMENT primary key is assigned the next sequence value; this\ncompiles onto the exact same bound INSERT plan `/sql` would use.",
         "operationId": "insert_row",
         "parameters": [
           {
@@ -1981,22 +4493,91 @@
             }
           },
           "400": {
-            "description": "NOT NULL/type/schema violation"
+            "description": "NOT NULL/type/schema violation",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing read access to a linked KV/JSON domain",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Domain, table, or referenced body column not found"
+            "description": "Domain, table, or referenced body column not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "409": {
-            "description": "PK collision, unique violation, or missing REFERENCES target"
+            "description": "PK collision, unique violation, or missing REFERENCES target",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
-            "description": "Per-domain request budget exceeded"
+            "description": "Per-domain request budget exceeded",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "Relational engine disabled"
+            "description": "Relational engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -2058,22 +4639,64 @@
             }
           },
           "400": {
-            "description": "PK parse/type error"
+            "description": "PK parse/type error",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Domain, table, or row not found"
+            "description": "Domain, table, or row not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "413": {
-            "description": "Response exceeds max_response_bytes"
+            "description": "Response exceeds max_response_bytes",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
-            "description": "Per-domain request budget exceeded"
+            "description": "Per-domain request budget exceeded",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "Relational engine disabled"
+            "description": "Relational engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -2081,7 +4704,7 @@
         "tags": [
           "Relational Rows"
         ],
-        "summary": "Partially updates a row by primary key: only the columns named in the\nbody are set, everything else stays unchanged (spec §5). Not an upsert —\na PK the table doesn't have answers 404, never a create.",
+        "summary": "Partially updates a row by primary key: only the columns named in the\nbody are set, everything else stays unchanged. Not an upsert —\na PK the table doesn't have answers 404, never a create.",
         "operationId": "update_row",
         "parameters": [
           {
@@ -2134,22 +4757,91 @@
             }
           },
           "400": {
-            "description": "NOT NULL/type/schema violation, or body primary key != path primary key"
+            "description": "NOT NULL/type/schema violation, or body primary key != path primary key",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing read access to a linked KV/JSON domain",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Domain, table, column, or row not found"
+            "description": "Domain, table, column, or row not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "409": {
-            "description": "Unique violation, or missing REFERENCES target"
+            "description": "Unique violation, or missing REFERENCES target",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
-            "description": "Per-domain request budget exceeded"
+            "description": "Per-domain request budget exceeded",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "Relational engine disabled"
+            "description": "Relational engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },
@@ -2157,7 +4849,7 @@
         "tags": [
           "Relational Rows"
         ],
-        "summary": "Deletes a row by primary key. Hanging REFERENCES from other tables are\nnot blocked by this (rel/005 §11) — they resolve to `null` afterwards.",
+        "summary": "Deletes a row by primary key. Hanging REFERENCES from other tables are\nnot blocked by this — they resolve to `null` afterwards.",
         "operationId": "delete_row",
         "parameters": [
           {
@@ -2200,19 +4892,71 @@
             }
           },
           "400": {
-            "description": "PK parse/type error"
+            "description": "PK parse/type error",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "404": {
-            "description": "Domain, table, or row not found"
+            "description": "Domain, table, or row not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
-            "description": "Per-domain request budget exceeded"
+            "description": "Per-domain request budget exceeded",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "Relational engine disabled"
+            "description": "Relational engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "507": {
+            "description": "Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -2250,16 +4994,96 @@
             }
           },
           "404": {
-            "description": "Domain not found"
+            "description": "Domain not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "410": {
-            "description": "Domain is being deleted"
+            "description": "Domain is being deleted",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "429": {
-            "description": "Per-domain request budget exceeded"
+            "description": "Per-domain request budget exceeded",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "503": {
-            "description": "Relational engine disabled"
+            "description": "Relational engine disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/store-api/restores/{id}": {
+      "get": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Live status of a restore job. Lives in RAM only — gone\nafter a restart; the outcome is also in the log.",
+        "operationId": "get_restore_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Restore id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restore status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreStatusResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Restore not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Backup is disabled",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
@@ -2283,7 +5107,14 @@
             }
           },
           "401": {
-            "description": "Unauthorized — a valid API key is required"
+            "description": "Unauthorized — a valid API key is required",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -2296,6 +5127,222 @@
   },
   "components": {
     "schemas": {
+      "BackupAcceptedResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "state"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        }
+      },
+      "BackupDetailResponse": {
+        "type": "object",
+        "description": "Manifest fields + state + size (GET /backups/{id} and\nPOST /backups/upload). Everything but `id`/`state`/`scope` is optional:\nthe currently-running-job shape (`running`) only fills `started_at`; the\ncomplete/incomplete shape fills the rest instead.",
+        "required": [
+          "id",
+          "state",
+          "scope"
+        ],
+        "properties": {
+          "created_at": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "encoding": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "format_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string"
+          },
+          "include_auth": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "json_snapshot_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The newest read-snapshot stamp of the JSON engine among the data shards.",
+            "minimum": 0
+          },
+          "kv_snapshot_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The newest read-snapshot stamp of the KV engine among the data shards.",
+            "minimum": 0
+          },
+          "lsn_cut": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LsnCutResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "luradb_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rel_snapshot_ts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The newest read-snapshot stamp of the relational engine among the\ndata shards.",
+            "minimum": 0
+          },
+          "schedule": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scope": {
+            "type": "string"
+          },
+          "shards": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Data shards of the server that wrote the archive; 0 for format\nversion 1. Informational: a restore places every domain by the shard\ncount of the server it runs on.",
+            "minimum": 0
+          },
+          "size_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "started_at": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "state": {
+            "type": "string"
+          }
+        }
+      },
+      "BackupListResponse": {
+        "type": "object",
+        "required": [
+          "backups"
+        ],
+        "properties": {
+          "backups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackupSummaryResponse"
+            }
+          },
+          "running": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RunningBackupInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BackupSummaryResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "state",
+          "scope",
+          "created_at",
+          "size_bytes",
+          "format_version"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "format_version": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string"
+          },
+          "schedule": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scope": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "state": {
+            "type": "string"
+          }
+        }
+      },
+      "BulkDeleteResponse": {
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
       "BulkErrorEntry": {
         "type": "object",
         "required": [
@@ -2352,9 +5399,7 @@
           "autoincrement": {
             "type": "boolean"
           },
-          "default": {
-            "type": "object"
-          },
+          "default": {},
           "name": {
             "type": "string"
           },
@@ -2378,8 +5423,23 @@
           }
         }
       },
+      "ConditionalWritesSetting": {
+        "type": "object",
+        "description": "Whether single-object writes over REST need `If-Match` or\n`If-None-Match: *`, per engine.",
+        "properties": {
+          "json": {
+            "type": "boolean",
+            "description": "PUT and DELETE on single documents; default false."
+          },
+          "kv": {
+            "type": "boolean",
+            "description": "PUT, DELETE and PATCH …/null on single keys; default false."
+          }
+        }
+      },
       "CountResponse": {
         "type": "object",
+        "description": "Generic `{\"count\": N}` response, shared by JSON's `count_documents`, KV's\n`count_keys`, and rel's `count_rows` — one schema\ninstead of three identical ones.",
         "required": [
           "count"
         ],
@@ -2391,6 +5451,22 @@
           }
         }
       },
+      "CreateBackupRequest": {
+        "type": "object",
+        "required": [
+          "scope"
+        ],
+        "properties": {
+          "include_auth": {
+            "type": "boolean",
+            "description": "Only effective for `all`/`kv` scopes (auth records live in the KV instance)."
+          },
+          "scope": {
+            "type": "string",
+            "description": "`all` | `kv` | `json` | `rel` | `kv:<domain>` | `json:<domain>` |\n`rel:<domain>` | `domain:<name>`. `all` covers every enabled engine;\n`domain:<name>` covers the domain of that name in each engine that has\nit. Relational domains go in with schema, rows and AUTOINCREMENT state."
+          }
+        }
+      },
       "CreateDomainRequest": {
         "type": "object",
         "required": [
@@ -2399,7 +5475,97 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "User-visible domain name (max 50 chars, [a-zA-Z0-9_-])."
+            "description": "Domain name: [a-zA-Z0-9_-], 1 to `domains.max_name_length` (default 50) characters."
+          },
+          "require_conditional_writes": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ConditionalWritesSetting",
+                "description": "Without a precondition, such writes answer 428. Fixed at creation;\nmissing fields are false."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "CreateFromFileColumn": {
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "primary_key"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "primary_key": {
+            "type": "boolean"
+          },
+          "source_header": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateFromFileErrorEntry": {
+        "type": "object",
+        "required": [
+          "row",
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "row": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "CreateFromFileResponse": {
+        "type": "object",
+        "required": [
+          "table",
+          "columns",
+          "imported",
+          "failed",
+          "errors"
+        ],
+        "properties": {
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateFromFileColumn"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateFromFileErrorEntry"
+            }
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "imported": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "table": {
+            "type": "string"
           }
         }
       },
@@ -2417,30 +5583,6 @@
           "type": {
             "type": "string",
             "description": "Value type: \"string\" | \"number\" | \"boolean\"."
-          }
-        }
-      },
-      "CreateJsonDomainRequest": {
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "User-visible domain name (max 50 chars, [a-zA-Z0-9_-])."
-          }
-        }
-      },
-      "CreateRelDomainRequest": {
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Domain name (max 50 chars, `[a-zA-Z0-9_-]`; `\"domains\"` is reserved)."
           }
         }
       },
@@ -2489,7 +5631,7 @@
           "documents": {
             "type": "array",
             "items": {
-              "type": "object"
+              "$ref": "#/components/schemas/DocumentResponse"
             },
             "description": "Loaded documents incl. `_key`/`_version` (empty when keys_only)."
           },
@@ -2517,11 +5659,36 @@
           }
         }
       },
+      "DocumentResponse": {
+        "type": "object",
+        "description": "A document as returned by the store: `_key`/`_version` metadata merged\ninto the user's fields.",
+        "required": [
+          "_key",
+          "_version"
+        ],
+        "properties": {
+          "_key": {
+            "type": "string",
+            "description": "Document key."
+          },
+          "_version": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Write counter: 1 on create, incremented on every write.",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": {
+          "description": "The document's own fields. A document whose content is not a JSON\nobject appears as a single `_content` field holding that value."
+        }
+      },
       "DomainResponse": {
         "type": "object",
         "required": [
           "name",
-          "created_at"
+          "created_at",
+          "state",
+          "require_conditional_writes"
         ],
         "properties": {
           "created_at": {
@@ -2531,8 +5698,82 @@
             "minimum": 0
           },
           "name": {
+            "type": "string"
+          },
+          "require_conditional_writes": {
+            "$ref": "#/components/schemas/ConditionalWritesSetting"
+          },
+          "state": {
             "type": "string",
-            "description": "User-visible domain name."
+            "description": "Lifecycle state: \"active\" or \"deleting\" (background purge running)."
+          }
+        }
+      },
+      "HeartbeatMetrics": {
+        "type": "object",
+        "required": [
+          "status",
+          "uptime_secs",
+          "version",
+          "domain_count",
+          "estimated_memtable_keys",
+          "vlog_size_bytes",
+          "l0_sstable_count",
+          "shards",
+          "resources"
+        ],
+        "properties": {
+          "domain_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "estimated_memtable_keys": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "io": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/IoState",
+                "description": "Only while writes of a data file fail: the most failures in a row."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "l0_sstable_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "resources": {
+            "$ref": "#/components/schemas/ResourceState",
+            "description": "Whether disk space and the server's own memory are short."
+          },
+          "shards": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShardHealth"
+            },
+            "description": "Every data shard, by id."
+          },
+          "status": {
+            "type": "string",
+            "description": "`ok`, or `degraded` while a data shard does not answer, disk space\nor memory runs short (`resources`) or writes of a data file fail\n(`io`)."
+          },
+          "uptime_secs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "version": {
+            "type": "string"
+          },
+          "vlog_size_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       },
@@ -2576,35 +5817,75 @@
           }
         }
       },
-      "JsonDomainResponse": {
+      "IoState": {
         "type": "object",
+        "description": "`io` of `GET /health`: the failed writes in a row, without the file.",
         "required": [
-          "name",
-          "created_at",
-          "state"
+          "failures"
         ],
         "properties": {
-          "created_at": {
+          "failures": {
             "type": "integer",
-            "format": "int64",
-            "description": "Creation timestamp (Unix seconds).",
+            "format": "int32",
+            "description": "Failed writes in a row of the data file with the most.",
             "minimum": 0
-          },
-          "document_count": {
+          }
+        }
+      },
+      "KeyMetaResponse": {
+        "type": "object",
+        "required": [
+          "last_modified_at"
+        ],
+        "properties": {
+          "expires_at": {
             "type": [
               "integer",
               "null"
             ],
             "format": "int64",
-            "description": "Number of documents — only set on the detail endpoint.",
+            "description": "Absolute Unix-seconds TTL expiry; `null` when the key has no TTL. Equal to the `X-Expires-At` header when present.",
             "minimum": 0
           },
-          "name": {
-            "type": "string"
+          "last_modified_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix-milliseconds write time of the newest visible version (PUT, or PATCH …/null) — not a creation timestamp; every overwrite advances it.",
+            "minimum": 0
+          }
+        }
+      },
+      "KeyScanResponse": {
+        "type": "object",
+        "required": [
+          "keys",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The page, in scan order (sorted)."
           },
-          "state": {
-            "type": "string",
-            "description": "Lifecycle state: \"active\" or \"deleting\" (background purge running)."
+          "limit": {
+            "type": "integer",
+            "description": "Effective limit applied (after capping to the maximum).",
+            "minimum": 0
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Effective offset applied.",
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Matches after `prefix`/`contains` filtering, before `offset`/`limit`.",
+            "minimum": 0
           }
         }
       },
@@ -2635,6 +5916,150 @@
           }
         }
       },
+      "LogFileInfo": {
+        "type": "object",
+        "required": [
+          "file",
+          "size",
+          "modified"
+        ],
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "modified": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "LogFilesResponse": {
+        "type": "object",
+        "required": [
+          "files"
+        ],
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LogFileInfo"
+            }
+          }
+        }
+      },
+      "LogQuery": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Name of a file listed by `GET /logs/files`. Defaults to the newest `luradb.log*` file."
+          },
+          "lines": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Tail line count from the file end (default 100, capped at 1000). `0` is rejected.",
+            "minimum": 0
+          },
+          "q": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Case-sensitive substring filter; only matching lines count toward `lines`."
+          }
+        }
+      },
+      "LogResponse": {
+        "type": "object",
+        "required": [
+          "file",
+          "format",
+          "lines",
+          "truncated"
+        ],
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Name of the file actually read, without a path."
+          },
+          "format": {
+            "type": "string",
+            "description": "Mirrors `log.format` (\"json\" | \"text\") — the client parses `lines` itself."
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Chronologically ascending (oldest first), like `tail`."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "`true` iff the scan budget was exhausted before `lines` matches and before file start."
+          }
+        }
+      },
+      "LsnCutResponse": {
+        "type": "object",
+        "description": "Per engine, a write-ahead-log position that every write in the archive is\nat or below; 0 for an engine outside the scope and for format version 1.\nPositions keep growing across restarts, so they compare across runs of\nthe server.",
+        "required": [
+          "kv",
+          "json",
+          "rel"
+        ],
+        "properties": {
+          "json": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "kv": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "rel": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "PermissionItem": {
+        "type": "object",
+        "description": "One entry of a user's domain permission matrix. `engine`/`access` are\nlowercase and match the write-endpoint vocabulary exactly — usable as-is\nin a follow-up request.",
+        "required": [
+          "domain",
+          "access"
+        ],
+        "properties": {
+          "access": {
+            "type": "string",
+            "description": "`\"read\"`, `\"write\"`, or `\"ddl\"`."
+          },
+          "domain": {
+            "type": "string"
+          },
+          "engine": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`\"kv\"`, `\"json\"` or `\"rel\"`; missing for a permission on the whole domain."
+          }
+        }
+      },
       "ReindexAcceptedResponse": {
         "type": "object",
         "required": [
@@ -2658,26 +6083,137 @@
           }
         }
       },
-      "RelDomainResponse": {
+      "ResourceState": {
         "type": "object",
+        "description": "`resources` of `GET /health`: the states of the report, without volumes,\npaths or numbers.",
         "required": [
-          "name",
-          "created_at",
-          "state"
+          "state",
+          "disk_state",
+          "memory_state"
         ],
         "properties": {
-          "created_at": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Creation timestamp (Unix seconds).",
-            "minimum": 0
+          "disk_state": {
+            "type": "string",
+            "description": "The worst state of the data volumes: `ok`, `warning` or `blocked`."
           },
-          "name": {
-            "type": "string"
+          "memory_state": {
+            "type": "string",
+            "description": "`ok`, `warning` or `blocked`."
           },
           "state": {
             "type": "string",
-            "description": "Lifecycle state: \"active\" or \"deleting\" (background purge running, rel/013).\nAlways present — so rel/013's later `list_domains` visibility change\n(surfacing `Deleting` domains too) needs no REST-contract change."
+            "description": "`ok`, `warning` (below a warn threshold) or `blocked` (writes refused)."
+          }
+        }
+      },
+      "RestoreAcceptedResponse": {
+        "type": "object",
+        "required": [
+          "restore_id",
+          "state"
+        ],
+        "properties": {
+          "restore_id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        }
+      },
+      "RestoreErrorEntry": {
+        "type": "object",
+        "required": [
+          "key",
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        }
+      },
+      "RestoreRequest": {
+        "type": "object",
+        "properties": {
+          "include_auth": {
+            "type": "boolean",
+            "description": "Apply auth-user/auth-perm lines from the archive (upsert). Default false."
+          },
+          "into_domain": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Only legal when the archive contains exactly one domain name\n(`kv:*`/`json:*`/`rel:*`/`domain:*` scopes). Links of relational\ntables (KVREF/JSONREF) then point to the KV and JSON domain of the new\nname."
+          },
+          "mode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`\"fail_if_exists\"` (default) or `\"replace\"`."
+          }
+        }
+      },
+      "RestoreStatusResponse": {
+        "type": "object",
+        "required": [
+          "restore_id",
+          "backup_id",
+          "state",
+          "imported",
+          "skipped",
+          "failed",
+          "errors",
+          "started_at"
+        ],
+        "properties": {
+          "backup_id": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RestoreErrorEntry"
+            }
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "finished_at": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "imported": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "restore_id": {
+            "type": "string"
+          },
+          "skipped": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "started_at": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "state": {
+            "type": "string"
           }
         }
       },
@@ -2729,7 +6265,28 @@
             "items": {
               "type": "object"
             },
-            "description": "One JSON object per row (catalog column order in principle; `serde_json`'s\ndefault map is unordered/alphabetical here, see rel_browse.rs module docs),\nwith an optional `_expanded` block (spec §6)."
+            "description": "One JSON object per row (catalog column order in principle; `serde_json`'s\ndefault map is unordered/alphabetical here, see rel_browse.rs module docs),\nwith an optional `_expanded` block."
+          }
+        }
+      },
+      "RunningBackupInfo": {
+        "type": "object",
+        "required": [
+          "id",
+          "scope",
+          "started_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       },
@@ -2770,7 +6327,7 @@
           "documents": {
             "type": "array",
             "items": {
-              "type": "object"
+              "$ref": "#/components/schemas/DocumentResponse"
             },
             "description": "Matching documents incl. `_key`/`_version` metadata."
           },
@@ -2800,18 +6357,37 @@
         "properties": {
           "access": {
             "type": "string",
-            "description": "Access level: `\"read\"`, `\"write\"` or `\"ddl\"` (spec rel/011)."
+            "description": "Access level: `\"read\"`, `\"write\"` or `\"ddl\"`; `\"ddl\"` acts as\n`\"write\"` on keys and documents."
           },
           "domain": {
             "type": "string",
             "description": "Domain name."
           },
-          "store_type": {
+          "engine": {
             "type": [
               "string",
               "null"
             ],
-            "description": "Store type of the domain: `\"kv\"` (default), `\"json\"` (spec json/012) or `\"rel\"` (spec rel/011)."
+            "description": "Limits the permission to one engine of the domain: `\"kv\"`, `\"json\"`\nor `\"rel\"`. Without it, the permission covers the whole domain."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ShardHealth": {
+        "type": "object",
+        "description": "A data shard as `GET /health` reports it: `ok` once it answered its\nping, `timeout` otherwise.",
+        "required": [
+          "id",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string"
           }
         }
       },
@@ -2826,18 +6402,18 @@
             "items": {
               "type": "string"
             },
-            "description": "REFERENCES columns to resolve into embedded objects, or `[\"*\"]` for\nall of them (§5). Only valid for SELECT; non-empty on DML/DDL → 400."
+            "description": "REFERENCES columns to resolve into embedded objects, or `[\"*\"]` for\nall of them. Only valid for SELECT; non-empty on DML/DDL → 400."
           },
           "params": {
             "type": "array",
             "items": {
               "type": "object"
             },
-            "description": "Positional parameters (JSON array), bound to the `?` placeholders\n(rel/004/005). Omitted ⇒ empty array."
+            "description": "Positional parameters (JSON array), bound to the `?` placeholders.\nOmitted ⇒ empty array."
           },
           "sql": {
             "type": "string",
-            "description": "Exactly one LuraSQL statement (more → 400 `MultipleStatements`, rel/004)."
+            "description": "Exactly one LuraSQL statement (more → 400 `MultipleStatements`)."
           }
         }
       },
@@ -2911,7 +6487,8 @@
         "required": [
           "name",
           "role",
-          "created_at"
+          "created_at",
+          "permissions"
         ],
         "properties": {
           "created_at": {
@@ -2921,6 +6498,13 @@
           },
           "name": {
             "type": "string"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PermissionItem"
+            },
+            "description": "Domain permission matrix — see `list_users` doc for `role == \"Admin\"` semantics."
           },
           "role": {
             "type": "string"
@@ -2964,6 +6548,25 @@
             "type": "string"
           }
         }
+      },
+      "WhoamiResponse": {
+        "type": "object",
+        "description": "Caller identity. `role` is the only discriminator between the four cases —\nsee `whoami` for the full mapping; `name` is `null` whenever no\n`UserRecord` backs the caller (`TrustedPeer`, `Disabled`).",
+        "required": [
+          "role"
+        ],
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "description": "`\"Admin\"`, `\"User\"`, or a pseudo-role: `\"TrustedPeer\"` (UDS peer\nauthenticated by the kernel) or `\"Disabled\"`\n(`auth.enabled = false`)."
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2986,7 +6589,7 @@
     },
     {
       "name": "Domains",
-      "description": "Domain lifecycle — create, list, get, delete"
+      "description": "Domain lifecycle — create, list, get, delete; a domain holds data in all three engines"
     },
     {
       "name": "Key-Value Store",
@@ -3001,12 +6604,12 @@
       "description": "Index management for JSON domains"
     },
     {
-      "name": "Relational Domains",
-      "description": "Relational domain lifecycle"
-    },
-    {
       "name": "Relational Store",
       "description": "Domain-scoped LuraSQL execution"
+    },
+    {
+      "name": "Relational Import",
+      "description": "CSV/TSV file upload -> new relational table with inferred schema"
     },
     {
       "name": "Relational Browse",
@@ -3018,7 +6621,19 @@
     },
     {
       "name": "Auth",
-      "description": "User management and domain permissions — admins only"
+      "description": "User management and domain permissions — admins only, except GET /auth/whoami (any authenticated caller)"
+    },
+    {
+      "name": "Backup",
+      "description": "Logical backup & restore — admins only"
+    },
+    {
+      "name": "Logs",
+      "description": "Read-only log tail and file listing — admins only, opt-in via log.http_access"
+    },
+    {
+      "name": "Events",
+      "description": "Global lifecycle/DDL event stream (SSE) across the KV, JSON and relational engines — admins only"
     }
   ]
 }

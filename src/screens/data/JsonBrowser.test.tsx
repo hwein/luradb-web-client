@@ -2,13 +2,13 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect } from '../../app/session'
 import { resetReindexTasks } from '../../lib'
 import { SelectedDomainProvider } from '../../shell/SelectedDomainContext'
-import { server } from '../../test/msw'
+import { domainResponse, server } from '../../test/msw'
 import { resetDocsState, useDocsState } from '../docs/docsStore'
 import { DataScreen } from './DataScreen'
 
@@ -22,19 +22,15 @@ function makeConnection(): Connection {
   return {
     id: 'conn-1',
     name: 'local',
-    type: { kind: 'rest', url: 'http://127.0.0.1:3000' },
+    type: { kind: 'rest', url: '' },
     auth: { kind: 'api-key', key: 'lura_secret' },
   }
 }
 
-function baseHandlers(relDomain: boolean) {
+function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
-    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([{ name: DOMAIN, created_at: 1, state: 'active' }])),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () =>
-      HttpResponse.json(relDomain ? [{ name: DOMAIN, created_at: 1, state: 'active' }] : []),
-    ),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
+    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([domainResponse(DOMAIN)])),
     http.get(`${ORIGIN}/store-api/json/${DOMAIN}/indexes`, () => HttpResponse.json([])),
   ]
 }
@@ -52,8 +48,8 @@ function DocsRouteProbe() {
 
 // `extraHandlers` kommen vor den Basis-Handlern in denselben `server.use()`-Aufruf (MSW: pro Aufruf gewinnt die
 // zuerst gelistete Route) — sonst würde `baseHandlers`' fixe `GET …/indexes → []` jeden Test-Override verdecken.
-async function connectAndRender(relDomain = false, extraHandlers: Parameters<typeof server.use> = [], initialPath = '/data') {
-  server.use(...extraHandlers, ...baseHandlers(relDomain))
+async function connectAndRender(extraHandlers: Parameters<typeof server.use> = [], initialPath = '/data') {
+  server.use(...extraHandlers, ...baseHandlers())
   await act(() => connect(makeConnection()))
   const queryClient = createAppQueryClient()
   const view = render(
@@ -75,6 +71,11 @@ function footerText(): string {
   return document.querySelector('.data__footer')?.textContent ?? ''
 }
 
+// Referenced-by probes the rel tables of every domain; a test's own handler is registered later and wins.
+beforeEach(() => {
+  server.use(http.get(`${ORIGIN}/store-api/rel/${DOMAIN}/tables`, () => HttpResponse.json([])))
+})
+
 afterEach(() => {
   act(() => disconnect())
   resetDocsState()
@@ -90,7 +91,6 @@ async function openIndexPanel(): Promise<void> {
 describe('JsonBrowser', () => {
   it('arrives with ?key= (cross-engine jump from the rel row detail): selects that document initially, loaded independently of the listed page (spec data/009 §5)', async () => {
     await connectAndRender(
-      false,
       [
         http.get(DOCS_URL, () =>
           HttpResponse.json({
@@ -112,7 +112,7 @@ describe('JsonBrowser', () => {
 
   it('keeps the ?key= arrival selection when the document list is already in the query cache (nachtrag data/009: auto-select overwrote it)', async () => {
     // Erster Besuch ohne ?key= füllt den Query-Cache (Auto-Select auf das erste Dokument), dann Ankunft per Jump.
-    const { queryClient, unmount } = await connectAndRender(false, [
+    const { queryClient, unmount } = await connectAndRender([
       http.get(DOCS_URL, () =>
         HttpResponse.json({
           documents: [{ _key: 'cus_1', _version: 1, name: 'first' }],
@@ -237,7 +237,7 @@ describe('JsonBrowser', () => {
     expect(await screen.findByText('filter must be a JSON object')).toBeInTheDocument()
   })
 
-  it('shows a red conflict line with a docs link on a 409 version conflict, without silently overwriting', async () => {
+  it('shows a red conflict line with a docs link on a 412 version conflict, without silently overwriting', async () => {
     server.use(
       http.get(DOCS_URL, () =>
         HttpResponse.json({
@@ -251,7 +251,7 @@ describe('JsonBrowser', () => {
       documentHandler('cus_1', 3, { name: 'old' }, '"etag-1"'),
       http.put(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_1`, ({ request }) => {
         expect(request.headers.get('if-match')).toBe('"etag-1"')
-        return new HttpResponse(null, { status: 409 })
+        return new HttpResponse(null, { status: 412 })
       }),
     )
     await connectAndRender()
@@ -260,12 +260,149 @@ describe('JsonBrowser', () => {
     expect(await screen.findByLabelText('document editor')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'save' }))
 
-    expect(await screen.findByText(/version conflict — reload document/)).toBeInTheDocument()
+    expect(await screen.findByText(/version conflict — the document changed on the server/)).toBeInTheDocument()
     // Der Editor bleibt offen (kein stilles Überschreiben) statt zur Pretty-Ansicht zurückzuspringen.
     expect(screen.getByLabelText('document editor')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'docs' }))
     expect(await screen.findByTestId('docs-screen')).toHaveTextContent('docs: errors-status-codes')
+  })
+
+  it('keeps the edited text after reload and sends the new ETag', async () => {
+    let version = 2
+    const ifMatches: Array<string | null> = []
+    server.use(
+      http.get(DOCS_URL, () =>
+        HttpResponse.json({ documents: [{ _key: 'cus_1', _version: 2, name: 'old' }], keys: ['cus_1'], total: 1, offset: 0, limit: 50 }),
+      ),
+      http.get(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_1`, () =>
+        HttpResponse.json({ _key: 'cus_1', _version: version, name: 'old' }, { headers: { ETag: `"etag-${version}"` } }),
+      ),
+      http.put(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_1`, ({ request }) => {
+        ifMatches.push(request.headers.get('if-match'))
+        if (ifMatches.length === 1) {
+          version = 3
+          return HttpResponse.json({ error: 'server detail text' }, { status: 412 })
+        }
+        return HttpResponse.json({ _key: 'cus_1', _version: 4, name: 'mine' })
+      }),
+    )
+    await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    expect(await screen.findByLabelText('document editor')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+    expect(await screen.findByText(/version conflict — the document changed on the server/)).toBeInTheDocument()
+    expect(screen.queryByText(/server detail text/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'reload' }))
+    expect(await screen.findByText('reloaded — saving now overwrites version 3')).toBeInTheDocument()
+    expect(screen.queryByText(/version conflict/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('document editor')).toHaveTextContent('"name": "old"')
+
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+    await waitFor(() => expect(ifMatches).toEqual(['"etag-2"', '"etag-3"']))
+    await waitFor(() => expect(screen.queryByText(/reloaded —/)).not.toBeInTheDocument())
+  })
+
+  it('keeps the conflict line when the reload fails', async () => {
+    let readFails = false
+    server.use(
+      http.get(DOCS_URL, () =>
+        HttpResponse.json({ documents: [{ _key: 'cus_1', _version: 2, name: 'old' }], keys: ['cus_1'], total: 1, offset: 0, limit: 50 }),
+      ),
+      http.get(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_1`, () =>
+        readFails
+          ? HttpResponse.text('500 Internal Server Error', { status: 500 })
+          : HttpResponse.json({ _key: 'cus_1', _version: 2, name: 'old' }, { headers: { ETag: '"etag-2"' } }),
+      ),
+      http.put(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_1`, () => new HttpResponse(null, { status: 412 })),
+    )
+    const { queryClient } = await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    expect(await screen.findByLabelText('document editor')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+    expect(await screen.findByText(/version conflict — the document changed on the server/)).toBeInTheDocument()
+
+    readFails = true
+    fireEvent.click(screen.getByRole('button', { name: 'reload' }))
+    expect(await screen.findByText('failed to load document')).toBeInTheDocument()
+
+    readFails = false
+    await act(() => queryClient.invalidateQueries({ queryKey: ['json-document', DOMAIN, 'cus_1'] }))
+    expect(await screen.findByLabelText('document editor')).toBeInTheDocument()
+    expect(screen.getByText(/version conflict — the document changed on the server/)).toBeInTheDocument()
+    expect(screen.queryByText(/^reloaded —/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the ETag of the edit start when the document refetches meanwhile', async () => {
+    let etag = '"etag-1"'
+    let ifMatch: string | null = null
+    server.use(
+      http.get(DOCS_URL, () =>
+        HttpResponse.json({ documents: [{ _key: 'cus_1', _version: 1, name: 'old' }], keys: ['cus_1'], total: 1, offset: 0, limit: 50 }),
+      ),
+      http.get(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_1`, () =>
+        HttpResponse.json({ _key: 'cus_1', _version: 1, name: 'old' }, { headers: { ETag: etag } }),
+      ),
+      http.put(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_1`, ({ request }) => {
+        ifMatch = request.headers.get('if-match')
+        return HttpResponse.json({ _key: 'cus_1', _version: 2, name: 'old' })
+      }),
+    )
+    const { queryClient } = await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    expect(await screen.findByLabelText('document editor')).toBeInTheDocument()
+    etag = '"etag-foreign"'
+    await act(() => queryClient.invalidateQueries({ queryKey: ['json-document', DOMAIN, 'cus_1'] }))
+    expect(queryClient.getQueryData<{ etag: string }>(['json-document', DOMAIN, 'cus_1'])?.etag).toBe('"etag-foreign"')
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+
+    await waitFor(() => expect(ifMatch).toBe('"etag-1"'))
+  })
+
+  it('reloads after a delete conflict and sends the new ETag on the second delete', async () => {
+    let version = 1
+    let deleted = false
+    const ifMatches: Array<string | null> = []
+    server.use(
+      http.get(DOCS_URL, () =>
+        HttpResponse.json({
+          documents: deleted ? [] : [{ _key: 'cus_1', _version: 1, name: 'x' }],
+          keys: deleted ? [] : ['cus_1'],
+          total: deleted ? 0 : 1,
+          offset: 0,
+          limit: 50,
+        }),
+      ),
+      http.get(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_1`, () =>
+        HttpResponse.json({ _key: 'cus_1', _version: version, name: 'x' }, { headers: { ETag: `"etag-${version}"` } }),
+      ),
+      http.delete(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_1`, ({ request }) => {
+        ifMatches.push(request.headers.get('if-match'))
+        if (ifMatches.length === 1) {
+          version = 2
+          return new HttpResponse(null, { status: 412 })
+        }
+        deleted = true
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'delete' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'delete — sure?' }))
+    expect(await screen.findByText(/version conflict — the document changed on the server/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'reload' }))
+    expect(await screen.findByText('reloaded — deleting now removes version 2')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'delete — sure?' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'delete — sure?' }))
+    await waitFor(() => expect(ifMatches).toEqual(['"etag-1"', '"etag-2"']))
+    expect(await screen.findByText('select a document')).toBeInTheDocument()
   })
 
   it('saves an edit successfully and invalidates the list (updated version shows up)', async () => {
@@ -297,6 +434,41 @@ describe('JsonBrowser', () => {
     expect(await screen.findByText('v2')).toBeInTheDocument()
   })
 
+  it('unwraps a scalar _content document and writes the bare scalar back (general/013 §6)', async () => {
+    let sentBody: string | undefined
+    server.use(
+      http.get(DOCS_URL, () =>
+        HttpResponse.json({
+          documents: [{ _key: 'scalar', _version: 1, _content: 42 }],
+          keys: ['scalar'],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        }),
+      ),
+      http.get(`${ORIGIN}/store-api/json/${DOMAIN}/documents/scalar`, () =>
+        HttpResponse.json({ _key: 'scalar', _version: 1, _content: 42 }, { headers: { ETag: '"etag-s"' } }),
+      ),
+      http.put(`${ORIGIN}/store-api/json/${DOMAIN}/documents/scalar`, async ({ request }) => {
+        sentBody = await request.text()
+        return HttpResponse.json({ _key: 'scalar', _version: 2, _content: 42 })
+      }),
+    )
+    await connectAndRender()
+
+    expect(await screen.findByText('DOCUMENT scalar')).toBeInTheDocument()
+    // Listen-Preview und Detail zeigen beide den Skalar, nicht den `_content`-Wrapper.
+    expect(screen.getAllByText('42')).toHaveLength(2)
+    expect(screen.queryByText(/_content/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'edit' }))
+    expect(await screen.findByLabelText('document editor')).toHaveTextContent('42')
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+
+    // Der Editor war mit dem Skalar vorbelegt — gespeichert wird er ohne `_content`-Wrapper (sonst 400).
+    await waitFor(() => expect(sentBody).toBe('42'))
+  })
+
   it('arms and confirms delete, then removes the document from the invalidated list', async () => {
     let deleted = false
     server.use(
@@ -324,6 +496,53 @@ describe('JsonBrowser', () => {
     expect(await screen.findByText('select a document')).toBeInTheDocument()
   })
 
+  it('sends If-Match on delete and keeps the armed state on 412', async () => {
+    let ifMatch: string | null = null
+    server.use(
+      http.get(DOCS_URL, () =>
+        HttpResponse.json({
+          documents: [{ _key: 'cus_1', _version: 1, name: 'used' }],
+          keys: ['cus_1'],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        }),
+      ),
+      documentHandler('cus_1', 1, { name: 'used' }, '"etag-1"'),
+      http.delete(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_1`, ({ request }) => {
+        ifMatch = request.headers.get('if-match')
+        return new HttpResponse(null, { status: 412 })
+      }),
+      http.get(`${ORIGIN}/store-api/rel/${DOMAIN}/tables`, () => HttpResponse.json([{ name: 'entrances', _links: { self: '', rows: '' } }])),
+      http.get(`${ORIGIN}/store-api/rel/${DOMAIN}/tables/entrances`, () =>
+        HttpResponse.json({
+          name: 'entrances',
+          created_at: 1,
+          indexes: [],
+          _links: { self: '', rows: '' },
+          columns: [
+            { name: 'id', type: 'INTEGER', nullable: false, primary_key: true, unique: false, autoincrement: true },
+            { name: 'door_id', type: 'JSONREF', nullable: true, primary_key: false, unique: false, autoincrement: false },
+          ],
+        }),
+      ),
+      http.post(`${ORIGIN}/store-api/rel/${DOMAIN}/sql`, () =>
+        HttpResponse.json({ columns: [{ name: 'COUNT(*)', type: 'INTEGER' }], rows: [[3]], row_count: 1, limit_applied: false }),
+      ),
+    )
+    await connectAndRender()
+
+    expect(await screen.findByText('entrances.door_id · 3 rows')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'delete' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'delete — sure?' }))
+
+    expect(await screen.findByText(/version conflict/)).toBeInTheDocument()
+    expect(ifMatch).toBe('"etag-1"')
+    expect(screen.getByRole('button', { name: 'delete — sure?' })).toBeInTheDocument()
+    expect(screen.getByText('referenced by 3 rows in entrances.door_id')).toBeInTheDocument()
+    expect(screen.queryByText(/delete failed/)).not.toBeInTheDocument()
+  })
+
   it('creates a new document via POST when no key is given, then selects it', async () => {
     server.use(
       http.get(DOCS_URL, () => HttpResponse.json({ documents: [], keys: [], total: 0, offset: 0, limit: 50 })),
@@ -342,18 +561,21 @@ describe('JsonBrowser', () => {
     expect(await screen.findByText('DOCUMENT generated-1')).toBeInTheDocument()
   })
 
-  it('creates a new document via PUT under a chosen key, after a 404 precheck confirms it is free', async () => {
+  it('creates a document under a chosen key with If-None-Match and no prior GET', async () => {
     let putCalled = false
+    let getBeforePut = false
+    let ifNoneMatch: string | null = null
+    let contentType: string | null = null
     server.use(
       http.get(DOCS_URL, () => HttpResponse.json({ documents: [], keys: [], total: 0, offset: 0, limit: 50 })),
-      // Vor dem PUT liefert der Precheck 404 (Key frei); danach steht das angelegte Dokument (Detail-Reload nach onSelectKey).
-      http.get(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_own`, () =>
-        putCalled
-          ? HttpResponse.json({ _key: 'cus_own', _version: 1 }, { headers: { ETag: '"etag-1"' } })
-          : new HttpResponse(null, { status: 404 }),
-      ),
+      http.get(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_own`, () => {
+        if (!putCalled) getBeforePut = true
+        return HttpResponse.json({ _key: 'cus_own', _version: 1 }, { headers: { ETag: '"etag-1"' } })
+      }),
       http.put(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_own`, async ({ request }) => {
         expect(await request.json()).toEqual({})
+        ifNoneMatch = request.headers.get('If-None-Match')
+        contentType = request.headers.get('Content-Type')
         putCalled = true
         return HttpResponse.json({ _key: 'cus_own', _version: 1 }, { status: 201 })
       }),
@@ -367,10 +589,13 @@ describe('JsonBrowser', () => {
 
     expect(await screen.findByText('DOCUMENT cus_own')).toBeInTheDocument()
     expect(putCalled).toBe(true)
+    expect(getBeforePut).toBe(false)
+    expect(ifNoneMatch).toBe('*')
+    expect(contentType).toBe('application/json')
   })
 
-  it('shows "key already exists" and skips the PUT when the collision precheck GET succeeds', async () => {
-    let putCalled = false
+  it('shows key already exists on 412 when creating', async () => {
+    let putCount = 0
     server.use(
       http.get(DOCS_URL, () =>
         HttpResponse.json({
@@ -381,10 +606,10 @@ describe('JsonBrowser', () => {
           limit: 50,
         }),
       ),
-      documentHandler('cus_taken', 1, { name: 'existing' }, '"etag-1"'),
-      http.put(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_taken`, () => {
-        putCalled = true
-        return HttpResponse.json({ _key: 'cus_taken', _version: 2 })
+      http.put(`${ORIGIN}/store-api/json/${DOMAIN}/documents/cus_taken`, ({ request }) => {
+        expect(request.headers.get('If-None-Match')).toBe('*')
+        putCount += 1
+        return HttpResponse.json({ error: 'precondition failed' }, { status: 412 })
       }),
     )
     await connectAndRender()
@@ -395,7 +620,7 @@ describe('JsonBrowser', () => {
     fireEvent.click(screen.getByRole('button', { name: 'create' }))
 
     expect(await screen.findByText('key already exists')).toBeInTheDocument()
-    expect(putCalled).toBe(false)
+    expect(putCount).toBe(1)
   })
 
   it('builds the referenced-by COUNT(*) probe and navigates the rel browser, filtered, on click', async () => {
@@ -450,7 +675,7 @@ describe('JsonBrowser', () => {
         })
       }),
     )
-    await connectAndRender(true)
+    await connectAndRender()
 
     expect(await screen.findByText('orders.customer_ref · 6 rows')).toBeInTheDocument()
 
@@ -491,7 +716,7 @@ describe('JsonBrowser', () => {
         HttpResponse.json({ columns: [{ name: 'COUNT(*)', type: 'INTEGER' }], rows: [[0]], row_count: 1, limit_applied: false }),
       ),
     )
-    await connectAndRender(true)
+    await connectAndRender()
 
     expect(await screen.findByText('orders.customer_ref · 0 rows')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /orders\.customer_ref/ })).toBeDisabled()
@@ -530,7 +755,7 @@ describe('JsonBrowser', () => {
         HttpResponse.json({ columns: [{ name: 'COUNT(*)', type: 'INTEGER' }], rows: [[3]], row_count: 1, limit_applied: false }),
       ),
     )
-    await connectAndRender(true)
+    await connectAndRender()
 
     expect(await screen.findByText('entrances.door_id · 3 rows')).toBeInTheDocument()
 
@@ -612,7 +837,7 @@ describe('JsonBrowser', () => {
     const emptyDocs = http.get(DOCS_URL, () => HttpResponse.json({ documents: [], keys: [], total: 0, offset: 0, limit: 50 }))
 
     it('toggles the idx pill open and renders the index list in contract form (field · type · created)', async () => {
-      await connectAndRender(false, [emptyDocs, http.get(INDEXES_URL, () => HttpResponse.json([{ field: 'city', type: 'string', created_at: 1 }]))])
+      await connectAndRender([emptyDocs, http.get(INDEXES_URL, () => HttpResponse.json([{ field: 'city', type: 'string', created_at: 1 }]))])
 
       await openIndexPanel()
 
@@ -623,7 +848,7 @@ describe('JsonBrowser', () => {
     it('create success invalidates the shared cache (pill text updates) and shows the reindex hint', async () => {
       let created = false
       let requestBody: unknown
-      await connectAndRender(false, [
+      await connectAndRender([
         emptyDocs,
         http.get(INDEXES_URL, () => HttpResponse.json(created ? [{ field: 'city', type: 'string', created_at: 1 }] : [])),
         http.post(INDEXES_URL, async ({ request }) => {
@@ -645,7 +870,7 @@ describe('JsonBrowser', () => {
     })
 
     it('create 409 shows the original server error text inline', async () => {
-      await connectAndRender(false, [
+      await connectAndRender([
         emptyDocs,
         http.get(INDEXES_URL, () => HttpResponse.json([])),
         http.post(INDEXES_URL, () => HttpResponse.text("index on field 'city' already exists in domain 'shop'", { status: 409 })),
@@ -660,7 +885,7 @@ describe('JsonBrowser', () => {
 
     it('delete removes the row from the (invalidated) list', async () => {
       let deleted = false
-      await connectAndRender(false, [
+      await connectAndRender([
         emptyDocs,
         http.get(INDEXES_URL, () => HttpResponse.json(deleted ? [] : [{ field: 'city', type: 'string', created_at: 1 }])),
         http.delete(`${INDEXES_URL}/city`, () => {
@@ -679,7 +904,7 @@ describe('JsonBrowser', () => {
 
     it('"reindex now" calls startReindex with domain + the newly created field', async () => {
       let reindexBody: unknown
-      await connectAndRender(false, [
+      await connectAndRender([
         emptyDocs,
         http.get(INDEXES_URL, () => HttpResponse.json([])),
         http.post(INDEXES_URL, () => HttpResponse.json({ field: 'city', type: 'string', created_at: 1 }, { status: 201 })),

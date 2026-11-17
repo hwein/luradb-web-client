@@ -4,9 +4,14 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../test/msw'
 import type { Connection } from './connections'
-import { connect, disconnect, useSession } from './session'
+import { isMixedContentBlocked } from './crossOrigin'
+import { connect, disconnect, useConnectedSession, useSession } from './session'
 
 vi.mock('@tauri-apps/plugin-http', () => ({ fetch: vi.fn() }))
+vi.mock('./crossOrigin', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./crossOrigin')>()),
+  isMixedContentBlocked: vi.fn(() => false),
+}))
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -19,7 +24,7 @@ function makeConnection(overrides: Partial<Connection> = {}): Connection {
   return {
     id: 'conn-1',
     name: 'local',
-    type: { kind: 'rest', url: 'http://127.0.0.1:3000' },
+    type: { kind: 'rest', url: '' },
     auth: { kind: 'api-key', key: 'lura_secret' },
     ...overrides,
   }
@@ -67,7 +72,7 @@ describe('connect', () => {
   })
 
   it('rejects a server below the minimum supported version', async () => {
-    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.1.0', server_version: '0.0.9' })))
+    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.0' })))
     render(<SessionProbe />)
 
     await act(() => connect(makeConnection()))
@@ -76,21 +81,21 @@ describe('connect', () => {
   })
 
   it('connects to any server at or above the minimum', async () => {
-    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.1' })))
+    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.2' })))
     render(<SessionProbe />)
 
     await act(() => connect(makeConnection()))
 
-    expect(screen.getByTestId('session')).toHaveTextContent(/connected 0\.2\.1/)
+    expect(screen.getByTestId('session')).toHaveTextContent(/connected 0\.7\.2/)
   })
 
   it('connects cleanly on a matching version', async () => {
-    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
+    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })))
     render(<SessionProbe />)
 
     await act(() => connect(makeConnection()))
 
-    expect(screen.getByTestId('session')).toHaveTextContent('connected 0.2.0')
+    expect(screen.getByTestId('session')).toHaveTextContent('connected 0.7.1')
   })
 })
 
@@ -147,20 +152,82 @@ describe('self-signed certificate hint (desktop, unreachable https://)', () => {
     expect(screen.getByTestId('session')).not.toHaveTextContent(/self-signed certificate/)
   })
 
-  it('is omitted in the browser, even when the stored url looks like https://', async () => {
+})
+
+describe('browser connect errors (proxy path and direct url)', () => {
+  it('reports unreachable without a certificate or cors hint on the proxy path (empty url)', async () => {
     server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.error()))
     render(<SessionProbe />)
 
-    await act(() => connect(makeConnection({ type: { kind: 'rest', url: 'https://127.0.0.1:3443' } })))
+    await act(() => connect(makeConnection({ type: { kind: 'rest', url: '' } })))
 
     expect(screen.getByTestId('session')).toHaveTextContent(`server unreachable at ${ORIGIN}`)
     expect(screen.getByTestId('session')).not.toHaveTextContent(/self-signed certificate/)
+    expect(screen.getByTestId('session')).not.toHaveTextContent(/cross-origin request/)
+  })
+
+  it('appends the cors hint, not the certificate hint, when a direct url is unreachable', async () => {
+    server.use(http.get('http://luradb.test:3000/version', () => HttpResponse.error()))
+    render(<SessionProbe />)
+
+    await act(() => connect(makeConnection({ type: { kind: 'rest', url: 'http://luradb.test:3000' } })))
+
+    expect(screen.getByTestId('session')).toHaveTextContent('server unreachable at http://luradb.test:3000')
+    expect(screen.getByTestId('session')).toHaveTextContent(/cross-origin request/)
+    expect(screen.getByTestId('session')).not.toHaveTextContent(/self-signed certificate/)
+  })
+
+  it('reports mixed content without sending a request', async () => {
+    let versionCalls = 0
+    server.use(
+      http.get('http://luradb.test:3000/version', () => {
+        versionCalls += 1
+        return HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })
+      }),
+    )
+    vi.mocked(isMixedContentBlocked).mockReturnValueOnce(true)
+    render(<SessionProbe />)
+
+    await act(() => connect(makeConnection({ type: { kind: 'rest', url: 'http://luradb.test:3000' } })))
+
+    expect(screen.getByTestId('session')).toHaveTextContent('(mixed content)')
+    expect(screen.getByTestId('session')).toHaveTextContent('luradb.test:3000')
+    expect(versionCalls).toBe(0)
+  })
+})
+
+function ConnectedSessionProbe() {
+  const connected = useConnectedSession()
+  if (connected === undefined) return <p data-testid="connected-session">undefined</p>
+  return (
+    <p data-testid="connected-session">
+      {connected.serverVersion} {connected.connectionId}
+    </p>
+  )
+}
+
+describe('useConnectedSession', () => {
+  it('is undefined while not connected', () => {
+    disconnect()
+    render(<ConnectedSessionProbe />)
+
+    expect(screen.getByTestId('connected-session')).toHaveTextContent('undefined')
+  })
+
+  it('exposes apiClient, serverVersion and connectionId once connected', async () => {
+    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.3' })))
+    render(<ConnectedSessionProbe />)
+
+    await act(() => connect(makeConnection()))
+
+    expect(screen.getByTestId('connected-session')).toHaveTextContent('0.7.3 conn-1')
+    act(() => disconnect())
   })
 })
 
 describe('disconnect', () => {
   it('returns to the unauthenticated gate', async () => {
-    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
+    server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })))
     render(<SessionProbe />)
     await act(() => connect(makeConnection()))
     expect(screen.getByTestId('session')).toHaveTextContent('connected')

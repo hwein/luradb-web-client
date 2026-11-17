@@ -1,7 +1,7 @@
 .explorer__label {
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 10px;
+  font-size: var(--fs-label);
   letter-spacing: 0.12em;
   color: var(--mut);
   padding: 0 6px 6px;
@@ -22,11 +22,19 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 6px;
+  min-height: var(--row-h);
+  padding: 0 6px;
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--fs-data);
   color: var(--tx);
+}
+
+.explorer__domain-tag {
+  margin-left: auto;
+  font-weight: 400;
+  font-size: var(--fs-meta);
+  color: var(--mut);
 }
 
 .explorer__domain-chevron {
@@ -68,8 +76,8 @@
 .explorer__section-label {
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 9.5px;
-  letter-spacing: 0.1em;
+  font-size: var(--fs-label);
+  letter-spacing: 0.12em;
   color: var(--mut);
 }
 
@@ -78,14 +86,16 @@
   padding: 1px 4px;
   background: transparent;
   border: none;
+  border-radius: var(--rad);
   color: var(--mut);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-data);
   line-height: 1;
   cursor: pointer;
 }
 
 .explorer__section-add:hover {
+  background: var(--panel2);
   color: var(--acc);
 }
 
@@ -93,10 +103,12 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 4px 6px;
-  border-radius: 6px;
+  min-height: var(--row-h);
+  padding: 0 6px;
+  border-radius: var(--rad);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-data);
+  font-weight: 500;
   color: var(--tx);
   background: transparent;
   border: none;
@@ -109,13 +121,18 @@
   background: var(--panel2);
 }
 
+.explorer__object-row--selected {
+  background: var(--panel2);
+}
+
 .explorer__object-row--muted {
   color: var(--mut);
 }
 
 .explorer__object-count {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--fs-meta);
+  font-weight: 400;
   color: var(--mut);
 }
 
@@ -125,7 +142,7 @@
   border-radius: var(--rad-chip);
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 9px;
+  font-size: var(--fs-label);
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -154,11 +171,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 6px;
-  border-radius: 6px;
+  min-height: var(--row-h);
+  padding: 0 6px;
+  border-radius: var(--rad);
   color: var(--mut);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-data);
   background: transparent;
   border: none;
   width: 100%;
@@ -172,19 +190,24 @@
 
 .explorer__engine-tags {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--fs-meta);
 }
 
 .explorer__create-link {
   align-self: flex-start;
   padding: 8px 6px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   color: var(--acc);
   background: transparent;
   border: none;
+  border-radius: var(--rad);
   cursor: pointer;
   text-align: left;
+}
+
+.explorer__create-link:hover {
+  background: var(--panel);
 }
 
 .explorer__empty-hint {
@@ -199,7 +222,7 @@
   border-radius: 6px;
   border: 1px solid var(--bord);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-label);
   line-height: 1.7;
   color: var(--mut);
 }
@@ -234,7 +257,7 @@
   cursor: pointer;
   border-radius: 7px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   padding: 7px 10px;
   margin-top: 12px;
   text-align: left;
@@ -245,7 +268,7 @@
   border: 1px solid var(--bord);
   border-radius: 4px;
   padding: 1px 5px;
-  font-size: 10px;
+  font-size: var(--fs-label);
 }
 
 .explorer__create-form {
@@ -263,17 +286,29 @@
   border-radius: var(--rad-input);
   color: var(--tx);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--fs-meta);
   padding: 6px 8px;
 }
 
 .explorer__create-hint {
-  font-size: 10px;
+  font-size: var(--fs-label);
+}
+
+.explorer__create-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--tx);
+  font-size: var(--fs-meta);
+}
+
+.explorer__create-check input {
+  accent-color: var(--acc);
 }
 
 .explorer__create-error {
   color: var(--err);
-  font-size: 10.5px;
+  font-size: var(--fs-label);
 }
 
 .explorer__create-actions {
@@ -285,7 +320,7 @@
   border-radius: var(--rad-input);
   padding: 6px 10px;
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   cursor: pointer;
 }
 

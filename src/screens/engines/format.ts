@@ -1,17 +1,15 @@
-export function formatNumber(value: number): string {
-  return Math.round(value).toLocaleString('en-US')
+import { formatNumber } from '../../lib'
+
+export const NUMBER_PLACEHOLDER = '…'
+export const NOT_AVAILABLE = '—'
+
+export function formatRate(perSec: number): string {
+  if (perSec === 0) return '0'
+  if (perSec < 0.05) return '<0.1'
+  return perSec < 10 ? perSec.toFixed(1) : formatNumber(perSec)
 }
 
-const BYTE_UNITS = ['KB', 'MB', 'GB', 'TB']
-
-/** Menschenlesbare Byte-Größe (1024er-Schritte), z. B. "1.9 GB" wie im Prototyp (BACKUPS-Karte). */
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} ${bytes === 1 ? 'byte' : 'bytes'}`
-  let value = bytes / 1024
-  let unitIndex = 0
-  while (value >= 1024 && unitIndex < BYTE_UNITS.length - 1) {
-    value /= 1024
-    unitIndex += 1
-  }
-  return `${value.toFixed(1)} ${BYTE_UNITS[unitIndex]}`
+/** `us` is in µs, as the server reports it. */
+export function formatLatency(us: number): string {
+  return us < 1000 ? `${us} µs` : `${(us / 1000).toFixed(1)} ms`
 }

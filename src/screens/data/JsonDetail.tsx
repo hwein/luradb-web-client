@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { BASE_PATH, type ApiClient } from '../../api'
 import { CodeEditor } from '../../lib'
+import { jsonCountKey } from '../../shell/domainDetails'
 import { openDocs } from '../docs/openDocs'
 import {
-  assertKeyAvailable,
   createDocument,
+  createDocumentWithKey,
   deleteDocument,
   isConflict,
   jsonDocumentQueryOptions,
@@ -48,17 +49,13 @@ export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOp
   const [editText, setEditText] = useState('')
   const [editError, setEditError] = useState<string | undefined>(undefined)
   const [deleteArmed, setDeleteArmed] = useState(false)
+  // ETag of the state the user saw at edit start / arming click; a background refetch must not change it.
+  const [heldEtag, setHeldEtag] = useState<string | undefined>(undefined)
+  const [reloadedNote, setReloadedNote] = useState<string | undefined>(undefined)
 
   const [newKey, setNewKey] = useState('')
   const [newText, setNewText] = useState(NEW_DOCUMENT_TEXT)
   const [newError, setNewError] = useState<string | undefined>(undefined)
-
-  // Moduswechsel (andere Auswahl, "+ new", Klick auf leer) verlässt Edit-/Löschbestätigung.
-  useEffect(() => {
-    setEditing(false)
-    setEditError(undefined)
-    setDeleteArmed(false)
-  }, [mode])
 
   // Key/ETag als Mutation-Variablen (nicht aus dem Closure) — bleibt korrekt, falls die Auswahl wechselt, während der Request läuft.
   const saveMutation = useMutation<void, unknown, { key: string; etag: string | undefined; fields: unknown }>({
@@ -68,36 +65,49 @@ export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOp
     },
     onSuccess: (_data, variables) => {
       setEditing(false)
+      setReloadedNote(undefined)
       void queryClient.invalidateQueries({ queryKey: ['json-document', domain, variables.key] })
       void queryClient.invalidateQueries({ queryKey: ['json-documents', domain] })
     },
   })
 
-  const deleteMutation = useMutation<void, unknown, string>({
-    mutationFn: async (key) => {
+  const deleteMutation = useMutation<void, unknown, { key: string; etag: string | undefined }>({
+    mutationFn: async ({ key, etag }) => {
       if (!apiClient) throw new Error('no active connection')
-      await deleteDocument(apiClient, domain, key)
+      await deleteDocument(apiClient, domain, key, etag)
     },
-    onSuccess: (_data, key) => {
+    onSuccess: (_data, { key }) => {
       queryClient.removeQueries({ queryKey: ['json-document', domain, key] })
       void queryClient.invalidateQueries({ queryKey: ['json-documents', domain] })
-      void queryClient.invalidateQueries({ queryKey: ['json-domain-detail', domain] })
+      void queryClient.invalidateQueries({ queryKey: jsonCountKey(domain) })
       setDeleteArmed(false)
+      setReloadedNote(undefined)
       onClear()
     },
   })
+
+  // A mode change (other selection, "+ new", click on empty) leaves edit and delete confirmation and clears write errors.
+  const resetSave = saveMutation.reset
+  const resetDelete = deleteMutation.reset
+  useEffect(() => {
+    setEditing(false)
+    setEditError(undefined)
+    setDeleteArmed(false)
+    setReloadedNote(undefined)
+    resetSave()
+    resetDelete()
+  }, [mode, resetSave, resetDelete])
 
   const createMutation = useMutation<string, unknown, { key: string | undefined; fields: unknown }>({
     mutationFn: async ({ key, fields }) => {
       if (!apiClient) throw new Error('no active connection')
       if (key === undefined) return createDocument(apiClient, domain, fields)
-      await assertKeyAvailable(apiClient, domain, key)
-      await putDocument(apiClient, domain, key, undefined, fields)
+      await createDocumentWithKey(apiClient, domain, key, fields)
       return key
     },
     onSuccess: (createdKey) => {
       void queryClient.invalidateQueries({ queryKey: ['json-documents', domain] })
-      void queryClient.invalidateQueries({ queryKey: ['json-domain-detail', domain] })
+      void queryClient.invalidateQueries({ queryKey: jsonCountKey(domain) })
       setNewKey('')
       setNewText(NEW_DOCUMENT_TEXT)
       onSelectKey(createdKey)
@@ -107,8 +117,18 @@ export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOp
   function handleEditStart(): void {
     if (detailQuery.data === undefined) return
     setEditText(JSON.stringify(detailQuery.data.fields, null, 2))
+    setHeldEtag(detailQuery.data.etag)
+    setReloadedNote(undefined)
     setEditError(undefined)
+    setDeleteArmed(false)
     setEditing(true)
+  }
+
+  function handleEditCancel(): void {
+    setEditing(false)
+    setEditError(undefined)
+    setReloadedNote(undefined)
+    saveMutation.reset()
   }
 
   function handleSaveEdit(): void {
@@ -119,15 +139,32 @@ export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOp
       return
     }
     setEditError(undefined)
-    saveMutation.mutate({ key: viewKey, etag: detailQuery.data?.etag, fields: parsed.value })
+    setReloadedNote(undefined)
+    saveMutation.mutate({ key: viewKey, etag: heldEtag, fields: parsed.value })
   }
 
   function handleDeleteClick(): void {
+    setReloadedNote(undefined)
     if (!deleteArmed) {
+      setHeldEtag(detailQuery.data?.etag)
       setDeleteArmed(true)
       return
     }
-    if (viewKey !== undefined) deleteMutation.mutate(viewKey)
+    if (viewKey !== undefined) deleteMutation.mutate({ key: viewKey, etag: heldEtag })
+  }
+
+  // Keeps editor text and armed state; only the held ETag moves to the freshly loaded one. A failed read changes nothing.
+  async function handleReload(): Promise<void> {
+    if (viewKey === undefined) return
+    const result = await detailQuery.refetch()
+    const fresh = result.data
+    if (result.isError || fresh === undefined) return
+    setHeldEtag(fresh.etag)
+    saveMutation.reset()
+    deleteMutation.reset()
+    setReloadedNote(
+      editing ? `reloaded — saving now overwrites version ${fresh.version}` : `reloaded — deleting now removes version ${fresh.version}`,
+    )
   }
 
   function handleCreate(): void {
@@ -209,7 +246,7 @@ export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOp
   const usedReferences = referencedBy.filter((card) => (card.rowCount ?? 0) > 0)
 
   return (
-    <div className="json-detail">
+    <div className="json-detail selectable">
       <div className="json-detail__head">
         <span className="json-detail__doc-label">DOCUMENT {doc.key}</span>
         {editing ? (
@@ -218,13 +255,7 @@ export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOp
               save
             </button>{' '}
             ·{' '}
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(false)
-                setEditError(undefined)
-              }}
-            >
+            <button type="button" onClick={handleEditCancel}>
               cancel
             </button>
           </span>
@@ -260,18 +291,25 @@ export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOp
       )}
 
       {editError !== undefined && <div className="json-detail__conflict">{editError}</div>}
-      {saveMutation.isError && isConflict(saveMutation.error) && (
+      {((saveMutation.isError && isConflict(saveMutation.error)) || (deleteMutation.isError && isConflict(deleteMutation.error))) && (
         <div className="json-detail__conflict">
-          version conflict — reload document ·{' '}
+          version conflict — the document changed on the server ·{' '}
+          <button type="button" className="json-detail__doc-link" onClick={() => void handleReload()}>
+            reload
+          </button>{' '}
+          ·{' '}
           <button type="button" className="json-detail__doc-link" onClick={openConflictDocs}>
             docs
           </button>
         </div>
       )}
+      {reloadedNote !== undefined && <div className="json-detail__conflict">{reloadedNote}</div>}
       {saveMutation.isError && !isConflict(saveMutation.error) && (
         <div className="json-detail__conflict">save failed: {messageOf(saveMutation.error)}</div>
       )}
-      {deleteMutation.isError && <div className="json-detail__conflict">delete failed: {messageOf(deleteMutation.error)}</div>}
+      {deleteMutation.isError && !isConflict(deleteMutation.error) && (
+        <div className="json-detail__conflict">delete failed: {messageOf(deleteMutation.error)}</div>
+      )}
 
       {referencedBy.length > 0 && (
         <>

@@ -1,13 +1,14 @@
+import { EditorView } from '@codemirror/view'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect } from '../../app/session'
 import { SelectedDomainProvider } from '../../shell/SelectedDomainContext'
-import { server } from '../../test/msw'
+import { domainResponse, kvKeyScan, server } from '../../test/msw'
 import { DataScreen } from './DataScreen'
 
 const ORIGIN = window.location.origin
@@ -28,18 +29,24 @@ function makeConnection(): Connection {
   return {
     id: 'conn-1',
     name: 'local',
-    type: { kind: 'rest', url: 'http://127.0.0.1:3000' },
+    type: { kind: 'rest', url: '' },
     auth: { kind: 'api-key', key: 'lura_secret' },
   }
 }
 
 function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
-    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([{ name: DOMAIN, created_at: 1 }])),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
+    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([domainResponse(DOMAIN)])),
   ]
+}
+
+function metaUrl(key: string): string {
+  return `${keyUrl(key)}/meta`
+}
+
+function metaLine(): string {
+  return document.querySelector('.kv-detail__meta')?.textContent ?? ''
 }
 
 /** MSW-Handler, der die Frames streamt und den Body offen hält (kein Reconnect während des Tests) — Muster aus useKvWatch.test.tsx. */
@@ -76,6 +83,11 @@ function footerText(): string {
   return document.querySelector('.data__footer')?.textContent ?? ''
 }
 
+// Fallback vor den Test-Handlern registriert (MSW: zuletzt registriert gewinnt) — ohne Metadaten sieht die Meta-Zeile aus wie vor data/012.
+beforeEach(() => {
+  server.use(http.get(`${KEYS_URL}/:key/meta`, () => HttpResponse.text('404 Not Found: key not found', { status: 404 })))
+})
+
 afterEach(() => {
   act(() => disconnect())
 })
@@ -83,7 +95,7 @@ afterEach(() => {
 describe('KvBrowser', () => {
   it('arrives with ?key= (cross-engine jump from the rel row detail): selects that key initially, even though it is not first in the list (spec data/009 §5)', async () => {
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['alpha', 'cart_1'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha', 'cart_1']))),
       http.get(keyUrl('alpha'), () => rawValue('a')),
       http.get(keyUrl('cart_1'), () => rawValue('cart-contents')),
     )
@@ -93,23 +105,24 @@ describe('KvBrowser', () => {
     expect(screen.getByText('cart-contents')).toBeInTheDocument()
   })
 
-  it('reveals a deep ?key= arrival in the master list: the display slice grows to the key position and marks it selected (nachtrag data/009)', async () => {
-    const keys = Array.from({ length: 150 }, (_, i) => `k_${String(i).padStart(3, '0')}`)
+  it('keeps a ?key= arrival open in the detail even when the key is on no loaded page (spec data/011 §6: list membership proves nothing)', async () => {
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(keys)),
-      http.get(keyUrl('k_120'), () => rawValue('deep value')),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha'], { total: 5000 }))),
+      http.get(keyUrl('alpha'), () => rawValue('a')),
+      http.get(keyUrl('far-away'), () => rawValue('deep value')),
     )
-    await connectAndRender('/data?engine=kv&key=k_120')
+    await connectAndRender('/data?engine=kv&key=far-away')
 
-    expect(await screen.findByText('KEY k_120')).toBeInTheDocument()
-    // Index 120 liegt hinter der ersten Anzeige-Stufe (100) — die Liste muss bis zum Key erweitert sein.
-    const row = await screen.findByRole('button', { name: 'k_120' })
-    expect(row).toHaveClass('kv-list__row--selected')
+    expect(await screen.findByText('KEY far-away')).toBeInTheDocument()
+    expect(screen.getByText('deep value')).toBeInTheDocument()
+    await waitFor(() => expect(footerText()).toContain('1 of 5,000 keys'))
+    expect(screen.getByText('KEY far-away')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'far-away' })).not.toBeInTheDocument()
   })
 
   it('keeps the ?key= arrival selection when the key list is already in the query cache (nachtrag data/009: auto-select overwrote it)', async () => {
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['alpha', 'cart_1'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha', 'cart_1']))),
       http.get(keyUrl('alpha'), () => rawValue('a')),
       http.get(keyUrl('cart_1'), () => rawValue('cart-contents')),
     )
@@ -134,12 +147,17 @@ describe('KvBrowser', () => {
     expect(screen.getByText('cart-contents')).toBeInTheDocument()
   })
 
-  it('scans keys via GET and shows the call in the footer; Scan commits a new prefix', async () => {
-    let lastPrefix: string | null = null
+  it('scans keys via GET with limit/offset and shows the call in the footer; Scan commits prefix and contains together, omitting empty filters', async () => {
+    const urls: URL[] = []
     server.use(
       http.get(KEYS_URL, ({ request }) => {
-        lastPrefix = new URL(request.url).searchParams.get('prefix')
-        return HttpResponse.json(lastPrefix === 'cart:' ? ['cart:1', 'cart:2'] : ['alpha', 'beta'])
+        const url = new URL(request.url)
+        urls.push(url)
+        const prefix = url.searchParams.get('prefix')
+        const contains = url.searchParams.get('contains')
+        if (prefix === 'cart:' && contains === '1') return HttpResponse.json(kvKeyScan(['cart:1'], { total: 1, limit: 100 }))
+        if (prefix === 'cart:') return HttpResponse.json(kvKeyScan(['cart:1', 'cart:2'], { total: 2, limit: 100 }))
+        return HttpResponse.json(kvKeyScan(['alpha', 'beta'], { total: 1205, limit: 100 }))
       }),
       http.get(keyUrl('alpha'), () => rawValue('a')),
       http.get(keyUrl('cart:1'), () => rawValue('c')),
@@ -148,61 +166,87 @@ describe('KvBrowser', () => {
 
     expect(await screen.findByText('alpha')).toBeInTheDocument()
     expect(screen.getByText('beta')).toBeInTheDocument()
-    await waitFor(() => expect(footerText()).toContain('2 keys'))
-    expect(footerText()).toContain(`GET /store-api/kv/${DOMAIN}/keys`)
-    expect(footerText()).toContain('limit 100')
+    // `total` ist die gefilterte Trefferzahl aus dem Envelope, nicht die Zahl geladener Keys.
+    await waitFor(() => expect(footerText()).toContain('2 of 1,205 keys'))
+    expect(footerText()).toContain(`GET /store-api/kv/${DOMAIN}/keys?limit=100&offset=0`)
     expect(footerText()).not.toContain('prefix=')
+    expect(footerText()).not.toContain('contains=')
+    expect(urls[0]?.searchParams.has('prefix')).toBe(false)
+    expect(urls[0]?.searchParams.has('contains')).toBe(false)
 
     fireEvent.change(screen.getByLabelText('key prefix'), { target: { value: 'cart:' } })
     fireEvent.click(screen.getByRole('button', { name: 'Scan' }))
 
-    await waitFor(() => expect(lastPrefix as string | null).toBe('cart:'))
-    expect(await screen.findByText('cart:1')).toBeInTheDocument()
-    await waitFor(() => expect(footerText()).toContain(`GET /store-api/kv/${DOMAIN}/keys?prefix=cart%3A`))
+    expect(await screen.findByText('cart:2')).toBeInTheDocument()
+    await waitFor(() => expect(footerText()).toContain(`2 of 2 keys · GET /store-api/kv/${DOMAIN}/keys?prefix=cart%3A&limit=100&offset=0`))
+
+    fireEvent.change(screen.getByLabelText('key contains'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Scan' }))
+
+    await waitFor(() => expect(footerText()).toContain(`1 of 1 keys · GET /store-api/kv/${DOMAIN}/keys?prefix=cart%3A&contains=1&limit=100&offset=0`))
+    expect(screen.getByRole('button', { name: 'cart:1' })).toBeInTheDocument()
+    expect(screen.queryByText('cart:2')).not.toBeInTheDocument()
+    const last = urls[urls.length - 1]
+    expect(last?.searchParams.get('prefix')).toBe('cart:')
+    expect(last?.searchParams.get('contains')).toBe('1')
   })
 
-  it('reveals more of the already-fetched keys on "load more", without a second network request', async () => {
-    let scanCalls = 0
+  it('pages server-side: "load more" requests offset=100&limit=100, appends the page, and disappears once everything is loaded', async () => {
+    const offsets: string[] = []
     const allKeys = Array.from({ length: 150 }, (_, i) => `k${String(i).padStart(3, '0')}`)
     server.use(
-      http.get(KEYS_URL, () => {
-        scanCalls += 1
-        return HttpResponse.json(allKeys)
+      http.get(KEYS_URL, ({ request }) => {
+        const params = new URL(request.url).searchParams
+        offsets.push(params.get('offset') ?? '')
+        const offset = Number(params.get('offset'))
+        const limit = Number(params.get('limit'))
+        return HttpResponse.json(kvKeyScan(allKeys.slice(offset, offset + limit), { total: allKeys.length, offset, limit }))
       }),
       http.get(`${KEYS_URL}/:key`, () => rawValue('v')),
     )
     await connectAndRender()
 
     await screen.findByText('k000')
-    await waitFor(() => expect(footerText()).toContain('150 keys'))
+    await waitFor(() => expect(footerText()).toContain('100 of 150 keys'))
     expect(screen.getByText('k099')).toBeInTheDocument()
     expect(screen.queryByText('k100')).not.toBeInTheDocument()
+    expect(offsets).toEqual(['0'])
 
     fireEvent.click(screen.getByRole('button', { name: 'load more' }))
 
     expect(await screen.findByText('k149')).toBeInTheDocument()
+    expect(offsets).toEqual(['0', '100'])
+    await waitFor(() => expect(footerText()).toContain('150 of 150 keys'))
+    expect(footerText()).toContain(`GET /store-api/kv/${DOMAIN}/keys?limit=100&offset=100`)
     expect(screen.queryByRole('button', { name: 'load more' })).not.toBeInTheDocument()
-    expect(scanCalls).toBe(1)
   })
 
-  it('opens the bulk panel from "bulk…", based on the full scan result rather than the 100-key page cap (spec data/008 §2)', async () => {
+  it('opens the bulk panel from "bulk…" with its own limit=10000 scan rather than the 100-key pages (spec data/008 §2, data/011 §7)', async () => {
+    const limits: string[] = []
     const allKeys = Array.from({ length: 150 }, (_, i) => `k${String(i).padStart(3, '0')}`)
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(allKeys)),
+      http.get(KEYS_URL, ({ request }) => {
+        const params = new URL(request.url).searchParams
+        limits.push(params.get('limit') ?? '')
+        const limit = Number(params.get('limit'))
+        return HttpResponse.json(kvKeyScan(allKeys.slice(0, limit), { total: allKeys.length, limit }))
+      }),
       http.get(`${KEYS_URL}/:key`, () => rawValue('v')),
     )
     await connectAndRender()
     await screen.findByText('k000')
 
-    expect(screen.queryByText(/keys scanned/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/matching keys/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'bulk…' }))
 
-    expect(document.querySelector('.kv-bulk__scope')?.textContent).toContain('150 keys scanned (prefix "")')
+    await waitFor(() => expect(document.querySelector('.kv-bulk__scope')?.textContent).toContain('150 of 150 matching keys'))
+    expect(limits).toEqual(['100', '10000'])
+    expect(screen.getByText('150 keys selected')).toBeInTheDocument()
   })
 
   it('shows JSON pretty-print, plaintext, and an empty value as a plain 0-bytes value (no special state)', async () => {
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['json-key', 'plain-key', 'empty-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['json-key', 'plain-key', 'empty-key']))),
       http.get(keyUrl('json-key'), () => rawValue('{"a":1}')),
       http.get(keyUrl('plain-key'), () => rawValue('hello world')),
       http.get(keyUrl('empty-key'), () => rawValue('')),
@@ -228,7 +272,7 @@ describe('KvBrowser', () => {
     let putBody: string | undefined
     let contentType: string | null = null
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['raw-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['raw-key']))),
       http.get(keyUrl('raw-key'), () => rawValue('hello')),
       http.put(keyUrl('raw-key'), async ({ request }) => {
         putBody = await request.text()
@@ -250,7 +294,7 @@ describe('KvBrowser', () => {
   it('arms and confirms "set null": PATCHes …/null; the key stays listed (server 0.2.0 upsert) and the detail shows the NULL marker', async () => {
     let nulled = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['null-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['null-key']))),
       http.get(keyUrl('null-key'), () => (nulled ? new HttpResponse(null, { status: 204 }) : rawValue('value'))),
       http.patch(`${keyUrl('null-key')}/null`, () => {
         nulled = true
@@ -269,11 +313,11 @@ describe('KvBrowser', () => {
     expect(screen.getByText('KEY null-key')).toBeInTheDocument()
   })
 
-  it('re-scanning with an unchanged prefix refetches: a key that expired server-side vanishes from list and detail', async () => {
+  it('re-scanning with unchanged filters refetches list and open value: a key that expired server-side vanishes from list and detail', async () => {
     let expired = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(expired ? [] : ['zombie'])),
-      http.get(keyUrl('zombie'), () => rawValue('z')),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(expired ? [] : ['zombie']))),
+      http.get(keyUrl('zombie'), () => (expired ? new HttpResponse('not found', { status: 404 }) : rawValue('z'))),
     )
     await connectAndRender()
     await screen.findByText('KEY zombie')
@@ -289,7 +333,7 @@ describe('KvBrowser', () => {
   it('clears a key that vanished server-side (ttl expiry): the 404 read invalidates the list and the selection empties without leftovers', async () => {
     let expired = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(expired ? [] : ['ttl-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(expired ? [] : ['ttl-key']))),
       http.get(keyUrl('ttl-key'), () => {
         expired = true
         return new HttpResponse('not found', { status: 404 })
@@ -303,10 +347,42 @@ describe('KvBrowser', () => {
     expect(screen.queryByText(/not found/)).not.toBeInTheDocument()
   })
 
+  it('keeps a key selected that is created again after its 404', async () => {
+    let beta: 'listed' | 'gone' | 'created' = 'listed'
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(beta === 'gone' ? ['alpha'] : ['alpha', 'beta']))),
+      http.get(keyUrl('alpha'), () => rawValue('a')),
+      http.get(keyUrl('beta'), () => {
+        if (beta === 'created') return rawValue('b')
+        beta = 'gone'
+        return new HttpResponse('not found', { status: 404 })
+      }),
+      http.put(keyUrl('beta'), () => {
+        beta = 'created'
+        return new HttpResponse(null, { status: 200 })
+      }),
+    )
+    await connectAndRender()
+    await screen.findByText('KEY alpha')
+
+    fireEvent.click(screen.getByRole('button', { name: 'beta' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'beta' })).not.toBeInTheDocument())
+    expect(await screen.findByText('KEY alpha')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '+ new' }))
+    fireEvent.change(screen.getByLabelText('new key name'), { target: { value: 'beta' } })
+    fireEvent.click(screen.getByRole('button', { name: 'create' }))
+
+    expect(await screen.findByText('KEY beta')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'beta' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('KEY beta')).toBeInTheDocument())
+    expect(screen.queryByText('KEY alpha')).not.toBeInTheDocument()
+  })
+
   it('arms and confirms delete, then removes the key from the invalidated list', async () => {
     let deleted = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(deleted ? [] : ['gone-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(deleted ? [] : ['gone-key']))),
       http.get(keyUrl('gone-key'), () => rawValue('bye')),
       http.delete(keyUrl('gone-key'), () => {
         deleted = true
@@ -325,8 +401,8 @@ describe('KvBrowser', () => {
   it('a bulk delete that removes the currently open key clears the detail selection like a single delete (spec data/008 §6)', async () => {
     let deleted = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(deleted ? [] : ['tomb-key'])),
-      http.get(keyUrl('tomb-key'), () => rawValue('bye')),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(deleted ? [] : ['tomb-key']))),
+      http.get(keyUrl('tomb-key'), () => (deleted ? new HttpResponse('not found', { status: 404 }) : rawValue('bye'))),
       http.delete(keyUrl('tomb-key'), () => {
         deleted = true
         return new HttpResponse(null, { status: 204 })
@@ -336,6 +412,7 @@ describe('KvBrowser', () => {
     await screen.findByText('KEY tomb-key')
 
     fireEvent.click(screen.getByRole('button', { name: 'bulk…' }))
+    await screen.findByText('1 keys selected')
     fireEvent.click(screen.getByLabelText('delete'))
     fireEvent.click(screen.getByRole('button', { name: 'run…' }))
     fireEvent.click(await screen.findByRole('button', { name: 'run' }))
@@ -347,7 +424,7 @@ describe('KvBrowser', () => {
   it('a bulk set null over the currently open key refetches its value: the detail switches to the NULL marker', async () => {
     let nulled = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['null-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['null-key']))),
       http.get(keyUrl('null-key'), () => (nulled ? new HttpResponse(null, { status: 204 }) : rawValue('old value'))),
       http.patch(`${keyUrl('null-key')}/null`, () => {
         nulled = true
@@ -359,6 +436,7 @@ describe('KvBrowser', () => {
     expect(screen.getByText('old value')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'bulk…' }))
+    await screen.findByText('1 keys selected')
     fireEvent.click(screen.getByLabelText('set null'))
     fireEvent.click(screen.getByRole('button', { name: 'run…' }))
     fireEvent.click(await screen.findByRole('button', { name: 'run' }))
@@ -372,7 +450,7 @@ describe('KvBrowser', () => {
   it('creates a new key via PUT with the given key and value, then selects it', async () => {
     let putBody: string | undefined
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(putBody !== undefined ? ['fresh:1'] : [])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(putBody !== undefined ? ['fresh:1'] : []))),
       http.put(keyUrl('fresh:1'), async ({ request }) => {
         putBody = await request.text()
         return new HttpResponse(null, { status: 200 })
@@ -391,8 +469,202 @@ describe('KvBrowser', () => {
     expect(await screen.findByText('KEY fresh:1')).toBeInTheDocument()
   })
 
+  it('shows key already exists on 412 when creating', async () => {
+    let ifNoneMatch: string | null | undefined
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan([]))),
+      http.put(keyUrl('taken'), ({ request }) => {
+        ifNoneMatch = request.headers.get('If-None-Match')
+        return HttpResponse.json({ error: 'precondition failed' }, { status: 412 })
+      }),
+    )
+    await connectAndRender()
+    await screen.findByText('no keys')
+
+    fireEvent.click(screen.getByRole('button', { name: '+ new' }))
+    fireEvent.change(screen.getByLabelText('new key name'), { target: { value: 'taken' } })
+    fireEvent.change(screen.getByLabelText('ttl (seconds)'), { target: { value: '60' } })
+    fireEvent.click(screen.getByRole('button', { name: 'create' }))
+
+    expect(await screen.findByText('key already exists')).toBeInTheDocument()
+    expect(ifNoneMatch).toBe('*')
+    expect(screen.getByLabelText('new key name')).toHaveValue('taken')
+    expect(screen.getByLabelText('ttl (seconds)')).toHaveValue('60')
+  })
+
+  it('shows the conflict line on 412 when saving', async () => {
+    let ifMatch: string | null | undefined
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['k']))),
+      http.get(keyUrl('k'), () => new HttpResponse('v1', { headers: { ETag: '"e1"' } })),
+      http.put(keyUrl('k'), ({ request }) => {
+        ifMatch = request.headers.get('If-Match')
+        return HttpResponse.text('412 Precondition Failed: etag mismatch', { status: 412 })
+      }),
+    )
+    await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'save' }))
+
+    expect(await screen.findByText(/version conflict — the key changed on the server/)).toBeInTheDocument()
+    expect(ifMatch).toBe('"e1"')
+    expect(screen.getByRole('button', { name: 'reload' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'docs' })).toBeInTheDocument()
+    expect(screen.queryByText(/etag mismatch/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/save failed/)).not.toBeInTheDocument()
+  })
+
+  it('drops the conflict line when another key is selected', async () => {
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha', 'beta']))),
+      http.get(keyUrl('alpha'), () => new HttpResponse('a', { headers: { ETag: '"e1"' } })),
+      http.get(keyUrl('beta'), () => rawValue('b')),
+      http.put(keyUrl('alpha'), () => HttpResponse.text('412 Precondition Failed: etag mismatch', { status: 412 })),
+    )
+    await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'save' }))
+    expect(await screen.findByText(/version conflict — the key changed on the server/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'beta' }))
+    expect(await screen.findByText('KEY beta')).toBeInTheDocument()
+    expect(screen.queryByText(/version conflict — the key changed on the server/)).not.toBeInTheDocument()
+  })
+
+  it('shows the conflict line on 412 when deleting', async () => {
+    let value = 'v1'
+    let etag = '"e1"'
+    let ifMatch: string | null | undefined
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['k']))),
+      http.get(keyUrl('k'), () => new HttpResponse(value, { headers: { ETag: etag } })),
+      http.delete(keyUrl('k'), ({ request }) => {
+        ifMatch = request.headers.get('If-Match')
+        return ifMatch === etag ? new HttpResponse(null, { status: 204 }) : HttpResponse.text('412', { status: 412 })
+      }),
+    )
+    await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'delete' }))
+    value = 'v2'
+    etag = '"e2"'
+    fireEvent.click(await screen.findByRole('button', { name: 'delete — sure?' }))
+
+    expect(await screen.findByText(/version conflict — the key changed on the server/)).toBeInTheDocument()
+    expect(ifMatch).toBe('"e1"')
+
+    fireEvent.click(screen.getByRole('button', { name: 'reload' }))
+    expect(await screen.findByText('reloaded — deleting now removes the server version')).toBeInTheDocument()
+    expect(screen.queryByText(/version conflict/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'delete — sure?' }))
+    expect(await screen.findByText('select a key')).toBeInTheDocument()
+    expect(ifMatch).toBe('"e2"')
+  })
+
+  it('keeps the edited text after reload and sends the new ETag', async () => {
+    let etag = '"e1"'
+    let ifMatch: string | null | undefined
+    let putBody: string | undefined
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['k']))),
+      http.get(keyUrl('k'), () => new HttpResponse('server', { headers: { ETag: etag } })),
+      http.put(keyUrl('k'), async ({ request }) => {
+        ifMatch = request.headers.get('If-Match')
+        if (ifMatch !== etag) return HttpResponse.text('412', { status: 412 })
+        putBody = await request.text()
+        return new HttpResponse(null, { status: 200 })
+      }),
+    )
+    await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    await screen.findByLabelText('value editor')
+    etag = '"e2"'
+    const cm = EditorView.findFromDOM(document.querySelector('.cm-editor') as HTMLElement)
+    act(() => cm?.dispatch({ changes: { from: 0, to: 'server'.length, insert: 'mine' } }))
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+    expect(await screen.findByText(/version conflict/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'reload' }))
+    expect(await screen.findByText('reloaded — saving now overwrites the server version')).toBeInTheDocument()
+    expect(screen.getByLabelText('value editor')).toBeInTheDocument()
+    expect(document.querySelector('.cm-content')?.textContent).toBe('mine')
+
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+    await waitFor(() => expect(putBody).toBe('mine'))
+    expect(ifMatch).toBe('"e2"')
+    await waitFor(() => expect(screen.queryByText(/reloaded —/)).not.toBeInTheDocument())
+  })
+
+  it('keeps the conflict line when the reload fails', async () => {
+    let readFails = false
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['k']))),
+      http.get(keyUrl('k'), () =>
+        readFails ? HttpResponse.text('500 Internal Server Error', { status: 500 }) : new HttpResponse('v1', { headers: { ETag: '"e1"' } }),
+      ),
+      http.put(keyUrl('k'), () => HttpResponse.text('412 Precondition Failed: etag mismatch', { status: 412 })),
+    )
+    const { queryClient } = await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'save' }))
+    expect(await screen.findByText(/version conflict — the key changed on the server/)).toBeInTheDocument()
+
+    readFails = true
+    fireEvent.click(screen.getByRole('button', { name: 'reload' }))
+    expect(await screen.findByText('failed to load value')).toBeInTheDocument()
+
+    readFails = false
+    await act(() => queryClient.invalidateQueries({ queryKey: ['kv-value', DOMAIN, 'k'] }))
+    expect(await screen.findByLabelText('value editor')).toBeInTheDocument()
+    expect(screen.getByText(/version conflict — the key changed on the server/)).toBeInTheDocument()
+    expect(screen.queryByText(/^reloaded —/)).not.toBeInTheDocument()
+  })
+
+  it('passes the 428 text through', async () => {
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['k']))),
+      http.get(keyUrl('k'), () => new HttpResponse('v1', { headers: { ETag: '"e1"' } })),
+      http.put(keyUrl('k'), () => HttpResponse.text('428 Precondition Required: conditional header needed', { status: 428 })),
+    )
+    await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'save' }))
+
+    expect(await screen.findByText(/save failed: .*conditional header needed/)).toBeInTheDocument()
+    expect(screen.queryByText(/version conflict/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the ETag of the edit start when the value refetches meanwhile', async () => {
+    let etag = '"e1"'
+    let ifMatch: string | null | undefined
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['k']))),
+      http.get(keyUrl('k'), () => new HttpResponse('v1', { headers: { ETag: etag } })),
+      http.put(keyUrl('k'), ({ request }) => {
+        ifMatch = request.headers.get('If-Match')
+        return new HttpResponse(null, { status: 200 })
+      }),
+    )
+    const { queryClient } = await connectAndRender()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'edit' }))
+    await screen.findByLabelText('value editor')
+    etag = '"e2"'
+    await act(() => queryClient.invalidateQueries({ queryKey: ['kv-value', DOMAIN, 'k'] }))
+    expect(queryClient.getQueryData<{ etag: string }>(['kv-value', DOMAIN, 'k'])?.etag).toBe('"e2"')
+    fireEvent.click(screen.getByRole('button', { name: 'save' }))
+
+    await waitFor(() => expect(ifMatch).toBe('"e1"'))
+  })
+
   it('requires a key name before creating', async () => {
-    server.use(http.get(KEYS_URL, () => HttpResponse.json([])))
+    server.use(http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan([]))))
     await connectAndRender()
     await screen.findByText('no keys')
 
@@ -402,10 +674,10 @@ describe('KvBrowser', () => {
     expect(await screen.findByText('key is required')).toBeInTheDocument()
   })
 
-  it('also invalidates the kv-keys-probe activity query on create and on delete, so dots/tags/sections can follow without reload (spec shell/004 §1)', async () => {
+  it('also invalidates the kv-count activity query on create and on delete, so dots/tags/sections can follow without reload (spec shell/004 §1, shell/010 §3)', async () => {
     let freshCreated = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(freshCreated ? ['existing', 'fresh:1'] : ['existing'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(freshCreated ? ['existing', 'fresh:1'] : ['existing']))),
       http.get(keyUrl('existing'), () => rawValue('e')),
       http.put(keyUrl('fresh:1'), () => {
         freshCreated = true
@@ -417,8 +689,8 @@ describe('KvBrowser', () => {
     const { queryClient } = await connectAndRender()
     await screen.findByText('KEY existing')
 
-    const probeKey = ['kv-keys-probe', DOMAIN]
-    queryClient.setQueryData(probeKey, ['existing'])
+    const probeKey = ['kv-count', DOMAIN]
+    queryClient.setQueryData(probeKey, 1)
     expect(queryClient.getQueryState(probeKey)?.isInvalidated).toBe(false)
 
     fireEvent.click(screen.getByRole('button', { name: '+ new' }))
@@ -428,7 +700,7 @@ describe('KvBrowser', () => {
     expect(await screen.findByText('KEY fresh:1')).toBeInTheDocument()
     await waitFor(() => expect(queryClient.getQueryState(probeKey)?.isInvalidated).toBe(true))
 
-    queryClient.setQueryData(probeKey, ['existing', 'fresh:1'])
+    queryClient.setQueryData(probeKey, 2)
     expect(queryClient.getQueryState(probeKey)?.isInvalidated).toBe(false)
 
     fireEvent.click(await screen.findByRole('button', { name: 'existing' }))
@@ -443,7 +715,7 @@ describe('KvBrowser', () => {
     server.use(
       http.get(KEYS_URL, () => {
         scanned += 1
-        return HttpResponse.json(scanned === 1 ? ['alpha'] : ['alpha', 'beta'])
+        return HttpResponse.json(kvKeyScan(scanned === 1 ? ['alpha'] : ['alpha', 'beta']))
       }),
       http.get(keyUrl('alpha'), () => rawValue('a')),
       watchStream(['event: set\ndata: beta\n\n', 'event: delete\ndata: alpha\n\n']),
@@ -460,13 +732,50 @@ describe('KvBrowser', () => {
     await waitFor(() => expect(scanned).toBeGreaterThanOrEqual(2), { timeout: 2000 })
   })
 
+  it('re-reads the key list after a reset frame, without a new event in the feed', async () => {
+    let scanned = 0
+    server.use(
+      http.get(KEYS_URL, () => {
+        scanned += 1
+        return HttpResponse.json(kvKeyScan(['alpha']))
+      }),
+      http.get(keyUrl('alpha'), () => rawValue('a')),
+      watchStream(['id: w-abc-9\nevent: reset\ndata: {"reason":"restart"}\n\n']),
+    )
+    await connectAndRender()
+    await screen.findByText('alpha')
+    const scannedBefore = scanned
+
+    fireEvent.click(screen.getByRole('button', { name: '● live' }))
+
+    await waitFor(() => expect(scanned).toBeGreaterThan(scannedBefore), { timeout: 2000 })
+    expect(document.querySelector('.kv-feed__row')).toBeNull()
+    expect(screen.getByText('waiting for events…')).toBeInTheDocument()
+  })
+
+  it('shows a delete without a preceding set as a plain delete row (TTL expiry)', async () => {
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha']))),
+      http.get(keyUrl('alpha'), () => rawValue('a')),
+      watchStream(['id: w-abc-3\nevent: delete\ndata: ttl-a\n\n']),
+    )
+    await connectAndRender()
+    await screen.findByText('alpha')
+
+    fireEvent.click(screen.getByRole('button', { name: '● live' }))
+
+    expect(await screen.findByText('ttl-a')).toBeInTheDocument()
+    expect(document.querySelector('.kv-feed__type--delete')).toHaveTextContent('delete')
+    expect(document.querySelectorAll('.kv-feed__row')).toHaveLength(1)
+  })
+
   it(
     'ends the watch feed with a hint once the domain enters deleting (410) after being connected',
     async () => {
       let call = 0
       let closeStream: (() => void) | undefined
       server.use(
-        http.get(KEYS_URL, () => HttpResponse.json(['alpha'])),
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha']))),
         http.get(keyUrl('alpha'), () => rawValue('a')),
         http.get(WATCH_URL, () => {
           call += 1
@@ -498,7 +807,7 @@ describe('KvBrowser', () => {
     let noTtlUrl: string | undefined
     let withTtlUrl: string | undefined
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json([])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan([]))),
       http.put(keyUrl('no-ttl'), async ({ request }) => {
         noTtlUrl = request.url
         return new HttpResponse(null, { status: 200 })
@@ -530,7 +839,7 @@ describe('KvBrowser', () => {
   it('rejects a non-positive-integer ttl on create without sending the request', async () => {
     let putCalled = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json([])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan([]))),
       http.put(keyUrl('fresh:1'), () => {
         putCalled = true
         return new HttpResponse(null, { status: 200 })
@@ -551,7 +860,7 @@ describe('KvBrowser', () => {
   it('edits a value with a ttl: PUT URL carries ?ttl= when entered', async () => {
     let lastUrl: string | undefined
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['raw-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['raw-key']))),
       http.get(keyUrl('raw-key'), () => rawValue('hello')),
       http.put(keyUrl('raw-key'), async ({ request }) => {
         lastUrl = request.url
@@ -571,7 +880,7 @@ describe('KvBrowser', () => {
   it('rejects a non-positive-integer ttl on edit without sending the request, keeping the editor open', async () => {
     let putCalled = false
     server.use(
-      http.get(KEYS_URL, () => HttpResponse.json(['raw-key'])),
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['raw-key']))),
       http.get(keyUrl('raw-key'), () => rawValue('hello')),
       http.put(keyUrl('raw-key'), () => {
         putCalled = true
@@ -588,4 +897,130 @@ describe('KvBrowser', () => {
     expect(putCalled).toBe(false)
     expect(await screen.findByLabelText('value editor')).toBeInTheDocument()
   })
+
+  describe('ttl and key metadata in the detail (spec data/012)', () => {
+    // Fixed wall clock (Date only; timers stay real): relative times render the same on every run.
+    beforeEach(() => {
+      vi.setSystemTime(new Date(2026, 5, 15, 12, 0, 0))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('appends "expires in" and "modified … ago" from /meta (seconds vs. milliseconds) to the bytes line', async () => {
+      const nowSecs = Math.floor(Date.now() / 1000)
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['ttl-key']))),
+        http.get(keyUrl('ttl-key'), () => rawValue('payload')),
+        http.get(metaUrl('ttl-key'), () => HttpResponse.json({ expires_at: nowSecs + 630, last_modified_at: Date.now() - 120_500 })),
+      )
+      await connectAndRender()
+
+      await screen.findByText('KEY ttl-key')
+      await waitFor(() => expect(metaLine()).toBe('7 bytes · expires in 10m · modified 2m ago'))
+    })
+
+    it('shows no expiry segment for a key without ttl, but still the modification age', async () => {
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['plain']))),
+        http.get(keyUrl('plain'), () => rawValue('payload')),
+        http.get(metaUrl('plain'), () => HttpResponse.json({ expires_at: null, last_modified_at: Date.now() - 5 * 3600_000 - 3 * 60_000 - 500 })),
+      )
+      await connectAndRender()
+
+      await screen.findByText('KEY plain')
+      await waitFor(() => expect(metaLine()).toBe('7 bytes · modified 5h 3m ago'))
+      expect(metaLine()).not.toContain('expires')
+    })
+
+    it('says "expired" once expires_at lies in the past', async () => {
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['stale']))),
+        http.get(keyUrl('stale'), () => rawValue('payload')),
+        http.get(metaUrl('stale'), () => HttpResponse.json({ expires_at: Math.floor(Date.now() / 1000) - 5, last_modified_at: Date.now() - 1000 })),
+      )
+      await connectAndRender()
+
+      await screen.findByText('KEY stale')
+      await waitFor(() => expect(metaLine()).toBe('7 bytes · expired · modified 1s ago'))
+    })
+
+    it('leaves the line exactly as before when /meta answers 404 — no placeholder, no error', async () => {
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['raced']))),
+        http.get(keyUrl('raced'), () => rawValue('payload')),
+        http.get(metaUrl('raced'), () => HttpResponse.text("404 Not Found: key 'raced' not found", { status: 404 })),
+      )
+      const { queryClient } = await connectAndRender()
+
+      await screen.findByText('KEY raced')
+      await waitFor(() => expect(queryClient.getQueryState(['kv-meta', DOMAIN, 'raced'])?.status).toBe('success'))
+      expect(metaLine()).toBe('7 bytes')
+      expect(screen.queryByText(/not found/)).not.toBeInTheDocument()
+    })
+
+    it('appends only the modification age to the null-state line, never an expiry segment', async () => {
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['nulled']))),
+        http.get(keyUrl('nulled'), () => new HttpResponse(null, { status: 204 })),
+        http.get(metaUrl('nulled'), () => HttpResponse.json({ expires_at: Math.floor(Date.now() / 1000) + 600, last_modified_at: Date.now() - 42_500 })),
+      )
+      await connectAndRender()
+
+      await screen.findByText('NULL')
+      await waitFor(() => expect(metaLine()).toBe('explicit null state — GET answers 204 · modified 42s ago'))
+    })
+
+    it('re-scanning with unchanged filters refetches the metadata of the open key as well (spec data/012 §4)', async () => {
+      let metaReads = 0
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['meta-key']))),
+        http.get(keyUrl('meta-key'), () => rawValue('payload')),
+        http.get(metaUrl('meta-key'), () => {
+          metaReads += 1
+          return HttpResponse.json({ expires_at: null, last_modified_at: Date.now() })
+        }),
+      )
+      await connectAndRender()
+      await screen.findByText('KEY meta-key')
+      await waitFor(() => expect(metaReads).toBe(1))
+
+      fireEvent.click(screen.getByRole('button', { name: 'Scan' }))
+
+      await waitFor(() => expect(metaReads).toBe(2))
+    })
+
+    it('refetches the metadata after save and after set null, and drops the cache entry after delete', async () => {
+      let metaReads = 0
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['meta-key']))),
+        http.get(keyUrl('meta-key'), () => rawValue('payload')),
+        http.get(metaUrl('meta-key'), () => {
+          metaReads += 1
+          return HttpResponse.json({ expires_at: null, last_modified_at: Date.now() })
+        }),
+        http.put(keyUrl('meta-key'), () => new HttpResponse(null, { status: 200 })),
+        http.patch(`${keyUrl('meta-key')}/null`, () => new HttpResponse(null, { status: 200 })),
+        http.delete(keyUrl('meta-key'), () => new HttpResponse(null, { status: 204 })),
+      )
+      const { queryClient } = await connectAndRender()
+      await screen.findByText('KEY meta-key')
+      await waitFor(() => expect(metaReads).toBe(1))
+
+      fireEvent.click(screen.getByRole('button', { name: 'edit' }))
+      await screen.findByLabelText('value editor')
+      fireEvent.click(screen.getByRole('button', { name: 'save' }))
+      await waitFor(() => expect(metaReads).toBe(2))
+
+      fireEvent.click(await screen.findByRole('button', { name: 'set null' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'set null — sure?' }))
+      await waitFor(() => expect(metaReads).toBe(3))
+
+      fireEvent.click(await screen.findByRole('button', { name: 'delete' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'delete — sure?' }))
+      await waitFor(() => expect(queryClient.getQueryState(['kv-meta', DOMAIN, 'meta-key'])).toBeUndefined())
+    })
+  })
 })
+

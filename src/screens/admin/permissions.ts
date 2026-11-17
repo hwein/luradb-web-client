@@ -1,56 +1,65 @@
-import { ApiError, type ApiClient } from '../../api'
-import type { DomainSummary } from '../../shell/domains'
-import type { Engine } from '../../shell/engineCascade'
+import { ApiError, messageFromBody, type ApiClient } from '../../api'
+import type { UserPermission } from './users'
 
-export type PermissionLevel = 'read' | 'write'
-export type CellValue = 'unknown' | 'none' | PermissionLevel
+const CELL_VALUES = ['none', 'read', 'write', 'ddl'] as const
+export type CellValue = (typeof CELL_VALUES)[number]
 
-const ENGINE_PRIORITY: Engine[] = ['kv', 'json', 'rel']
-
-/**
- * Eine Matrix-Spalte = ein Domain-Name, aber `SetPermissionRequest` verlangt einen `store_type`
- * (Permissions leben pro Engine). kv zuerst: der Server prüft dort wirklich, ob die Domain
- * existiert — json/rel nehmen jeden Namen ungeprüft an (live verifiziert, admin/002-Bericht).
- */
-export function primaryEngineFor(domain: DomainSummary): Engine | undefined {
-  return ENGINE_PRIORITY.find((engine) => domain.engines[engine] !== undefined)
+export function isCellValue(level: string): level is CellValue {
+  return CELL_VALUES.some((value) => value === level)
 }
 
-function messageForPermissionError(status: number): string {
-  if (status === 404) return 'user or domain not found'
-  if (status === 400) return 'invalid access or domain'
-  return `permission update failed (HTTP ${status})`
+/** openapi-fetch has already read the error body: plaintext ⇒ string, JSON ⇒ object, empty ⇒ undefined. */
+function permissionError(status: number, error: unknown): ApiError {
+  const text = typeof error === 'string' && error.trim() !== '' ? error.trim() : messageFromBody(error)
+  return new ApiError(status, text ?? `permission update failed (HTTP ${status})`)
 }
 
+/** Grants the level on the whole domain, or on one engine of it when `engine` is given. */
 export async function setPermission(
   apiClient: ApiClient,
   userName: string,
   domainName: string,
-  storeType: Engine,
-  access: PermissionLevel,
+  access: 'read' | 'write',
+  engine?: string,
 ): Promise<void> {
-  const { response } = await apiClient.api.POST('/store-api/auth/users/{name}/permissions', {
+  const { error, response } = await apiClient.api.POST('/store-api/auth/users/{name}/permissions', {
     params: { path: { name: userName } },
-    body: { domain: domainName, access, store_type: storeType },
+    body: engine === undefined ? { domain: domainName, access } : { domain: domainName, engine, access },
   })
-  if (!response.ok) throw new ApiError(response.status, messageForPermissionError(response.status))
+  if (!response.ok) throw permissionError(response.status, error)
 }
 
-export async function removePermission(apiClient: ApiClient, userName: string, domainName: string, storeType: Engine): Promise<void> {
-  const { response } = await apiClient.api.DELETE('/store-api/auth/users/{name}/permissions/{domain}', {
-    params: { path: { name: userName, domain: domainName }, query: { store_type: storeType } },
+/** Revokes every permission of the user on the domain, or only the one on `engine` when given. */
+export async function removePermission(apiClient: ApiClient, userName: string, domainName: string, engine?: string): Promise<void> {
+  const { error, response } = await apiClient.api.DELETE('/store-api/auth/users/{name}/permissions/{domain}', {
+    params: { path: { name: userName, domain: domainName }, query: engine === undefined ? undefined : { engine } },
   })
-  if (!response.ok) throw new ApiError(response.status, response.status === 404 ? 'permission not found' : messageForPermissionError(response.status))
+  if (!response.ok) throw permissionError(response.status, error)
 }
 
-interface CellAction {
-  next: CellValue
-  perform: (apiClient: ApiClient, userName: string, domainName: string, storeType: Engine) => Promise<void>
+interface DomainLevels {
+  /** Level of the grant on the whole domain (entry without `engine`). */
+  whole: string | undefined
+  /** Level per engine; the server keeps either `whole` or these. */
+  parts: Partial<Record<string, string>>
 }
 
-/** Zell-Zyklus (spec admin/002 §2): ?/— → read → read+write → — → read … */
-export function cellActionFor(current: CellValue): CellAction {
-  if (current === 'read') return { next: 'write', perform: (c, u, d, s) => setPermission(c, u, d, s, 'write') }
-  if (current === 'write') return { next: 'none', perform: (c, u, d, s) => removePermission(c, u, d, s) }
-  return { next: 'read', perform: (c, u, d, s) => setPermission(c, u, d, s, 'read') }
+/** The stored levels of one user on one domain; levels outside `CellValue` pass through verbatim. */
+export function levelsOn(permissions: UserPermission[], domainName: string): DomainLevels {
+  const levels: DomainLevels = { whole: undefined, parts: {} }
+  for (const entry of permissions) {
+    if (entry.domain !== domainName) continue
+    if (entry.engine === undefined || entry.engine === null) levels.whole = entry.access
+    else levels.parts[entry.engine] = entry.access
+  }
+  return levels
+}
+
+type CellAction = (apiClient: ApiClient, userName: string, domainName: string, engine?: string) => Promise<void>
+
+/** Chip cycle — → read → read+write → —; `ddl` and unknown levels are revoked. */
+export function cellActionFor(current: string): CellAction {
+  if (current === 'none') return (c, u, d, e) => setPermission(c, u, d, 'read', e)
+  if (current === 'read') return (c, u, d, e) => setPermission(c, u, d, 'write', e)
+  return removePermission
 }

@@ -7,16 +7,17 @@
 
 The LuraDB Web Client is an **IDE for [LuraDB](https://github.com/hwein/luradb)** —
 dense, monospaced where the data lives, dark by default, and honest about the
-protocol underneath. It speaks nothing but the LuraDB REST API and ships
-primarily as a **cross-platform desktop app** (Tauri 2): the recommended first
-tool for LuraDB — install it, enter a server URL and key, and start working. No
-web server required; the same build optionally runs as a browser SPA behind a
-reverse proxy.
+protocol underneath. It reaches your server through nothing but the LuraDB REST
+API, reads its help pages from docs.luradb.org, and ships primarily as a
+**cross-platform desktop app** (Tauri 2): the recommended first tool for
+LuraDB — install it, enter a server URL and key, and start working. No web
+server required; the same build optionally runs as a browser SPA — behind a
+reverse proxy, or directly against a server that allows its origin via CORS.
 
 ## Workbench
 
 A single-page client in the shape of a development environment: an icon rail on
-the left, a persistent domain explorer, a status bar at the bottom — and seven
+the left, a persistent domain explorer, a status bar at the bottom — and six
 work areas between them.
 
 | Area | Purpose |
@@ -26,8 +27,10 @@ work areas between them.
 | **REST Explorer** | Request builder over the OpenAPI contract; every response in raw form |
 | **Engines & Jobs** | Status and metric cards, running tasks, recent requests |
 | **Admin** | Domains, users and domain permissions, key rotation |
-| **Configuration** | View, diff and download `luradb.toml` (apply = restart) |
-| **Docs** | Built-in documentation, contextually linked (F1, "why?" on errors) |
+| **Docs** | A built-in getting-started article and the pages of docs.luradb.org, rendered in the app, contextually linked (F1, "why?" on errors) |
+
+The server label in the status bar opens a what's-new dialog with the LuraDB
+changes up to the release the client is built against.
 
 ## Guiding principles
 
@@ -58,14 +61,10 @@ builds from source on all three — see [Build from source](#build-from-source).
 
 Each client release declares a **minimum LuraDB server version** it supports.
 On connect the client calls `GET /version` and refuses to operate against a
-server below that minimum.
-
-| Client | Minimum LuraDB server |
-| :--- | :--- |
-| 0.0.x | 0.1.0 |
-
-When a LuraDB change requires it, a new client release raises the minimum;
-older releases stay downloadable but unmaintained.
+server below that minimum. When a LuraDB change requires it, a new client
+release raises the minimum — each raise is noted in that release's
+[CHANGELOG](CHANGELOG.md) entry. Older releases stay downloadable but
+unmaintained.
 
 ## Build from source
 
@@ -77,7 +76,7 @@ Build Tools + WebView2; Linux: `webkit2gtk`, `libayatana-appindicator3`,
 
 ```
 npm install
-npm run dev        # browser mode: Vite dev server (proxy → 127.0.0.1:3000)
+npm run dev        # browser mode: Vite dev server (proxy → LURADB_URL from .env.local, default 127.0.0.1:3000)
 npm run app:dev    # desktop app in dev mode (Tauri; needs Rust)
 npm run check      # tsc --noEmit + ESLint — always before npm test
 npm test           # Vitest
@@ -93,7 +92,10 @@ the fastest path to a fresh executable.
 The TypeScript API types (`src/api/`) are committed and used as the build input.
 Regenerate them deliberately with `npm run api:types`, which fetches the OpenAPI
 contract from the [LuraDB repository](https://github.com/hwein/luradb) (`main` for
-released, `next` for in-development API).
+released, `next` for in-development API). The server changelog behind the
+what's-new dialog (`src/api/server-changelog.md`) is vendored the same way:
+`npm run api:changelog` downloads it from the LuraDB tag named by the pinned
+contract.
 
 ## Contributing
 

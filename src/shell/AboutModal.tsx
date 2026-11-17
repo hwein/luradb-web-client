@@ -22,7 +22,7 @@ export function AboutContent({ onClose }: AboutContentProps) {
           <span className="about__version mono-data">v{__APP_VERSION__}</span>
         </div>
       </div>
-      <div className="about__body">
+      <div className="about__body selectable">
         <section className="about__section">
           <span className="about__label mono-label">license</span>
           <p className="about__text">

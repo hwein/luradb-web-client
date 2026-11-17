@@ -91,3 +91,30 @@ describe('ConnectionForm — accept self-signed certificates checkbox', () => {
     expect(submitted.type.acceptInvalidCerts).toBe(true)
   })
 })
+
+describe('ConnectionForm — server url in browser mode', () => {
+  it('submits the typed server url in browser create mode', () => {
+    const onSubmit = vi.fn()
+    render(<ConnectionForm target={{ mode: 'create' }} onSubmit={onSubmit} onCancel={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'direct' } })
+    fireEvent.change(screen.getByLabelText(/^Server URL/), { target: { value: 'http://luradb.test:3000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    const [submitted] = onSubmit.mock.calls[0] as [Connection, boolean]
+    expect(submitted.type.url).toBe('http://luradb.test:3000')
+  })
+
+  it('submits an empty server url in browser create mode', () => {
+    const onSubmit = vi.fn()
+    render(<ConnectionForm target={{ mode: 'create' }} onSubmit={onSubmit} onCancel={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'proxy' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    const [submitted] = onSubmit.mock.calls[0] as [Connection, boolean]
+    expect(submitted.type.url).toBe('')
+  })
+})

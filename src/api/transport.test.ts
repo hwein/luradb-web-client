@@ -25,16 +25,16 @@ describe('isTauri', () => {
 
 describe('getTransport', () => {
   it('uses native fetch in the browser', () => {
-    expect(getTransport()).toEqual({ fetchImpl: fetch, defaultBaseUrl: '' })
+    expect(getTransport()).toEqual({ fetchImpl: fetch })
   })
 
   it('ignores acceptInvalidCerts in the browser', () => {
-    expect(getTransport({ acceptInvalidCerts: true })).toEqual({ fetchImpl: fetch, defaultBaseUrl: '' })
+    expect(getTransport({ acceptInvalidCerts: true })).toEqual({ fetchImpl: fetch })
   })
 
   it('uses the plugin-http fetch inside the Tauri webview', () => {
     vi.stubGlobal('__TAURI_INTERNALS__', {})
-    expect(getTransport()).toEqual({ fetchImpl: pluginFetch, defaultBaseUrl: '' })
+    expect(getTransport()).toEqual({ fetchImpl: pluginFetch })
   })
 
   it('returns the plugin-http fetch unchanged when acceptInvalidCerts is false', () => {

@@ -14,7 +14,7 @@ function makeConnection(): Connection {
   return {
     id: 'conn-1',
     name: 'local',
-    type: { kind: 'rest', url: 'http://127.0.0.1:3000' },
+    type: { kind: 'rest', url: '' },
     auth: { kind: 'api-key', key: 'lura_secret' },
   }
 }
@@ -36,7 +36,7 @@ describe('AuthCard', () => {
   it('derives auth.enabled = true (green) from a 401 on the headerless probe, sending no Authorization header', async () => {
     let sawAuthHeader = false
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
       http.get(`${ORIGIN}/store-api/domains`, ({ request }) => {
         if (request.headers.has('authorization')) sawAuthHeader = true
         return new HttpResponse(null, { status: 401 })
@@ -53,7 +53,7 @@ describe('AuthCard', () => {
 
   it('derives auth.enabled = false (red) with a warning from a 200 on the headerless probe', async () => {
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
     )
     await act(() => connect(makeConnection()))
@@ -66,7 +66,7 @@ describe('AuthCard', () => {
 
   it('always shows the static scheme and the toml explanatory note', async () => {
     server.use(
-      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
       http.get(`${ORIGIN}/store-api/domains`, () => new HttpResponse(null, { status: 401 })),
     )
     await act(() => connect(makeConnection()))
@@ -74,5 +74,17 @@ describe('AuthCard', () => {
 
     expect(screen.getByText('bearer api-key')).toBeInTheDocument()
     expect(await screen.findByText(/admins live in luradb\.toml/)).toBeInTheDocument()
+  })
+
+  it('shows a red inline error when the headerless probe itself fails (not 401/200), and stays at "…" (spec admin/005 §2/§4)', async () => {
+    server.use(
+      http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
+      http.get(`${ORIGIN}/store-api/domains`, () => new HttpResponse(null, { status: 500 })),
+    )
+    await act(() => connect(makeConnection()))
+    renderAuthCard()
+
+    expect(await screen.findByText('auth state unavailable — unexpected auth probe response (HTTP 500)')).toBeInTheDocument()
+    expect(document.querySelector('.admin-auth__row-value--muted')).toHaveTextContent('…')
   })
 })

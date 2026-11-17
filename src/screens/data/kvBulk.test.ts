@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
 import { createApi } from '../../api/client'
 import { server } from '../../test/msw'
-import { filterByContains, kvBulkCallPattern, kvBulkConfirmText, runKvBulk, runKvBulkOp } from './kvBulk'
+import { kvBulkCallPattern, kvBulkConfirmText, kvBulkDeletePath, kvBulkServerDeleteConfirmText, runKvBulk, runKvBulkDelete, runKvBulkOp, usesServerDelete } from './kvBulk'
 
 const BASE_URL = 'http://127.0.0.1:3000'
 const DOMAIN = 'sessions'
@@ -10,16 +10,6 @@ const DOMAIN = 'sessions'
 function makeApi() {
   return createApi({ baseUrl: BASE_URL, fetchImpl: fetch, getAuthHeader: () => 'Bearer test-key' })
 }
-
-describe('filterByContains', () => {
-  it('returns all keys unchanged for an empty filter', () => {
-    expect(filterByContains(['a', 'b', 'c'], '')).toEqual(['a', 'b', 'c'])
-  })
-
-  it('keeps only keys containing the substring, case-sensitively (like the keys themselves)', () => {
-    expect(filterByContains(['session:1', 'Session:2', 'cart:1'], 'session')).toEqual(['session:1'])
-  })
-})
 
 describe('kvBulkCallPattern', () => {
   it('describes each action as method + templated path with a literal {key} placeholder', () => {
@@ -37,6 +27,58 @@ describe('kvBulkConfirmText', () => {
   it('phrases clear and set-null as a verb + "on"', () => {
     expect(kvBulkConfirmText('clear', 3, 'shop')).toBe('set value to "" on 3 keys in "shop"?')
     expect(kvBulkConfirmText('set-null', 3, 'shop')).toBe('set null on 3 keys in "shop"?')
+  })
+})
+
+describe('usesServerDelete', () => {
+  it('routes only delete with a non-empty prefix to the server endpoint (spec data/013 §1)', () => {
+    expect(usesServerDelete('delete', { prefix: 'user-', contains: '' })).toBe(true)
+    expect(usesServerDelete('delete', { prefix: '', contains: 'x' })).toBe(false)
+    expect(usesServerDelete('clear', { prefix: 'user-', contains: '' })).toBe(false)
+    expect(usesServerDelete('set-null', { prefix: 'user-', contains: '' })).toBe(false)
+  })
+})
+
+describe('kvBulkDeletePath', () => {
+  it('always carries prefix, adds contains only when set, and encodes both', () => {
+    expect(kvBulkDeletePath('sessions', { prefix: 'user-', contains: '' })).toBe('/store-api/kv/sessions/keys?prefix=user-')
+    expect(kvBulkDeletePath('sessions', { prefix: 'user:', contains: 'a b' })).toBe('/store-api/kv/sessions/keys?prefix=user%3A&contains=a+b')
+  })
+})
+
+describe('kvBulkServerDeleteConfirmText', () => {
+  it('names the criterion instead of a count, with and without contains', () => {
+    expect(kvBulkServerDeleteConfirmText('sessions', { prefix: 'user-', contains: '' })).toBe('delete all keys with prefix "user-" in "sessions"?')
+    expect(kvBulkServerDeleteConfirmText('sessions', { prefix: 'user-', contains: '2026' })).toBe('delete all keys with prefix "user-" containing "2026" in "sessions"?')
+  })
+})
+
+describe('runKvBulkDelete', () => {
+  it('sends one DELETE …/keys?prefix= and returns the deleted count', async () => {
+    let received: URL | undefined
+    server.use(
+      http.delete(`${BASE_URL}/store-api/kv/${DOMAIN}/keys`, ({ request }) => {
+        received = new URL(request.url)
+        return HttpResponse.json({ deleted: 3 })
+      }),
+    )
+    await expect(runKvBulkDelete(makeApi(), DOMAIN, { prefix: 'user-', contains: '' })).resolves.toBe(3)
+    expect(received?.searchParams.get('prefix')).toBe('user-')
+    expect(received?.searchParams.has('contains')).toBe(false)
+  })
+
+  it('rejects with the literal 413 server text (nothing deleted, no client rewording)', async () => {
+    server.use(
+      http.delete(`${BASE_URL}/store-api/kv/${DOMAIN}/keys`, () =>
+        HttpResponse.text('413 Payload Too Large: 10500 keys match the selection, limit is 10000', { status: 413 }),
+      ),
+    )
+    await expect(runKvBulkDelete(makeApi(), DOMAIN, { prefix: 'big-', contains: '' })).rejects.toThrow('413 Payload Too Large: 10500 keys match the selection, limit is 10000')
+  })
+
+  it('rejects when the response has no numeric deleted field', async () => {
+    server.use(http.delete(`${BASE_URL}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json({})))
+    await expect(runKvBulkDelete(makeApi(), DOMAIN, { prefix: 'user-', contains: '' })).rejects.toThrow('unexpected bulk delete response')
   })
 })
 

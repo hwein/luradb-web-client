@@ -1,11 +1,18 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import type { ApiClient } from '../api'
+import { RelFileImportModal } from '../screens/data/RelFileImportModal'
 import { CreateTableModal } from '../screens/sql/CreateTableModal'
 import { addTab } from '../screens/sql/sqlStore'
-import { jsonDomainDetailQueryOptions, jsonIndexesQueryOptions, relTablesQueryOptions, relViewsQueryOptions } from './domainDetails'
-import type { DomainSummary } from './domains'
+import {
+  jsonDocumentCountQueryOptions,
+  jsonIndexesQueryOptions,
+  relTableRowCountQueryOptions,
+  relTablesQueryOptions,
+  relViewsQueryOptions,
+} from './domainDetails'
+import { conditionalWritesTitle, type DomainSummary } from './domains'
 import { useEngineActivity } from './engineActivity'
 
 interface ExpandedDomainProps {
@@ -23,11 +30,7 @@ function formatCount(value: number): string {
   return value < 1000 ? String(value) : `${(value / 1000).toFixed(1)}k`
 }
 
-function sectionLabelText(base: string, state: string | undefined): string {
-  return state === 'deleting' ? `${base} (deleting)` : base
-}
-
-function jsonSummaryText(count: number | null | undefined, indexCount: number | undefined): string | undefined {
+function jsonSummaryText(count: number | undefined, indexCount: number | undefined): string | undefined {
   if (typeof count !== 'number' || typeof indexCount !== 'number') return undefined
   return `${formatCount(count)} · idx ${indexCount}`
 }
@@ -45,19 +48,61 @@ function SectionLabel({ tone, text, addLabel, onAdd }: { tone: 'rel' | 'json' | 
   )
 }
 
+/** The object the data browser shows: `rel:<table>`, `json` or `kv`; without `engine` it falls back to JSON like DataScreen. */
+function dataTarget(pathname: string, search: string): string | undefined {
+  if (pathname !== '/data') return undefined
+  const params = new URLSearchParams(search)
+  const engine = params.get('engine')
+  if (engine === 'kv') return 'kv'
+  if (engine === 'rel') {
+    const table = params.get('table')
+    return table === null ? undefined : `rel:${table}`
+  }
+  return 'json'
+}
+
+function objectRowProps(selected: boolean): { className: string; 'aria-current': 'true' | undefined } {
+  return {
+    className: selected ? 'explorer__object-row explorer__object-row--selected' : 'explorer__object-row',
+    'aria-current': selected ? 'true' : undefined,
+  }
+}
+
+/** Tabellenzeile mit eigener Row-Count-Query (spec shell/010 §4): Zahl nur bei Erfolg — kein Platzhalter, keine `0` auf Verdacht. */
+function TableObjectRow({
+  domain,
+  table,
+  apiClient,
+  selected,
+  onOpen,
+}: {
+  domain: string
+  table: string
+  apiClient: ApiClient | undefined
+  selected: boolean
+  onOpen: () => void
+}) {
+  const countQuery = useQuery({ ...relTableRowCountQueryOptions(apiClient, domain, table), refetchInterval: 60_000 })
+  return (
+    <button type="button" {...objectRowProps(selected)} onClick={onOpen}>
+      <EngineChip letter="T" tone="rel" /> {table}
+      {countQuery.isSuccess && <span className="explorer__object-count">{formatCount(countQuery.data)}</span>}
+    </button>
+  )
+}
+
 /** RELATIONAL/JSON/KEY-VALUE-Abschnitte der genau einen expandierten Domäne (spec shell/002 §3) — Daten nur hier geladen. */
 export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
   const navigate = useNavigate()
-  const hasRel = domain.engines.rel !== undefined
-  const hasJson = domain.engines.json !== undefined
-  const hasKv = domain.engines.kv !== undefined
-
-  const tablesQuery = useQuery({ ...relTablesQueryOptions(apiClient, domain.name, hasRel), refetchInterval: 30_000 })
-  const viewsQuery = useQuery({ ...relViewsQueryOptions(apiClient, domain.name, hasRel), refetchInterval: 30_000 })
-  const jsonDetailQuery = useQuery({ ...jsonDomainDetailQueryOptions(apiClient, domain.name, hasJson), refetchInterval: 30_000 })
-  const indexesQuery = useQuery({ ...jsonIndexesQueryOptions(apiClient, domain.name, hasJson), refetchInterval: 30_000 })
+  const location = useLocation()
+  const target = dataTarget(location.pathname, location.search)
+  const tablesQuery = useQuery({ ...relTablesQueryOptions(apiClient, domain.name, true), refetchInterval: 30_000 })
+  const viewsQuery = useQuery({ ...relViewsQueryOptions(apiClient, domain.name, true), refetchInterval: 30_000 })
+  const jsonCountQuery = useQuery({ ...jsonDocumentCountQueryOptions(apiClient, domain.name, true), refetchInterval: 30_000 })
+  const indexesQuery = useQuery({ ...jsonIndexesQueryOptions(apiClient, domain.name, true), refetchInterval: 30_000 })
   const activity = useEngineActivity(apiClient, domain)
   const [tableModalOpen, setTableModalOpen] = useState(false)
+  const [fileImportOpen, setFileImportOpen] = useState(false)
 
   function openInData(engine: 'kv' | 'json' | 'rel', table?: string): void {
     const params = new URLSearchParams({ engine })
@@ -71,70 +116,64 @@ export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
     void navigate('/sql')
   }
 
-  const jsonSummary = jsonSummaryText(jsonDetailQuery.data?.document_count, indexesQuery.data?.length)
+  const jsonSummary = jsonSummaryText(jsonCountQuery.data, indexesQuery.data?.length)
 
   return (
     <>
       <div className="explorer__domain-card">
         <div className="explorer__domain-header">
           <span className="explorer__domain-chevron">▾</span> {domain.name}
+          {conditionalWritesTitle(domain) !== undefined && (
+            <span className="explorer__domain-tag" role="group" aria-label="conditional writes" title={conditionalWritesTitle(domain)}>
+              conditional writes
+            </span>
+          )}
         </div>
         <div className="explorer__sections">
-          {hasRel && (
+          {activity.rel !== undefined && (
             <>
-              <SectionLabel
-                tone="rel"
-                text={sectionLabelText('RELATIONAL', domain.engines.rel?.state)}
-                addLabel="new table"
-                onAdd={() => setTableModalOpen(true)}
-              />
+              <SectionLabel tone="rel" text="RELATIONAL" addLabel="new table" onAdd={() => setTableModalOpen(true)} />
               {(tablesQuery.data ?? []).map((table) => (
-                <button key={table.name} type="button" className="explorer__object-row" onClick={() => openInData('rel', table.name)}>
-                  <EngineChip letter="T" tone="rel" /> {table.name}
-                </button>
+                <TableObjectRow
+                  key={table.name}
+                  domain={domain.name}
+                  table={table.name}
+                  apiClient={apiClient}
+                  selected={target === `rel:${table.name}`}
+                  onOpen={() => openInData('rel', table.name)}
+                />
               ))}
               {(viewsQuery.data ?? []).map((view) => (
-                <button
-                  key={view.name}
-                  type="button"
-                  className="explorer__object-row explorer__object-row--muted"
-                  onClick={() => openViewInSql(view.name)}
-                >
+                <button key={view.name} type="button" className="explorer__object-row explorer__object-row--muted" onClick={() => openViewInSql(view.name)}>
                   <EngineChip letter="V" tone="dashed" /> {view.name}
                 </button>
               ))}
             </>
           )}
-          {hasJson && (
+          {activity.json !== undefined && (
             <>
-              <SectionLabel
-                tone="json"
-                text={sectionLabelText('JSON', domain.engines.json?.state)}
-                addLabel="new document"
-                onAdd={() => openInData('json')}
-              />
+              <SectionLabel tone="json" text="JSON" addLabel="new document" onAdd={() => openInData('json')} />
               {activity.json === 'active' && (
-                <button type="button" className="explorer__object-row" onClick={() => openInData('json')}>
+                <button type="button" {...objectRowProps(target === 'json')} onClick={() => openInData('json')}>
                   <EngineChip letter="J" tone="json" /> documents
                   {jsonSummary && <span className="explorer__object-count">{jsonSummary}</span>}
                 </button>
               )}
             </>
           )}
-          {hasKv && (
-            <>
-              <SectionLabel tone="kv" text="KEY-VALUE" addLabel="new key" onAdd={() => openInData('kv')} />
-              {activity.kv === 'active' && (
-                <button type="button" className="explorer__object-row" onClick={() => openInData('kv')}>
-                  <EngineChip letter="K" tone="kv" /> keys
-                  {typeof activity.kvKeyCount === 'number' && <span className="explorer__object-count">{formatCount(activity.kvKeyCount)}</span>}
-                </button>
-              )}
-            </>
+          <SectionLabel tone="kv" text="KEY-VALUE" addLabel="new key" onAdd={() => openInData('kv')} />
+          {activity.kv === 'active' && (
+            <button type="button" {...objectRowProps(target === 'kv')} onClick={() => openInData('kv')}>
+              <EngineChip letter="K" tone="kv" /> keys
+              {typeof activity.kvKeyCount === 'number' && <span className="explorer__object-count">{formatCount(activity.kvKeyCount)}</span>}
+            </button>
           )}
         </div>
       </div>
-      {tableModalOpen && <CreateTableModal domain={domain} apiClient={apiClient} onClose={() => setTableModalOpen(false)} />}
+      {tableModalOpen && (
+        <CreateTableModal domain={domain} apiClient={apiClient} onClose={() => setTableModalOpen(false)} onFromFile={() => setFileImportOpen(true)} />
+      )}
+      {fileImportOpen && <RelFileImportModal domain={domain.name} apiClient={apiClient} onClose={() => setFileImportOpen(false)} />}
     </>
   )
 }

@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { BrowserRouter } from 'react-router'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -12,24 +12,49 @@ import { AppShell } from './AppShell'
 
 const ORIGIN = window.location.origin
 
+let eventStreamOpens = 0
+let whoamiRequests = 0
+
+interface WhoamiMock {
+  status: number
+  body?: { name: string | null; role: string }
+}
+
+const ADMIN_WHOAMI: WhoamiMock = { status: 200, body: { name: 'admin', role: 'Admin' } }
+
 function makeConnection(): Connection {
   return {
     id: 'conn-1',
     name: 'local',
-    type: { kind: 'rest', url: 'http://127.0.0.1:3000' },
+    type: { kind: 'rest', url: '' },
     auth: { kind: 'api-key', key: 'lura_secret' },
   }
 }
 
-async function renderConnectedShell(path = '/sql'): Promise<void> {
+const HEALTH_OK = { status: 'ok', uptime_secs: 4260 }
+
+async function renderConnectedShell(path = '/sql', whoami: WhoamiMock = ADMIN_WHOAMI, health: object = HEALTH_OK): Promise<void> {
   window.history.pushState({}, '', path)
+  eventStreamOpens = 0
+  whoamiRequests = 0
   server.use(
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
-    http.get(`${ORIGIN}/store-api/auth/users`, () => HttpResponse.json([])),
+    // Der Shell-Stream (spec shell/009) läuft in jedem dieser Tests mit — offen gehalten, damit kein Reconnect dazwischenfunkt.
+    http.get(`${ORIGIN}/store-api/events`, () => {
+      eventStreamOpens += 1
+      return new HttpResponse(new ReadableStream<Uint8Array>({ start() {} }), { headers: { 'Content-Type': 'text/event-stream' } })
+    }),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
+    http.get(`${ORIGIN}/store-api/auth/whoami`, () => {
+      whoamiRequests += 1
+      return whoami.body === undefined ? new HttpResponse(null, { status: whoami.status }) : HttpResponse.json(whoami.body, { status: whoami.status })
+    }),
     http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([])),
-    http.get(`${ORIGIN}/health`, () => HttpResponse.json({ status: 'ok', uptime_secs: 4260 })),
+    http.get(`${ORIGIN}/store-api/backups`, () => HttpResponse.json({ backups: [], running: null })),
+    http.get(`${ORIGIN}/health`, () => HttpResponse.json(health)),
+    http.get(`${ORIGIN}/store-api/logs`, () => HttpResponse.text('503 Service Unavailable: log access is disabled (log.http_access = false)', { status: 503 })),
+    http.get(`${ORIGIN}/store-api/logs/files`, () =>
+      HttpResponse.text('503 Service Unavailable: log access is disabled (log.http_access = false)', { status: 503 }),
+    ),
   )
   await act(() => connect(makeConnection()))
 
@@ -87,10 +112,70 @@ describe('AppShell', () => {
     await screen.findByText('run a query to see results')
 
     expect(await screen.findByText('bearer ✓ admin')).toBeInTheDocument()
-    expect(await screen.findByText('luradb 0.2.0')).toBeInTheDocument()
+    expect(await screen.findByText('signed in as admin')).toBeInTheDocument()
+    expect(await screen.findByText('luradb 0.7.1')).toBeInTheDocument()
     expect(await screen.findByText('up 1h 11m')).toBeInTheDocument()
     expect(screen.getByText(`${window.location.host} ${BASE_PATH}`)).toBeInTheDocument()
     expect(screen.getByTitle('disconnect')).toHaveTextContent('connected')
+  })
+
+  it('shows no health label while the server is ok', async () => {
+    await renderConnectedShell('/sql')
+    await screen.findByText('up 1h 11m')
+
+    expect(document.querySelector('.statusbar__health')).toBeNull()
+  })
+
+  it('shows a degraded health label in warn style for a mere warning', async () => {
+    await renderConnectedShell('/sql', ADMIN_WHOAMI, {
+      status: 'degraded',
+      resources: { state: 'warning', disk_state: 'warning', memory_state: 'ok' },
+    })
+
+    const label = await screen.findByText('degraded · disk space low')
+    expect(label).toHaveClass('statusbar__health')
+    expect(label).not.toHaveClass('statusbar__health--err')
+  })
+
+  it('marks the health label as err when a shard is not ok', async () => {
+    await renderConnectedShell('/sql', ADMIN_WHOAMI, {
+      status: 'degraded',
+      shards: [{ id: 1, status: 'timeout' }],
+      resources: { state: 'ok', disk_state: 'ok', memory_state: 'ok' },
+    })
+
+    const label = await screen.findByText('degraded · shard 1 timeout')
+    expect(label).toHaveClass('statusbar__health', 'statusbar__health--err')
+  })
+
+  it('shows the signed-in user right after the auth label, with the full label as title', async () => {
+    const longName = 'a-very-long-service-account-name-for-the-nightly-import-job'
+    await renderConnectedShell('/sql', { status: 200, body: { name: longName, role: 'User' } })
+    await screen.findByText('run a query to see results')
+
+    const identity = await screen.findByText(`signed in as ${longName}`)
+    expect(identity).toHaveClass('statusbar__identity')
+    expect(identity).toHaveAttribute('title', `signed in as ${longName}`)
+    expect(screen.getByText('bearer ✓ user').nextElementSibling).toBe(identity)
+  })
+
+  it('shows the admin role but no signed-in user for an open server (role Disabled)', async () => {
+    await renderConnectedShell('/sql', { status: 200, body: { name: null, role: 'Disabled' } })
+    await screen.findByText('run a query to see results')
+
+    expect(await screen.findByText('bearer ✓ admin')).toBeInTheDocument()
+    expect(screen.queryByText(/signed in as/)).not.toBeInTheDocument()
+  })
+
+  it('shows neither the auth label nor the signed-in user when whoami fails', async () => {
+    await renderConnectedShell('/sql', { status: 500 })
+    await screen.findByText('run a query to see results')
+
+    await screen.findByText('up 1h 11m')
+    await waitFor(() => expect(whoamiRequests).toBe(1))
+    await act(async () => {})
+    expect(screen.queryByText(/signed in as/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/bearer/)).not.toBeInTheDocument()
   })
 
   it('F1 navigates to the docs screen and focuses its search field', async () => {
@@ -155,6 +240,17 @@ describe('AppShell', () => {
     fireEvent.click(document.querySelector('.cmdk') as HTMLElement)
 
     expect(screen.queryByLabelText('command palette search')).not.toBeInTheDocument()
+  })
+
+  it('subscribes to the store event stream exactly once', async () => {
+    await renderConnectedShell('/sql')
+    await screen.findByText('run a query to see results')
+
+    await waitFor(() => expect(eventStreamOpens).toBe(1))
+    fireEvent.click(screen.getByTitle('Data browser'))
+    await screen.findByText('no domain selected')
+
+    expect(eventStreamOpens).toBe(1)
   })
 
   it('toggles the theme via the rail pill', async () => {

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import type { ApiClient } from '../../api'
 import type { components } from '../../api/schema'
+import { formatNumber } from '../../lib'
 import { primaryKeyColumn } from './referencedBy'
 import { checkDanglingLinks, isLinkColumn, type DanglingLinksReport } from './relRows'
 
@@ -10,10 +11,6 @@ type ColumnInfo = components['schemas']['ColumnInfo']
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'request failed'
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString('en-US')
 }
 
 interface DanglingReportContentProps {

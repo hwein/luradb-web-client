@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { http, HttpResponse } from 'msw'
-import { server } from '../test/msw'
+import { domainResponse, server } from '../test/msw'
 import { createApi, type CallInfo } from './client'
 import { ApiError } from './errors'
 
@@ -16,7 +16,7 @@ describe('createApi', () => {
     server.use(
       http.get(`${BASE_URL}/store-api/domains`, ({ request }) => {
         receivedAuth = request.headers.get('Authorization')
-        return HttpResponse.json([{ name: 'shop', created_at: 1700000000 }])
+        return HttpResponse.json([domainResponse('shop')])
       }),
     )
 
@@ -25,7 +25,7 @@ describe('createApi', () => {
 
     expect(receivedAuth).toBe('Bearer test-key')
     expect(error).toBeUndefined()
-    expect(data).toEqual([{ name: 'shop', created_at: 1700000000 }])
+    expect(data).toEqual([domainResponse('shop')])
   })
 
   it('skips the Authorization header when getAuthHeader returns undefined', async () => {
@@ -55,6 +55,77 @@ describe('createApi', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0]).toMatchObject({ method: 'GET', path: '/store-api/domains', status: 200, ok: true })
     expect(calls[0]?.ms).toBeGreaterThanOrEqual(0)
+  })
+
+  describe('silentRecord (general/012)', () => {
+    it('a typed call with silentRecord: true does not notify onCall listeners', async () => {
+      server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([])))
+
+      const { api, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+      await api.GET('/store-api/domains', { silentRecord: true })
+
+      expect(calls).toHaveLength(0)
+    })
+
+    it('a typed call without the marker still notifies (default stays recorded)', async () => {
+      server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([])))
+
+      const { api, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+      await api.GET('/store-api/domains')
+
+      expect(calls).toHaveLength(1)
+    })
+
+    it('a typed call with silentRecord: true stays silent even when it fails as a network error', async () => {
+      server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.error()))
+
+      const { api, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+      await expect(api.GET('/store-api/domains', { silentRecord: true })).rejects.toBeInstanceOf(ApiError)
+
+      expect(calls).toHaveLength(0)
+    })
+
+    it('fetchRaw with silentRecord: true does not notify, but still resolves normally', async () => {
+      server.use(http.get(`${BASE_URL}/store-api/kv/shop/keys/present`, () => new Response('raw-bytes')))
+
+      const { fetchRaw, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+      const response = await fetchRaw('/store-api/kv/shop/keys/present', { silentRecord: true })
+
+      expect(calls).toHaveLength(0)
+      await expect(response.text()).resolves.toBe('raw-bytes')
+    })
+
+    it('postNdjson with silentRecord: true does not notify', async () => {
+      server.use(http.post(`${BASE_URL}/store-api/json/shop/bulk`, () => HttpResponse.json({ imported: 1, failed: 0, errors: [] })))
+
+      const { postNdjson, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+      await postNdjson('/store-api/json/shop/bulk', '{"_key":"a"}\n', { silentRecord: true })
+
+      expect(calls).toHaveLength(0)
+    })
+
+    it('openStream with silentRecord: true does not notify', async () => {
+      server.use(
+        http.get(`${BASE_URL}/store-api/kv/shop/watch`, () => new HttpResponse('event: set\ndata: k\n\n', { headers: { 'Content-Type': 'text/event-stream' } })),
+      )
+
+      const { openStream, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+      await openStream('/store-api/kv/shop/watch', { silentRecord: true })
+
+      expect(calls).toHaveLength(0)
+    })
   })
 
   it('does not leak query strings into the recorded path', async () => {
@@ -128,6 +199,56 @@ describe('createApi', () => {
 
     await expect(fetchSilent('/store-api/kv/shop/keys/gone', { method: 'DELETE' })).rejects.toBeInstanceOf(ApiError)
     expect(calls).toHaveLength(0)
+  })
+
+  describe('fetchAnonymous (admin/005)', () => {
+    it('never sets an Authorization header, even when getAuthHeader is configured', async () => {
+      let receivedAuth: string | null = 'unset'
+      server.use(
+        http.get(`${BASE_URL}/store-api/domains`, ({ request }) => {
+          receivedAuth = request.headers.get('Authorization')
+          return new HttpResponse(null, { status: 401 })
+        }),
+      )
+
+      const { fetchAnonymous } = makeApi(() => 'Bearer test-key')
+      const response = await fetchAnonymous('/store-api/domains')
+
+      expect(receivedAuth).toBeNull()
+      expect(response.status).toBe(401)
+    })
+
+    it('does not notify onCall listeners — a deliberate silent path pending general/012', async () => {
+      server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([])))
+
+      const { fetchAnonymous, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+      await fetchAnonymous('/store-api/domains')
+
+      expect(calls).toHaveLength(0)
+    })
+
+    it('resolves with the raw Response even when not ok', async () => {
+      server.use(http.get(`${BASE_URL}/store-api/domains`, () => new HttpResponse('nope', { status: 500 })))
+
+      const { fetchAnonymous } = makeApi()
+      const response = await fetchAnonymous('/store-api/domains')
+
+      expect(response.ok).toBe(false)
+      await expect(response.text()).resolves.toBe('nope')
+    })
+
+    it('wraps a network failure as a status-0 ApiError without notifying', async () => {
+      server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.error()))
+
+      const { fetchAnonymous, onCall } = makeApi()
+      const calls: CallInfo[] = []
+      onCall((info) => calls.push(info))
+
+      await expect(fetchAnonymous('/store-api/domains')).rejects.toBeInstanceOf(ApiError)
+      expect(calls).toHaveLength(0)
+    })
   })
 
   it('fetchNdjson sends an ndjson Accept header', async () => {
@@ -215,6 +336,32 @@ describe('createApi', () => {
     expect(calls[0]).toMatchObject({ method: 'GET', path: '/store-api/kv/shop/watch', status: 'stream', ok: true })
     expect(response.body).not.toBeNull()
     await expect(response.text()).resolves.toContain('event: set')
+  })
+
+  it('openStream appends last_event_id with the right separator and encoding, and leaves the URL alone without one', async () => {
+    const urls: string[] = []
+    server.use(
+      http.get(`${BASE_URL}/store-api/kv/shop/watch`, ({ request }) => {
+        urls.push(request.url)
+        return new HttpResponse('', { headers: { 'Content-Type': 'text/event-stream' } })
+      }),
+    )
+
+    const { openStream, onCall } = makeApi()
+    const calls: CallInfo[] = []
+    onCall((info) => calls.push(info))
+    await openStream('/store-api/kv/shop/watch', { lastEventId: 'w-abc-1' })
+    await openStream('/store-api/kv/shop/watch?prefix=r', { lastEventId: 'w-abc-2' })
+    await openStream('/store-api/kv/shop/watch', { lastEventId: 'w abc/1&2' })
+    await openStream('/store-api/kv/shop/watch?prefix=r')
+
+    expect(urls).toEqual([
+      `${BASE_URL}/store-api/kv/shop/watch?last_event_id=w-abc-1`,
+      `${BASE_URL}/store-api/kv/shop/watch?prefix=r&last_event_id=w-abc-2`,
+      `${BASE_URL}/store-api/kv/shop/watch?last_event_id=w%20abc%2F1%262`,
+      `${BASE_URL}/store-api/kv/shop/watch?prefix=r`,
+    ])
+    expect(calls.map((call) => call.path)).toEqual(Array(4).fill('/store-api/kv/shop/watch'))
   })
 
   it('openStream returns a non-2xx response without throwing and records the numeric status', async () => {

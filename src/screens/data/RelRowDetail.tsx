@@ -1,9 +1,10 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { ApiClient } from '../../api'
 import type { components } from '../../api/schema'
+import { relTableCountKey } from '../../shell/domainDetails'
 import { jsonDocumentsQueryOptions } from './jsonDocuments'
-import { kvKeysQueryOptions } from './kvEntries'
+import { EMPTY_KV_KEY_FILTER, kvKeysQueryOptions } from './kvEntries'
 import {
   blankFormState,
   buildRowPayload,
@@ -82,10 +83,10 @@ function RelRowForm({ domain, apiClient, columns, form, isInsert, onFieldText, o
     ...jsonDocumentsQueryOptions(apiClient, domain, undefined),
     enabled: hasJsonref && apiClient !== undefined,
   })
-  const kvrefQuery = useQuery({ ...kvKeysQueryOptions(apiClient, domain, ''), enabled: hasKvref && apiClient !== undefined })
+  const kvrefQuery = useInfiniteQuery({ ...kvKeysQueryOptions(apiClient, domain, EMPTY_KV_KEY_FILTER), enabled: hasKvref && apiClient !== undefined })
 
   const jsonrefOptions = (jsonrefQuery.data?.pages ?? []).flatMap((page) => page.documents.map((doc) => doc.key))
-  const kvrefOptions = kvrefQuery.data?.keys ?? []
+  const kvrefOptions = (kvrefQuery.data?.pages ?? []).flatMap((page) => page.keys)
 
   return (
     <div className="rel-detail__fields">
@@ -239,6 +240,7 @@ export function RelRowDetail({ domain, apiClient, table, columns, mode, row, onC
   function invalidateRows(): void {
     void queryClient.invalidateQueries({ queryKey: ['rel-rows', domain, table] })
     void queryClient.invalidateQueries({ queryKey: ['rel-rows-filtered', domain, table] })
+    void queryClient.invalidateQueries({ queryKey: relTableCountKey(domain, table) })
   }
 
   const insertMutation = useMutation<{ affected: number; lastPk: unknown }, unknown, Record<string, unknown>>({
@@ -351,7 +353,7 @@ export function RelRowDetail({ domain, apiClient, table, columns, mode, row, onC
   const expanded = expandedOf(row)
 
   return (
-    <div className="rel-detail">
+    <div className="rel-detail selectable">
       <div className="rel-detail__head">
         <span className="rel-detail__label">ROW {mode.pk}</span>
         {editing ? (

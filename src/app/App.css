@@ -1,0 +1,11 @@
+.app-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-frame__content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}

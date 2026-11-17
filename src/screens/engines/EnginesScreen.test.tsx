@@ -10,7 +10,7 @@ import { connect, disconnect } from '../../app/session'
 import { noteReindexStart, resetReindexTasks } from '../../lib'
 import { useSelectedDomain } from '../../shell'
 import { SelectedDomainProvider } from '../../shell/SelectedDomainContext'
-import { server } from '../../test/msw'
+import { domainResponse, server } from '../../test/msw'
 import { resetDocsState, useDocsState } from '../docs/docsStore'
 import { EnginesScreen } from './EnginesScreen'
 
@@ -26,8 +26,28 @@ const HEALTH = {
   vlog_size_bytes: 2097152, // 2.0 MB
 }
 
+function engineBlock(fields: Record<string, number>) {
+  return {
+    read_ops: 0,
+    write_ops: 0,
+    window_secs: 60,
+    read_latency_us_p50: 0,
+    read_latency_us_p95: 0,
+    read_latency_us_p99: 0,
+    write_latency_us_p50: 0,
+    write_latency_us_p95: 0,
+    write_latency_us_p99: 0,
+    ...fields,
+  }
+}
+
 const METRICS = {
   system: { total_reads: 8, total_writes: 19, compaction_runs: 3, janitor_runs: 5, memtable_size_bytes: 1000 },
+  engines: {
+    kv: engineBlock({ read_ops: 100, write_ops: 200, read_latency_us_p50: 5, read_latency_us_p95: 50, write_latency_us_p50: 500, write_latency_us_p95: 5000 }),
+    json: engineBlock({ read_ops: 60, write_ops: 0, read_latency_us_p50: 7, read_latency_us_p95: 70 }),
+    rel: engineBlock({}),
+  },
   domains: [],
   block_cache: {},
 }
@@ -36,27 +56,19 @@ function makeConnection(): Connection {
   return {
     id: 'conn-1',
     name: 'local',
-    type: { kind: 'rest', url: 'http://127.0.0.1:3000' },
+    type: { kind: 'rest', url: '' },
     auth: { kind: 'api-key', key: 'lura_secret' },
   }
 }
 
 function baseHandlers() {
   return [
-    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })),
-    http.get(`${ORIGIN}/store-api/domains`, () =>
-      HttpResponse.json([
-        { name: 'shop', created_at: 1 },
-        { name: 'sessions', created_at: 2 },
-      ]),
-    ),
-    http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1, state: 'active' }])),
-    http.get(`${ORIGIN}/store-api/rel/domains`, () => HttpResponse.json([{ name: 'shop', created_at: 1, state: 'active' }])),
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
+    http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([domainResponse('shop'), domainResponse('sessions', { created_at: 2 })])),
+    http.get(`${ORIGIN}/store-api/auth/whoami`, () => HttpResponse.json({ name: 'admin', role: 'Admin' })),
     http.get(`${ORIGIN}/health`, () => HttpResponse.json(HEALTH)),
     http.get(`${ORIGIN}/store-api/metrics`, () => HttpResponse.json(METRICS)),
-    http.get(`${ORIGIN}/store-api/json/domains/shop`, () =>
-      HttpResponse.json({ name: 'shop', created_at: 1, state: 'active', document_count: 42 }),
-    ),
+    http.get(`${ORIGIN}/store-api/json/shop/documents/count`, () => HttpResponse.json({ count: 42 })),
     http.get(`${ORIGIN}/store-api/json/shop/indexes`, () =>
       HttpResponse.json([
         { created_at: 1, field: 'city', type: 'string' },
@@ -70,6 +82,10 @@ function baseHandlers() {
       ]),
     ),
     http.get(`${ORIGIN}/store-api/rel/shop/views`, () => HttpResponse.json([{ name: 'v_paid', created_at: 1, sql: 'SELECT 1' }])),
+    http.get(`${ORIGIN}/store-api/json/sessions/documents/count`, () => HttpResponse.json({ count: 0 })),
+    http.get(`${ORIGIN}/store-api/json/sessions/indexes`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/store-api/rel/sessions/tables`, () => HttpResponse.json([])),
+    http.get(`${ORIGIN}/store-api/rel/sessions/views`, () => HttpResponse.json([])),
   ]
 }
 
@@ -95,7 +111,7 @@ async function connectAndRender(initialPath = '/engines', extraHandlers: Request
   if (extraHandlers.length > 0) server.use(...extraHandlers)
   await act(() => connect(makeConnection()))
   const queryClient = createAppQueryClient()
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[initialPath]}>
         <SelectedDomainProvider>
@@ -108,6 +124,7 @@ async function connectAndRender(initialPath = '/engines', extraHandlers: Request
       </MemoryRouter>
     </QueryClientProvider>,
   )
+  return { queryClient, ...view }
 }
 
 function cardText(tone: 'kv' | 'json' | 'rel'): string {
@@ -149,6 +166,39 @@ describe('EnginesScreen', () => {
     expect(document.querySelector('.engines__card--rel .engines__dot--ok')).toBeInTheDocument()
   })
 
+  it('turns the status dot of an engine off when its endpoints answer 503', async () => {
+    await connectAndRender('/engines', [
+      http.get(`${ORIGIN}/store-api/json/:domain/documents/count`, () => HttpResponse.text('JSON engine disabled', { status: 503 })),
+      http.get(`${ORIGIN}/store-api/json/:domain/indexes`, () => HttpResponse.text('JSON engine disabled', { status: 503 })),
+      http.get(`${ORIGIN}/store-api/rel/:domain/tables`, () => HttpResponse.text('Relational engine disabled', { status: 503 })),
+      http.get(`${ORIGIN}/store-api/rel/:domain/views`, () => HttpResponse.text('Relational engine disabled', { status: 503 })),
+    ])
+
+    // the kv dot is on once the domain list has loaded; from then on a json/rel dot goes off only through the 503
+    await waitFor(() => expect(document.querySelector('.engines__card--kv .engines__dot--ok')).toBeInTheDocument())
+    await waitFor(() => expect(document.querySelector('.engines__card--json .engines__dot--ok')).not.toBeInTheDocument())
+    await waitFor(() => expect(document.querySelector('.engines__card--rel .engines__dot--ok')).not.toBeInTheDocument())
+    expect(document.querySelector('.engines__card--kv .engines__dot--ok')).toBeInTheDocument()
+  })
+
+  it('keeps the status dot of an engine on when its endpoints answer 503 with Retry-After', async () => {
+    const overloaded = () => HttpResponse.text('503 Service Unavailable', { status: 503, headers: { 'Retry-After': '1' } })
+    const { queryClient } = await connectAndRender('/engines', [
+      http.get(`${ORIGIN}/store-api/rel/:domain/tables`, overloaded),
+      http.get(`${ORIGIN}/store-api/rel/:domain/views`, overloaded),
+    ])
+
+    await waitFor(() => expect(document.querySelector('.engines__card--kv .engines__dot--ok')).toBeInTheDocument())
+    const relKeys = [
+      ['rel-tables', 'shop'],
+      ['rel-tables', 'sessions'],
+      ['rel-views', 'shop'],
+      ['rel-views', 'sessions'],
+    ]
+    await waitFor(() => expect(relKeys.map((key) => queryClient.getQueryState(key)?.status)).toEqual(['error', 'error', 'error', 'error']))
+    expect(document.querySelector('.engines__card--rel .engines__dot--ok')).toBeInTheDocument()
+  })
+
   it('"open in: <domain>" selects the domain and navigates into the matching data-browser engine mode', async () => {
     await connectAndRender()
     await waitFor(() => expect(cardText('json')).toContain('42'))
@@ -165,10 +215,50 @@ describe('EnginesScreen', () => {
     await connectAndRender()
 
     expect(await screen.findByText('no client-started tasks')).toBeInTheDocument()
-    await waitFor(() => expect(document.querySelector('.engines__tasks')?.textContent).toContain('compaction runs'))
-    expect(document.querySelector('.engines__tasks')?.textContent).toContain('3')
-    expect(document.querySelector('.engines__tasks')?.textContent).toContain('janitor runs')
-    expect(document.querySelector('.engines__tasks')?.textContent).toContain('5')
+    // metrics follow the role check, so the counters arrive after the labels
+    await waitFor(() => expect(document.querySelector('.engines__tasks')?.textContent).toContain('compaction runs3'))
+    expect(document.querySelector('.engines__tasks')?.textContent).toContain('janitor runs5')
+  })
+
+  it('shows dashes for ops per second and the run counters to a key without the admin role', async () => {
+    const { queryClient } = await connectAndRender('/engines', [
+      http.get(`${ORIGIN}/store-api/auth/whoami`, () => HttpResponse.json({ name: 'bob', role: 'User' })),
+    ])
+
+    await waitFor(() => expect(queryClient.getQueryState(['capabilities', 'whoami'])?.status).toBe('success'))
+    await waitFor(() => {
+      const ops = Array.from(document.querySelectorAll('.engines__card-ops')).map((el) => el.textContent)
+      expect(ops).toEqual(['— ops/s', '— ops/s', '— ops/s'])
+    })
+    const tasks = document.querySelector('.engines__tasks')?.textContent ?? ''
+    expect(tasks).toContain('compaction runs—')
+    expect(tasks).toContain('janitor runs—')
+  })
+
+  it('drops cached metrics when the role turns out to be no admin', async () => {
+    let role = 'Admin'
+    const { queryClient } = await connectAndRender('/engines', [
+      http.get(`${ORIGIN}/store-api/auth/whoami`, () => HttpResponse.json({ name: 'bob', role })),
+    ])
+    await waitFor(() => expect(document.querySelector('.engines__tasks')?.textContent).toContain('compaction runs3'))
+
+    role = 'User'
+    await act(() => queryClient.invalidateQueries({ queryKey: ['capabilities', 'whoami'] }))
+
+    await waitFor(() => {
+      const ops = Array.from(document.querySelectorAll('.engines__card-ops')).map((el) => el.textContent)
+      expect(ops).toEqual(['— ops/s', '— ops/s', '— ops/s'])
+    })
+    expect(document.querySelector('.engines__tasks')?.textContent).toContain('compaction runs—')
+  })
+
+  it('keeps the loading sign while the role check is open', async () => {
+    await connectAndRender('/engines', [http.get(`${ORIGIN}/store-api/auth/whoami`, () => new Promise<Response>(() => undefined))])
+
+    await waitFor(() => expect(document.querySelector('.engines__health')).toBeInTheDocument())
+    const ops = Array.from(document.querySelectorAll('.engines__card-ops')).map((el) => el.textContent)
+    expect(ops).toEqual(['… ops/s', '… ops/s', '… ops/s'])
+    expect(document.querySelector('.engines__tasks')?.textContent).toContain('compaction runs0')
   })
 
   it(
@@ -197,35 +287,23 @@ describe('EnginesScreen', () => {
   )
 
   describe('reindex trigger (spec engines/002)', () => {
-    it('disables the reindex trigger with a reason when there are no JSON domains', async () => {
-      await connectAndRender('/engines', [http.get(`${ORIGIN}/store-api/json/domains`, () => HttpResponse.json([]))])
+    it('disables the reindex trigger with a reason when there are no domains', async () => {
+      await connectAndRender('/engines', [http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([]))])
 
       const toggle = await screen.findByRole('button', { name: '▶ reindex…' })
       await waitFor(() => expect(toggle).toBeDisabled())
-      expect(toggle).toHaveAttribute('title', 'no JSON domains to reindex')
+      expect(toggle).toHaveAttribute('title', 'no domains to reindex')
     })
 
-    it('excludes deleting JSON domains from the domain dropdown and sources fields from the shared index cache', async () => {
-      await connectAndRender('/engines', [
-        http.get(`${ORIGIN}/store-api/json/domains`, () =>
-          HttpResponse.json([
-            { name: 'shop', created_at: 1, state: 'active' },
-            { name: 'archive', created_at: 2, state: 'deleting' },
-          ]),
-        ),
-        // Die JSON-ENGINE-Karte summiert document_count/Indexe über alle JSON-Domänen (auch deleting) — ohne
-        // Handler hierfür bliebe der Request unhandled und ginge auf das echte Netzwerk (hängt, verhungert
-        // den Connection-Pool nachfolgender Tests).
-        http.get(`${ORIGIN}/store-api/json/domains/archive`, () => HttpResponse.json({ name: 'archive', created_at: 2, state: 'deleting' })),
-        http.get(`${ORIGIN}/store-api/json/archive/indexes`, () => HttpResponse.json([])),
-      ])
+    it('offers every domain of the domain list in the domain dropdown and sources fields from the shared index cache', async () => {
+      await connectAndRender()
 
       const toggle = await screen.findByRole('button', { name: '▶ reindex…' })
       await waitFor(() => expect(toggle).toBeEnabled())
       fireEvent.click(toggle)
 
       const domainSelect = await screen.findByLabelText('reindex domain')
-      expect(within(domainSelect).getAllByRole('option').map((option) => option.textContent)).toEqual(['shop'])
+      expect(within(domainSelect).getAllByRole('option').map((option) => option.textContent)).toEqual(['shop', 'sessions'])
 
       const fieldSelect = screen.getByLabelText('reindex field')
       await waitFor(() =>
@@ -299,15 +377,135 @@ describe('EnginesScreen', () => {
     })
   })
 
-  it('renders the SYSTEM throughput bar wired to /store-api/metrics (delta-integration itself covered by SystemThroughput.test.tsx)', async () => {
+  it('shows per-engine ops/s and latency lines from the engines block', async () => {
     await connectAndRender()
 
-    const throughputText = () => document.querySelector('.engines__throughput')?.textContent ?? ''
-    expect(await screen.findByText('system-wide · derived from /store-api/metrics')).toBeInTheDocument()
-    // Nur ein Metrik-Stand bislang ⇒ noch keine Rate (spec §1: Rate braucht zwei Metrik-Stände).
-    expect(throughputText()).toContain('0 reads/s')
-    expect(throughputText()).toContain('0 writes/s')
-    expect(document.querySelectorAll('.engines__spark-bar')).toHaveLength(24) // 2 Sparklines à 12 Balken
+    const kvCard = document.querySelector('.engines__card--kv') as HTMLElement
+    await waitFor(() => expect(kvCard.querySelector('.engines__card-ops')?.textContent).toContain('5.0'))
+    expect(kvCard.querySelector('.engines__card-window')?.textContent).toBe('60s window')
+    expect(Array.from(kvCard.querySelectorAll('.engines__card-lat')).map((line) => line.textContent)).toEqual([
+      'reads 1.7/s · p50 5 µs · p95 50 µs',
+      'writes 3.3/s · p50 500 µs · p95 5.0 ms',
+    ])
+    expect(document.querySelectorAll('.engines__spark-bar')).toHaveLength(36)
+  })
+
+  it('shows the json and rel cards with their own figures', async () => {
+    await connectAndRender()
+
+    const jsonCard = document.querySelector('.engines__card--json') as HTMLElement
+    const relCard = document.querySelector('.engines__card--rel') as HTMLElement
+    const latLines = (card: HTMLElement) => Array.from(card.querySelectorAll('.engines__card-lat')).map((line) => line.textContent)
+    await waitFor(() => expect(jsonCard.querySelector('.engines__card-ops')?.textContent).toBe('1.0 ops/s'))
+    expect(latLines(jsonCard)).toEqual(['reads 1.0/s · p50 7 µs · p95 70 µs', 'writes 0/s'])
+    expect(relCard.querySelector('.engines__card-ops')?.textContent).toBe('0 ops/s')
+    expect(latLines(relCard)).toEqual(['reads 0/s', 'writes 0/s'])
+  })
+
+  it('never renders the system-wide throughput label', async () => {
+    await connectAndRender()
+
+    await waitFor(() => expect(document.querySelector('.engines__card-window')).toBeInTheDocument())
+    expect(screen.queryByText('system-wide · derived from /store-api/metrics')).not.toBeInTheDocument()
+  })
+
+  describe('health bar (spec s-c5d388f5)', () => {
+    const HEALTH_DEGRADED = {
+      ...HEALTH,
+      status: 'degraded',
+      shards: [
+        { id: 0, status: 'ok' },
+        { id: 1, status: 'timeout' },
+      ],
+      resources: { state: 'warning', disk_state: 'blocked', memory_state: 'warning' },
+      io: { failures: 2 },
+    }
+    const barText = () => document.querySelector('.engines__health')?.textContent ?? ''
+
+    it('shows the health bar', async () => {
+      await connectAndRender('/engines', [http.get(`${ORIGIN}/health`, () => HttpResponse.json(HEALTH_DEGRADED, { status: 503 }))])
+
+      await waitFor(() => expect(barText()).toContain('shards 1/2 ok'))
+      expect(barText()).toContain('disk blocked')
+      expect(barText()).toContain('memory warning')
+      expect(barText()).toContain('i/o 2 failures')
+      expect(screen.getByText('shards 1/2 ok')).toHaveAttribute('title', 'shard 0: ok\nshard 1: timeout')
+      expect(screen.getByText('disk blocked')).toHaveClass('engines__health-seg--err')
+      expect(screen.getByText('memory warning')).toHaveClass('engines__health-seg--warn')
+    })
+
+    it('appends admin numbers from metrics', async () => {
+      await connectAndRender('/engines', [
+        http.get(`${ORIGIN}/store-api/metrics`, () =>
+          HttpResponse.json({
+            ...METRICS,
+            resources: {
+              disk: [{ path: '/data', size_bytes: 2097152, free_bytes: 1048576, state: 'ok' }],
+              memory: { rss_anon_bytes: 1048576, budget_bytes: 4194304, state: 'ok' },
+            },
+          }),
+        ),
+      ])
+
+      await waitFor(() => expect(barText()).toContain('1.0 MB free of 2.0 MB'))
+      expect(barText()).toContain('1.0 MB of 4.0 MB')
+    })
+
+    it('names titled segments by their visible text', async () => {
+      await connectAndRender('/engines', [
+        http.get(`${ORIGIN}/health`, () => HttpResponse.json(HEALTH_DEGRADED, { status: 503 })),
+        http.get(`${ORIGIN}/store-api/metrics`, () =>
+          HttpResponse.json({
+            ...METRICS,
+            resources: { disk: [{ path: '/data', size_bytes: 2097152, free_bytes: 1048576, state: 'ok' }] },
+          }),
+        ),
+      ])
+
+      const shardsSeg = await screen.findByRole('group', { name: 'shards 1/2 ok' })
+      expect(shardsSeg).toHaveAttribute('title', 'shard 0: ok\nshard 1: timeout')
+      const volumeSeg = await screen.findByRole('group', { name: '1.0 MB free of 2.0 MB' })
+      expect(volumeSeg).toHaveAttribute('title', '/data')
+    })
+
+    it('does not request metrics for a key without the admin role', async () => {
+      let metricsCalls = 0
+      const { queryClient } = await connectAndRender('/engines', [
+        http.get(`${ORIGIN}/store-api/auth/whoami`, () => HttpResponse.json({ name: 'bob', role: 'User' })),
+        http.get(`${ORIGIN}/store-api/metrics`, () => {
+          metricsCalls += 1
+          return HttpResponse.json(METRICS)
+        }),
+      ])
+
+      await waitFor(() => expect(barText()).toContain('shards 0/0 ok'))
+      await waitFor(() => expect(queryClient.getQueryState(['capabilities', 'whoami'])?.status).toBe('success'))
+      expect(metricsCalls).toBe(0)
+    })
+
+    it('still requests metrics when the role check fails', async () => {
+      let metricsCalls = 0
+      await connectAndRender('/engines', [
+        http.get(`${ORIGIN}/store-api/auth/whoami`, () => HttpResponse.text('boom', { status: 500 })),
+        http.get(`${ORIGIN}/store-api/metrics`, () => {
+          metricsCalls += 1
+          return HttpResponse.json(METRICS)
+        }),
+      ])
+
+      await waitFor(() => expect(metricsCalls).toBeGreaterThanOrEqual(1))
+    })
+
+    it('shows metrics unavailable on 503', async () => {
+      await connectAndRender('/engines', [
+        http.get(`${ORIGIN}/store-api/metrics`, () => HttpResponse.text('503 Service Unavailable', { status: 503 })),
+      ])
+
+      await waitFor(() => expect(barText()).toContain('metrics unavailable'))
+      expect(barText()).toContain('shards 0/0 ok')
+      expect(barText()).not.toContain('free of')
+      await waitFor(() => expect(cardText('kv')).toContain('2.0 MB'))
+    })
   })
 
   it('renders recorder rows newest-first (max 20 visible), a why? link on a 409 row, and a distinct stream row', async () => {

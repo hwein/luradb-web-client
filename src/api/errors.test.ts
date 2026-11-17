@@ -25,6 +25,72 @@ describe('apiErrorFromResponse', () => {
     const err = await apiErrorFromResponse(response)
     expect(err.message).toBe('Internal Server Error')
   })
+
+  it('uses a plaintext body (trimmed) as the message', async () => {
+    const response = new Response('  503 Service Unavailable: backup is disabled (backup.enabled = false)\n', {
+      status: 503,
+      statusText: 'Service Unavailable',
+    })
+    const err = await apiErrorFromResponse(response)
+    expect(err.message).toBe('503 Service Unavailable: backup is disabled (backup.enabled = false)')
+    expect(err.body).toBeUndefined()
+  })
+
+  it('keeps statusText for a JSON body without error/message', async () => {
+    const response = new Response(JSON.stringify({ detail: 'nope' }), { status: 400, statusText: 'Bad Request' })
+    const err = await apiErrorFromResponse(response)
+    expect(err.message).toBe('Bad Request')
+  })
+
+  it('caps a foreign plaintext body to its first line and 300 chars', async () => {
+    const html = `<html>${'x'.repeat(400)}\n<body>more</body></html>`
+    const err = await apiErrorFromResponse(new Response(html, { status: 502, statusText: 'Bad Gateway' }))
+    expect(err.message.length).toBeLessThanOrEqual(300)
+    expect(err.message).not.toContain('\n')
+    expect(err.message.startsWith('<html>')).toBe(true)
+  })
+
+  it('reads Retry-After into retryAfterSecs', async () => {
+    const response = new Response('503 Service Unavailable: the server is overloaded, retry later', {
+      status: 503,
+      headers: { 'Retry-After': '1' },
+    })
+    const err = await apiErrorFromResponse(response)
+    expect(err.retryAfterSecs).toBe(1)
+  })
+
+  it('appends the retry delay to the message', async () => {
+    const response = new Response('503 Service Unavailable: the server is overloaded, retry later', {
+      status: 503,
+      headers: { 'Retry-After': '1' },
+    })
+    const err = await apiErrorFromResponse(response)
+    expect(err.message).toBe('503 Service Unavailable: the server is overloaded, retry later · retry in 1 s')
+  })
+
+  it('does not repeat a retry delay the server text already names', async () => {
+    const text = '507 Insufficient Storage: write blocked: disk space below threshold, retry in 5 s'
+    const err = await apiErrorFromResponse(new Response(text, { status: 507, headers: { 'Retry-After': '5' } }))
+    expect(err.message).toBe(text)
+    expect(err.retryAfterSecs).toBe(5)
+  })
+
+  it('keeps the message and sets no field without a Retry-After header', async () => {
+    const text = '503 Service Unavailable: backup is disabled (backup.enabled = false)'
+    const err = await apiErrorFromResponse(new Response(text, { status: 503 }))
+    expect(err.message).toBe(text)
+    expect(err.retryAfterSecs).toBeUndefined()
+  })
+
+  it('ignores a Retry-After that is not a whole number of seconds', async () => {
+    const response = new Response('503 Service Unavailable: x', {
+      status: 503,
+      headers: { 'Retry-After': 'Fri, 06 Nov 2026 13:00:00 GMT' },
+    })
+    const err = await apiErrorFromResponse(response)
+    expect(err.message).toBe('503 Service Unavailable: x')
+    expect(err.retryAfterSecs).toBeUndefined()
+  })
 })
 
 describe('networkApiError', () => {

@@ -1,12 +1,12 @@
 import { keymap } from '@codemirror/view'
 import { Prec } from '@codemirror/state'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router'
+import { useMemo, useRef, useState } from 'react'
 import type { ApiClient } from '../../api'
 import { useSession } from '../../app/session'
 import { CodeEditor } from '../../lib'
 import { useSelectedDomain } from '../../shell'
+import { relTableCountDomainPrefix, relTablesKey, relViewsKey } from '../../shell/domainDetails'
 import { useDomainSummaries } from '../../shell/domains'
 import './SqlScreen.css'
 import { SqlDocsSplit } from './SqlDocsSplit'
@@ -25,12 +25,6 @@ import {
   updateTabText,
   useSqlState,
 } from './sqlStore'
-
-function insertQueryFrom(state: unknown): string | undefined {
-  if (state === null || typeof state !== 'object') return undefined
-  const value = (state as { insertQuery?: unknown }).insertQuery
-  return typeof value === 'string' ? value : undefined
-}
 
 function SaveViewBar({ onSubmit, onCancel }: { onSubmit: (name: string) => void; onCancel: () => void }) {
   const [name, setName] = useState('')
@@ -71,27 +65,29 @@ export function SqlScreen() {
   const queryClient = useQueryClient()
   const { selected } = useSelectedDomain()
   const domains = useDomainSummaries(apiClient)
-  const hasRel = domains.find((domain) => domain.name === selected)?.engines.rel !== undefined
+  const domainListed = domains.some((domain) => domain.name === selected)
 
   const { tabs, activeId } = useSqlState()
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0]
 
   const [docsOpen, setDocsOpen] = useState(false)
-  const [docsArticle, setDocsArticle] = useState('cross-engine-links')
+  const [docsArticle, setDocsArticle] = useState('lurasql')
   const [savingView, setSavingView] = useState(false)
-
-  const location = useLocation()
-  const navigate = useNavigate()
 
   // Alle Request-Parameter als mutate-Variablen: TanStack aktualisiert die mutationFn erst im Effect —
   // eine Closure über apiClient/selected wäre direkt nach einem Commit einen Render alt (Muster: JsonDetail).
   const run = useMutation<SqlOutcome, Error, { apiClient: ApiClient; domain: string; sql: string; expand: string[]; params: unknown[] }>({
     mutationFn: ({ apiClient: client, domain, sql, expand, params }) => executeSql(client, domain, sql, expand, params),
     onSuccess: (outcome, variables) => {
+      if (outcome.status !== 'ok') return
       // Schema-Änderungen (u. a. save-as-view) frisch in den Explorer spiegeln (spec §6).
-      if (outcome.status === 'ok' && outcome.result.kind === 'ddl') {
-        void queryClient.invalidateQueries({ queryKey: ['rel-tables', variables.domain] })
-        void queryClient.invalidateQueries({ queryKey: ['rel-views', variables.domain] })
+      if (outcome.result.kind === 'ddl') {
+        void queryClient.invalidateQueries({ queryKey: relTablesKey(variables.domain) })
+        void queryClient.invalidateQueries({ queryKey: relViewsKey(variables.domain) })
+      }
+      // Row-Counts der Domäne (spec shell/010 §9) — das Ergebnis nennt die betroffene Tabelle nicht, daher Präfix über alle.
+      if (outcome.result.kind === 'ddl' || outcome.result.kind === 'dml') {
+        void queryClient.invalidateQueries({ queryKey: relTableCountDomainPrefix(variables.domain) })
       }
     },
   })
@@ -102,7 +98,7 @@ export function SqlScreen() {
 
   // Eine Quelle für Button-disabled UND Klick-Guard — sonst verpufft ein Klick im Fenster zwischen
   // Domänen-Query und Default-Selektion still (Button schon enabled, selected noch null).
-  const canRun = hasRel && apiClient !== undefined && selected !== null && activeTab !== undefined && paramsError === undefined && !run.isPending
+  const canRun = domainListed && apiClient !== undefined && selected !== null && activeTab !== undefined && paramsError === undefined && !run.isPending
 
   // Live-Handler in Refs, damit die (stabile) CodeMirror-Keymap immer den aktuellen Tab-Stand nutzt.
   const runRef = useRef<() => void>(() => {})
@@ -112,7 +108,7 @@ export function SqlScreen() {
     run.mutate({ apiClient, domain: selected, sql: activeTab.text, expand: activeTab.expand, params: paramsResult.params })
   }
   saveRef.current = () => {
-    if (!hasRel || activeTab === undefined) return
+    if (!domainListed || activeTab === undefined) return
     setSavingView(true)
   }
 
@@ -142,14 +138,6 @@ export function SqlScreen() {
     ],
     [],
   )
-
-  // Docs-„try in the console →" (docs/001) trägt {insertQuery} als Router-State — neuen Tab anlegen, State löschen.
-  useEffect(() => {
-    const query = insertQueryFrom(location.state)
-    if (query === undefined) return
-    addTab(query)
-    void navigate('.', { replace: true, state: null })
-  }, [location, navigate])
 
   function openDocSplit(docId: string): void {
     setDocsArticle(docId)
@@ -192,7 +180,7 @@ export function SqlScreen() {
         <SqlToolbar
           apiClient={apiClient}
           domainName={selected}
-          hasRel={hasRel}
+          domainListed={domainListed}
           runDisabled={!canRun}
           expand={activeTab.expand}
           onExpandChange={(expand) => setTabExpand(activeTab.id, expand)}

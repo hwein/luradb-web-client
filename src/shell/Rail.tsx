@@ -1,6 +1,8 @@
+import { useQueryClient } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { NavLink } from 'react-router'
+import { endSession } from '../app/queryClient'
 import { LogoMark } from '../brand/LogoMark'
 import { useTheme } from '../theme'
 import { AboutModal } from './AboutModal'
@@ -66,21 +68,6 @@ export const ROUTES: RailRoute[] = [
     ),
   },
   {
-    path: '/config',
-    title: 'Configuration',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <circle cx="8" cy="8" r="2.4" stroke="currentColor" strokeWidth="1.6" />
-        <path
-          d="M8 1.8v2.2M8 12v2.2M1.8 8H4M12 8h2.2M3.6 3.6l1.6 1.6M10.8 10.8l1.6 1.6M12.4 3.6l-1.6 1.6M5.2 10.8l-1.6 1.6"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      </svg>
-    ),
-  },
-  {
     path: '/docs',
     title: 'Docs',
     icon: (
@@ -94,6 +81,7 @@ export const ROUTES: RailRoute[] = [
 
 export function Rail() {
   const { theme, toggle } = useTheme()
+  const queryClient = useQueryClient()
   const [aboutOpen, setAboutOpen] = useState(false)
 
   return (
@@ -114,6 +102,12 @@ export function Rail() {
       <div className="rail__spacer" />
       <button type="button" className="rail__theme" title="Toggle theme" onClick={toggle}>
         {theme.toUpperCase()}
+      </button>
+      <button type="button" className="rail__button rail__disconnect" title="Disconnect" onClick={() => endSession(queryClient)}>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M6.5 2.5h-3v11h3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M7 8h6.5M11 5.5L13.5 8 11 10.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
     </nav>

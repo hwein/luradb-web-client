@@ -1,8 +1,9 @@
 import { useSyncExternalStore } from 'react'
-import { checkCompatibility, createApi, record, type ApiClient } from '../api'
+import { checkCompatibility, clearRecordedCalls, createApi, record, type ApiClient } from '../api'
 import { buildAuthHeader, buildTransport } from './connectionRegistry'
 import type { Connection } from './connections'
 import { touchLastUsed } from './connections'
+import { isCrossOrigin, isMixedContentBlocked } from './crossOrigin'
 import { getEnvironment } from './environment'
 
 export type SessionState =
@@ -42,6 +43,19 @@ export function useSession(): SessionState {
   return useSyncExternalStore(subscribe, getSnapshot)
 }
 
+export interface ConnectedSession {
+  apiClient: ApiClient
+  serverVersion: string
+  connectionId: string
+}
+
+/** Kondensierte Sicht für Verbraucher, die nur im verbundenen Zustand aktiv sind (spec admin/005 §1) — spart das `status === 'connected'`-Narrowing an jeder Aufrufstelle. */
+export function useConnectedSession(): ConnectedSession | undefined {
+  const session = useSession()
+  if (session.status !== 'connected') return undefined
+  return { apiClient: session.apiClient, serverVersion: session.serverVersion, connectionId: session.connection.id }
+}
+
 /** Version-Handshake gemäß api/COMPATIBILITY.md: 401 ⇒ ungültiger Key, Netzwerkfehler ⇒ unreachable, sonst Compat-Check. */
 export async function connect(connection: Connection): Promise<void> {
   setState({ status: 'connecting', connection })
@@ -56,6 +70,16 @@ export async function connect(connection: Connection): Promise<void> {
     getAuthHeader: () => authHeader,
   })
   unsubscribeRecorder = apiClient.onCall(record)
+
+  if (env === 'browser' && isMixedContentBlocked(window.location.href, transport.baseUrl)) {
+    const host = new URL(transport.baseUrl).host
+    setState({
+      status: 'error',
+      connection,
+      message: `blocked by the browser: this page is served over https and cannot call the http api at ${host} (mixed content) — use an https server url, or leave the url empty to go through this origin’s proxy`,
+    })
+    return
+  }
 
   // Nur der Fetch selbst zählt als "unreachable" — ein Fehler in checkCompatibility/touchLastUsed danach
   // wäre kein Erreichbarkeits-Problem und soll nicht als solches maskiert werden.
@@ -75,7 +99,12 @@ export async function connect(connection: Connection): Promise<void> {
       env === 'desktop' && connection.type.url.startsWith('https://') && connection.type.acceptInvalidCerts !== true
         ? ' — if this server uses a self-signed certificate, enable "Accept self-signed certificates" in the connection settings'
         : ''
-    setState({ status: 'error', connection, message: `server unreachable at ${transport.baseUrl}${suffix}${certHint}` })
+    // Same pattern for CORS: a blocked cross-origin request is indistinguishable from a server that is down.
+    const corsHint =
+      env === 'browser' && isCrossOrigin(window.location.origin, transport.baseUrl)
+        ? ' — cross-origin request: this also fails when the server does not allow this origin in its [cors] section; a blocked request looks exactly like an unreachable server'
+        : ''
+    setState({ status: 'error', connection, message: `server unreachable at ${transport.baseUrl}${suffix}${certHint}${corsHint}` })
     return
   }
 
@@ -116,5 +145,6 @@ export async function connect(connection: Connection): Promise<void> {
 export function disconnect(): void {
   unsubscribeRecorder?.()
   unsubscribeRecorder = undefined
+  clearRecordedCalls()
   setState({ status: 'unauthenticated' })
 }

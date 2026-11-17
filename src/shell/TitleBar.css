@@ -1,0 +1,50 @@
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  height: 32px;
+  padding-left: 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--bord);
+}
+
+/* Room for the native traffic lights */
+.titlebar--macos {
+  padding-left: 78px;
+}
+
+.titlebar__name {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tx);
+}
+
+.titlebar__controls {
+  display: flex;
+  align-self: stretch;
+  margin-left: auto;
+}
+
+.titlebar__control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--mut);
+}
+
+.titlebar__control:hover {
+  background: var(--panel2);
+  color: var(--tx);
+}
+
+.titlebar__control--close:hover {
+  background: var(--err);
+  color: var(--accT);
+}

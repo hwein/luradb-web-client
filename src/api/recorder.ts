@@ -23,6 +23,12 @@ export function record(info: CallInfo): void {
   notify()
 }
 
+/** Verbindungswechsel: RECENT REQUESTS darf keine Calls des vorigen Servers weiterzeigen. */
+export function clearRecordedCalls(): void {
+  entries = []
+  notify()
+}
+
 export function subscribeRecorder(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)

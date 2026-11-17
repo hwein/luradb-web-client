@@ -13,7 +13,13 @@ export interface paths {
         };
         /**
          * `GET /health` — public heartbeat endpoint.
-         * @description Returns a JSON snapshot of system vitals. No authentication required.
+         * @description Returns a JSON snapshot of system vitals, summed over the data shards, in
+         *     `shards` the status of each data shard: `ok` once it answered, `timeout`
+         *     when it did not within 250 ms, in `resources` the state of disk space
+         *     (the worst of all data volumes) and of the server's own memory, and in
+         *     `io`, while writes of a data file fail, their failures in a row. It names
+         *     no path and gives no size; `GET /store-api/metrics` does. No
+         *     authentication required.
          */
         get: operations["health"];
         put?: never;
@@ -32,8 +38,19 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Returns all created users (admins and regular users).
-         *     API keys are not included — only name, role, and creation timestamp.
+         * Returns all created users (admins and regular users) with their domain
+         *     permission matrix. API keys are not included.
+         * @description For `role == "Admin"`, `permissions` is meaningless for access control:
+         *     admins have unconditional access regardless of its contents. It
+         *     is usually empty for an admin but not guaranteed to be — e.g. a user
+         *     promoted to admin via `luradb.toml` keeps any permissions set before the
+         *     promotion. Never read an empty array as "no access" or a non-empty one as
+         *     a restriction on an Admin row.
+         *
+         *     The list reflects the permission table as stored — it is not cross-checked
+         *     against existing domains, so an entry set with `?allow_missing=true` for a
+         *     domain not created yet is shown too. Deleting a domain removes the
+         *     permissions on it.
          */
         get: operations["list_users"];
         put?: never;
@@ -79,9 +96,16 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Sets or overwrites a user's access permission on a domain.
-         *     `access` must be `"read"`, `"write"`, or `"ddl"` — each level includes the
-         *     lower ones. For `kv` the domain must exist; `json`/`rel` only check the name.
+         * Sets or overwrites a user's access permission on a domain: without
+         *     `engine` on the whole domain (keys, documents and tables), with `engine`
+         *     on that engine only. `access` must be `"read"`, `"write"`, or `"ddl"` —
+         *     each level includes the lower ones; `"ddl"` acts as `"write"` on keys and
+         *     documents. A user holds either a permission on the whole domain or
+         *     permissions on engines: one on the whole domain replaces the user's engine
+         *     permissions on it, and one on an engine turns a permission on the whole
+         *     domain into one of the same level per engine first, then sets the named
+         *     engine. The domain must exist and be active, whatever its engines;
+         *     `?allow_missing=true` skips that check.
          */
         post: operations["set_permission"];
         delete?: never;
@@ -101,9 +125,11 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Revokes a user's access permission on a specific domain.
-         *     `?store_type=json`/`rel` revokes a JSON/rel domain permission (default: kv).
-         *     After this call, the user's requests to this domain get `403 Forbidden`.
+         * Revokes a user's permissions on a domain: without `engine` every one —
+         *     on the whole domain and on its engines —, with `?engine=` the one on that
+         *     engine. A permission on the whole domain then becomes one of the same
+         *     level on each of the other two engines. Afterwards, the user's requests
+         *     to what was revoked get `403 Forbidden`.
          */
         delete: operations["remove_permission"];
         options?: never;
@@ -132,6 +158,203 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/store-api/auth/whoami": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Returns the caller's own identity. Unlike every other endpoint under this
+         *     tag, reachable by any authenticated caller — not admin-only (the
+         *     `auth_layer` middleware whitelists this path, see `middleware.rs`).
+         * @description Checked in order: `auth.enabled = false` → `Disabled`; a `TrustedPeer`
+         *     (UDS peer authenticated by the kernel) → `TrustedPeer`;
+         *     otherwise the Bearer key is resolved to its `UserRecord` → `Admin`/`User`.
+         *     A `401` past the `auth_layer` middleware (which already validates the key)
+         *     can only mean a middleware bug — fail-closed, analogous to `enforce_sql_level`.
+         */
+        get: operations["whoami"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lists every backup archive in `backup.dir`, plus the currently running
+         *     backup job (if any) separately in `running`.
+         */
+        get: operations["list_backups"];
+        put?: never;
+        /** Starts an on-demand backup job. */
+        post: operations["create_backup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/backups/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Streams the request body to `backup.dir`, verifies its checksum and
+         *     manifest, then assigns it a fresh server-side id (`bk_..._upload[_N]`) —
+         *     the id in the manifest is never adopted. Invalid archives are discarded.
+         */
+        post: operations["upload_backup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/backups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Manifest fields + state + size for one backup. A backup whose job is
+         *     still running (no `.ndjson` file yet, only `.part`) reports `state:
+         *     "running"` from the in-RAM job slot instead of 404.
+         */
+        get: operations["get_backup"];
+        put?: never;
+        post?: never;
+        /**
+         * Deletes a backup archive file. Refuses while the id is the currently
+         *     running job (or a stale `.part` leftover still exists for it).
+         */
+        delete: operations["delete_backup"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/backups/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Streams the archive with HTTP Range support for resumable downloads.
+         * @description The archive is NDJSON. Its first line is the manifest, format version 2:
+         *     `format_version`, `id`, `created_at`, `luradb_version`, `scope`,
+         *     `include_auth`, `encoding`, `schedule`, and
+         *     - `shards`: data shards of the server that wrote it. Informational only:
+         *       a restore places every domain by the shard count of the server it runs
+         *       on, so an archive restores into any shard count.
+         *     - `lsn_cut`: `{kv, json, rel}`, per engine a write-ahead-log position that
+         *       every write in the archive is at or below (a lower bound of the cut);
+         *       0 for an engine outside the scope. Positions keep growing across
+         *       restarts, so they compare across runs of the server.
+         *     - `kv_snapshot_ts`, `json_snapshot_ts`, `rel_snapshot_ts`: per engine,
+         *       the newest read-snapshot stamp among the data shards; 0 for an engine
+         *       outside the scope.
+         *
+         *     All shards of one engine are read at one consistent cut: an archive that
+         *     holds a write holds every write confirmed before it. The relational cut
+         *     is taken before the KV and JSON cuts. Domain lines carry their domain's
+         *     name; sections follow in the order KV, JSON, relational, auth; the last
+         *     line is the checksum.
+         *
+         *     A relational domain is a `rel-domain` line (`name`, `created_at`), then
+         *     its tables by creation, its views, and per table its rows and
+         *     AUTOINCREMENT state:
+         *     - `rel-table`: `domain`, `name`, `columns` (each `name`, `type` as SQL
+         *       type name, `nullable`, `primary_key`, `autoincrement`, `unique`, an
+         *       optional `default` of `{"kind": "null"}`, `{"kind":
+         *       "current_timestamp"}` or `{"kind": "literal", "value": …}`, an optional
+         *       `references` naming the target table) and `indexes` (`name`, `column`,
+         *       `unique`; every index under its stored name).
+         *     - `rel-view`: `domain`, `name`, `sql`, the stored SELECT text.
+         *     - `rel-row`: `domain`, `table`, `row`, every column by name, NULL as
+         *       `null`, KVREF/JSONREF links as stored.
+         *     - `rel-seq`: `domain`, `table`, `hw`: the next insert without a key gets
+         *       `hw + 1`.
+         *
+         *     Values are JSON numbers (INTEGER, REAL), booleans, strings (TEXT, KVREF,
+         *     JSONREF) and, for TIMESTAMP, integer milliseconds since the Unix epoch.
+         *     Archives of format version 1, which lack `shards` and `lsn_cut`, and
+         *     archives without relational lines remain restorable.
+         */
+        get: operations["download_backup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/backups/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Starts a restore job from an existing backup archive. The single-domain
+         *     remap and format-version checks happen synchronously here; a domain
+         *     already existing (`fail_if_exists`) only surfaces asynchronously via
+         *     `GET /restores/{id}`.
+         */
+        post: operations["restore_backup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * `GET /config` — effective configuration of the running process. Admin only.
+         * @description The path carries no `{domain}` segment, so `extract_domain` returns `None`
+         *     and the auth layer's None-branch requires an admin role. The admin API
+         *     key never appears in the body — redaction happens at the field level
+         *     (`AdminEntry.api_key`'s `#[serde(skip_serializing)]` in config.rs), not
+         *     in this handler.
+         */
+        get: operations["get_config"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/store-api/domains": {
         parameters: {
             query?: never;
@@ -139,12 +362,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Returns all active domains with their names and creation timestamps. */
+        /**
+         * Returns the active domains, by name. Admin keys see all of them; any other
+         *     key sees the domains it holds a permission on in any engine (an empty list
+         *     without any).
+         */
         get: operations["list_domains"];
         put?: never;
         /**
-         * Creates a new logical domain (isolated KV namespace).
-         *     Domain names must be unique, max 50 chars, and match `[a-zA-Z0-9_-]`.
+         * Creates a domain, which holds keys, documents and tables in the key-value,
+         *     JSON and relational engines. With `require_conditional_writes`,
+         *     single-object writes over REST of the engines it names must carry
+         *     `If-Match` or `If-None-Match: *`; bulk operations and other write paths
+         *     are not affected.
          */
         post: operations["create_domain"];
         delete?: never;
@@ -160,13 +390,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Returns metadata for a single domain by name. Returns 404 if it does not exist. */
+        /**
+         * Returns a domain. Needs a permission on the domain in any engine (admin
+         *     keys always pass). A domain in `deleting` state answers 410 Gone.
+         */
         get: operations["get_domain"];
         put?: never;
         post?: never;
         /**
-         * Schedules a domain and all its data for deletion.
-         *     The domain becomes immediately inaccessible; the actual purge runs in the background.
+         * Deletes a domain with its keys, documents, tables and views. The domain
+         *     becomes inaccessible immediately; the purge runs in the background, and
+         *     the name stays taken until it is done.
          */
         delete: operations["delete_domain"];
         options?: never;
@@ -174,25 +408,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/store-api/json/domains": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Returns all active JSON domains. */
-        get: operations["json_list_domains_1"];
-        put?: never;
-        /** Creates a new JSON domain (isolated document namespace, separate from KV domains). */
-        post: operations["json_create_domain_1"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/store-api/json/domains/{name}": {
+    "/store-api/events": {
         parameters: {
             query?: never;
             header?: never;
@@ -200,14 +416,19 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Returns metadata for a single JSON domain, including its document count.
-         *     Domains in `deleting` state answer with 410 Gone.
+         * Opens a Server-Sent Events stream of global lifecycle/DDL events: domains created, deleted and
+         *     purged across all three engines, plus relational table/view/index DDL and JSON index DDL.
+         *     Admin-only — the path carries no domain segment, so the standard auth middleware rejects any
+         *     non-admin caller.
+         * @description A `Last-Event-ID` (header or `?last_event_id=`, header wins) resumes gaplessly from an in-memory
+         *     replay ring when possible; otherwise the server emits `event: reset` before continuing live. This
+         *     stream has its own tag (`g`) and sequence, entirely independent of `GET /store-api/kv/{domain}/watch`'s
+         *     (`w`) — an id from one stream is `unknown_id` at the other.
          */
-        get: operations["json_get_domain_1"];
+        get: operations["get_events"];
         put?: never;
         post?: never;
-        /** Marks a JSON domain as deleting. Documents become inaccessible immediately. */
-        delete: operations["json_delete_domain_1"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -222,7 +443,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Imports documents from an NDJSON body in atomic batches. */
+        /**
+         * Imports documents from an NDJSON body in atomic batches; bulk writes take
+         *     no preconditions and are not subject to `require_conditional_writes`.
+         */
         post: operations["bulk_load"];
         delete?: never;
         options?: never;
@@ -274,18 +498,21 @@ export interface paths {
         };
         /**
          * Reads a document; `_key`/`_version` are top-level fields and an opaque
-         *     `ETag` is exposed for use with `If-Match` (json/011).
+         *     `ETag` is exposed for use with `If-Match`.
          */
         get: operations["get_document"];
         /**
          * Upserts a document. With an `If-Match: "<etag>"` header the write is a
-         *     conditional update that fails with 409 on a version mismatch.
+         *     conditional update; with `If-None-Match: *` it is create-only. Both may
+         *     be combined and are evaluated in that order; a failed precondition
+         *     answers 412 with the current `ETag`.
          */
         put: operations["put_document"];
         post?: never;
         /**
          * Deletes a document and its index entries. Supports conditional delete via
-         *     `If-Match: "<etag>"`.
+         *     `If-Match: "<etag>"`; a failed precondition answers 412 with the current
+         *     `ETag`.
          */
         delete: operations["delete_document"];
         options?: never;
@@ -300,7 +527,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Streams all documents of a domain as NDJSON without full buffering. */
+        /**
+         * Streams all documents of a domain as NDJSON without full buffering. A
+         *     legacy document that still carries a top-level
+         *     `_key`/`_version`/`_content` field exports lossy, same as before — no
+         *     migration reshapes existing data.
+         */
         get: operations["export_documents"];
         put?: never;
         post?: never;
@@ -405,6 +637,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/store-api/kv/{domain}/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Counts live keys in the domain, optionally filtered by a prefix — the same
+         *     semantics as `GET …/keys?prefix=`, without transferring the keys themselves.
+         */
+        get: operations["count_keys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/store-api/kv/{domain}/keys": {
         parameters: {
             query?: never;
@@ -412,11 +664,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Lists all keys in the domain, optionally filtered by a prefix. Returns an empty array if no keys match. */
+        /**
+         * Lists one page of keys in the domain, optionally filtered by a prefix and/or a case-sensitive `contains` substring.
+         *     `total` counts matches after filtering, before `offset`/`limit` are applied; an out-of-range `offset` yields an empty `keys` array with `total` unchanged.
+         */
         get: operations["scan_keys"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Deletes every live key whose raw form starts with `prefix`, optionally narrowed by a case-sensitive
+         *     `contains` substring filter on the key — the same selection `GET …/keys?prefix=&contains=` would show.
+         *     Atomic: either every matched key is gone, or (a 413) none is. Returns the number of keys deleted.
+         */
+        delete: operations["delete_keys_by_prefix"];
         options?: never;
         head?: never;
         patch?: never;
@@ -429,16 +689,46 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Retrieves the raw byte value for a key. Returns 204 for a key in the null state and 404 if the key does not exist or has expired. */
+        /**
+         * Retrieves the raw byte value for a key. Returns 204 for a key in the null state and 404 if the key does not exist or has expired.
+         *     When the key has a TTL, the response carries an `X-Expires-At` header with the absolute Unix-seconds expiry.
+         *     200 and 204 carry an `ETag` identifying the version read, for a later conditional write.
+         */
         get: operations["get_key"];
         /**
          * Inserts or updates a value for the given key (upsert semantics).
          *     The optional `ttl` query parameter sets an expiry in seconds; omitting it stores the key indefinitely.
+         *     `If-Match` (an ETag from a prior read) or `If-None-Match: *` (create only) make the write conditional;
+         *     without them the last writer wins.
          */
         put: operations["put_key"];
         post?: never;
-        /** Permanently removes a key from the domain. The operation is idempotent; deleting a non-existent key still returns 204. */
+        /**
+         * Permanently removes a key from the domain. The operation is idempotent; deleting a non-existent key still returns 204.
+         *     `If-Match` makes the delete conditional on the version read.
+         */
         delete: operations["delete_key"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/kv/{domain}/keys/{key}/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Returns a key's TTL expiry and last-modified time without reading its value (no VLog dereference).
+         *     `last_modified_at` is the write time of the newest visible version (PUT, or PATCH …/null) — not a
+         *     creation timestamp; every overwrite advances it.
+         */
+        get: operations["get_key_meta"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -459,7 +749,8 @@ export interface paths {
         head?: never;
         /**
          * Sets the key to an explicit null value (upsert): the key stays registered and appears in scans,
-         *     but carries no data — GET answers 204. A write like any other; it resets a previously set TTL.
+         *     but carries no data — GET answers 204. A write like any other; it resets a previously set TTL,
+         *     and takes the same `If-Match` / `If-None-Match: *` preconditions as PUT.
          */
         patch: operations["set_null"];
         trace?: never;
@@ -474,8 +765,48 @@ export interface paths {
         /**
          * Opens a Server-Sent Events stream that delivers real-time change events (`set` / `delete`) for keys matching the optional prefix.
          *     The connection stays open until the client disconnects; a keep-alive ping is sent automatically.
+         * @description A `Last-Event-ID` (header or `?last_event_id=`) resumes gaplessly from an in-memory
+         *     replay ring when possible; otherwise the server emits `event: reset` before continuing live. A
+         *     client that ignores `id:`/`reset` behaves exactly as before this was added.
          */
         get: operations["watch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reads the last N lines of a log file. */
+        get: operations["get_logs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/logs/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lists every `luradb.log*` file in the log directory.
+         *     `files[0]` is exactly the file `GET /logs` reads without a `file` param.
+         */
+        get: operations["list_files"];
         put?: never;
         post?: never;
         delete?: never;
@@ -491,7 +822,31 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** `GET /metrics` — system + all domain metrics. Admin only. */
+        /**
+         * `GET /metrics` — system + all domain metrics. Admin only.
+         * @description `engines` is an additive block, one entry per storage
+         *     engine (`kv`/`json`/`rel`), each with the same nine fields: `read_ops`,
+         *     `write_ops`, `read_latency_us_p50/p95/p99`, `write_latency_us_p50/p95/p99`,
+         *     `window_secs`. Clients compute `read_ops / window_secs` for ops/s — the
+         *     rate is a `window_secs`-wide average, not an instantaneous value, since
+         *     `read_ops`/`write_ops` only count fully ticked seconds (the running
+         *     second is excluded). A disabled engine still gets its block, all zero —
+         *     `0` for a latency percentile means no op landed in the window, not an
+         *     unmeasurably fast one.
+         *
+         *     `shm` covers the shared-memory snapshot publisher, all zero while SHM is
+         *     off: `snapshot_publishes_total`, `snapshot_publish_skips_total` (a client
+         *     was still reading the buffer due for overwriting),
+         *     `snapshot_consecutive_skips` (the current run of skips; above 0 the snapshot
+         *     is not being updated) and `clients_kicked_total` (clients disconnected after
+         *     `shm.kick_blocking_client_after_secs`).
+         *
+         *     `resources` is the full disk and memory report, of which `GET /health`
+         *     gives the states only: per data volume `path`, `size_bytes`, `free_bytes`
+         *     and `state`, and for the memory `rss_anon_bytes`, `budget_bytes` and
+         *     `state`. `io` appears only while writes of a data file fail: the file
+         *     with the most failures in a row, `path` and `failures`.
+         */
         get: operations["get_metrics"];
         put?: never;
         post?: never;
@@ -513,51 +868,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/store-api/rel/domains": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Returns all active relational domains. */
-        get: operations["rel_list_domains_2"];
-        put?: never;
-        /**
-         * Creates a new relational domain (isolated table/view namespace, separate
-         *     from KV and JSON domains).
-         */
-        post: operations["rel_create_domain_2"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/store-api/rel/domains/{name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Returns metadata for a single relational domain. A domain in `deleting`
-         *     state answers 410 Gone (rel/013 finishes the physical purge).
-         */
-        get: operations["rel_get_domain_2"];
-        put?: never;
-        post?: never;
-        /**
-         * Marks a relational domain as deleting. Its tables/views become
-         *     inaccessible immediately; physical cleanup follows in rel/013.
-         */
-        delete: operations["rel_delete_domain_2"];
         options?: never;
         head?: never;
         patch?: never;
@@ -601,6 +911,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/store-api/rel/{domain}/tables/from-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Creates a table from an uploaded CSV/TSV file, with one type per column
+         *     inferred from its values, and imports its rows; a row that fails is logged
+         *     and the import continues. Requires DDL access.
+         * @description Recommended headers: lowercase letters `a`-`z`, digits and `_`, starting
+         *     with a letter, at most 50 characters, each used only once, and not a LuraSQL
+         *     keyword (for example `key`, `order`, `count`, `text`, `timestamp`). If every
+         *     header of a file follows this, each column is named exactly like its header
+         *     and `pk` is the header itself.
+         *
+         *     Every header is turned into a column name by these rules, applied in this
+         *     order; a header that follows the recommendation only changes when an
+         *     earlier column already has its name:
+         *
+         *     - The header is trimmed and lowercased.
+         *     - An empty header becomes `col_<n>`, where `n` is its 1-based position.
+         *     - Every character other than `a`-`z`, `0`-`9` and `_` becomes `_`.
+         *     - A leading digit gets a `c` in front.
+         *     - A name longer than 50 characters is cut to 50 characters; otherwise a
+         *       name that is a LuraSQL keyword gets a `_` appended (`key` becomes `key_`).
+         *     - A name that an earlier column already has gets the first free suffix of
+         *       `_2`, `_3`, ... appended, from left to right, with the name shortened so
+         *       the result stays within 50 characters; the first column keeps the plain
+         *       name.
+         *
+         *     The name `_row` is reserved for the generated primary key column: a header
+         *     that becomes `_row` is only accepted together with `pk=_row`, which makes
+         *     that file column the primary key.
+         *
+         *     Example: the header line `SKU,Product Name,2024 Price,,sku,Order` gives the
+         *     columns `sku`, `product_name`, `c2024_price`, `col_4`, `sku_2` and `order_`.
+         *     The response shows each column's `name` and its `source_header`.
+         */
+        post: operations["create_table_from_file"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/store-api/rel/{domain}/tables/{table}": {
         parameters: {
             query?: never;
@@ -613,6 +972,27 @@ export interface paths {
          *     name answers 404 here — use `GET …/views` for views.
          */
         get: operations["get_table"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/rel/{domain}/tables/{table}/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Counts the rows of `table` — the same residual-free access path `SELECT
+         *     COUNT(*) FROM table` would use via `/sql`, without a SQL round trip. A
+         *     view answers 404 here, same as `GET …/rows` (no row-level resource in v1).
+         */
+        get: operations["count_rows"];
         put?: never;
         post?: never;
         delete?: never;
@@ -638,8 +1018,8 @@ export interface paths {
         put?: never;
         /**
          * Inserts one row from a JSON object body (`{column: value, …}`). An omitted
-         *     AUTOINCREMENT primary key is assigned the next sequence value (rel/005
-         *     §9); this compiles onto the exact same bound INSERT plan `/sql` would use.
+         *     AUTOINCREMENT primary key is assigned the next sequence value; this
+         *     compiles onto the exact same bound INSERT plan `/sql` would use.
          */
         post: operations["insert_row"];
         delete?: never;
@@ -662,14 +1042,14 @@ export interface paths {
         get: operations["get_row"];
         /**
          * Partially updates a row by primary key: only the columns named in the
-         *     body are set, everything else stays unchanged (spec §5). Not an upsert —
+         *     body are set, everything else stays unchanged. Not an upsert —
          *     a PK the table doesn't have answers 404, never a create.
          */
         put: operations["update_row"];
         post?: never;
         /**
          * Deletes a row by primary key. Hanging REFERENCES from other tables are
-         *     not blocked by this (rel/005 §11) — they resolve to `null` afterwards.
+         *     not blocked by this — they resolve to `null` afterwards.
          */
         delete: operations["delete_row"];
         options?: never;
@@ -686,6 +1066,26 @@ export interface paths {
         };
         /** Lists the views of a domain, including their raw (unmodified) SQL text. */
         get: operations["list_views"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/store-api/restores/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live status of a restore job. Lives in RAM only — gone
+         *     after a restart; the outcome is also in the log.
+         */
+        get: operations["get_restore_status"];
         put?: never;
         post?: never;
         delete?: never;
@@ -715,6 +1115,76 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        BackupAcceptedResponse: {
+            id: string;
+            state: string;
+        };
+        /**
+         * @description Manifest fields + state + size (GET /backups/{id} and
+         *     POST /backups/upload). Everything but `id`/`state`/`scope` is optional:
+         *     the currently-running-job shape (`running`) only fills `started_at`; the
+         *     complete/incomplete shape fills the rest instead.
+         */
+        BackupDetailResponse: {
+            /** Format: int64 */
+            created_at?: number | null;
+            encoding?: string | null;
+            /** Format: int32 */
+            format_version?: number | null;
+            id: string;
+            include_auth?: boolean | null;
+            /**
+             * Format: int64
+             * @description The newest read-snapshot stamp of the JSON engine among the data shards.
+             */
+            json_snapshot_ts?: number | null;
+            /**
+             * Format: int64
+             * @description The newest read-snapshot stamp of the KV engine among the data shards.
+             */
+            kv_snapshot_ts?: number | null;
+            lsn_cut?: components["schemas"]["LsnCutResponse"] | null;
+            luradb_version?: string | null;
+            /**
+             * Format: int64
+             * @description The newest read-snapshot stamp of the relational engine among the
+             *     data shards.
+             */
+            rel_snapshot_ts?: number | null;
+            schedule?: string | null;
+            scope: string;
+            /**
+             * Format: int32
+             * @description Data shards of the server that wrote the archive; 0 for format
+             *     version 1. Informational: a restore places every domain by the shard
+             *     count of the server it runs on.
+             */
+            shards?: number | null;
+            /** Format: int64 */
+            size_bytes?: number | null;
+            /** Format: int64 */
+            started_at?: number | null;
+            state: string;
+        };
+        BackupListResponse: {
+            backups: components["schemas"]["BackupSummaryResponse"][];
+            running?: components["schemas"]["RunningBackupInfo"] | null;
+        };
+        BackupSummaryResponse: {
+            /** Format: int64 */
+            created_at: number;
+            /** Format: int32 */
+            format_version: number;
+            id: string;
+            schedule?: string | null;
+            scope: string;
+            /** Format: int64 */
+            size_bytes: number;
+            state: string;
+        };
+        BulkDeleteResponse: {
+            deleted: number;
+        };
         BulkErrorEntry: {
             error: string;
             /** @description Document key or "line N" for parse errors. */
@@ -729,7 +1199,7 @@ export interface components {
         };
         ColumnInfo: {
             autoincrement: boolean;
-            default?: Record<string, never>;
+            default?: unknown;
             name: string;
             nullable: boolean;
             primary_key: boolean;
@@ -737,27 +1207,66 @@ export interface components {
             type: string;
             unique: boolean;
         };
+        /**
+         * @description Whether single-object writes over REST need `If-Match` or
+         *     `If-None-Match: *`, per engine.
+         */
+        ConditionalWritesSetting: {
+            /** @description PUT and DELETE on single documents; default false. */
+            json?: boolean;
+            /** @description PUT, DELETE and PATCH …/null on single keys; default false. */
+            kv?: boolean;
+        };
+        /**
+         * @description Generic `{"count": N}` response, shared by JSON's `count_documents`, KV's
+         *     `count_keys`, and rel's `count_rows` — one schema
+         *     instead of three identical ones.
+         */
         CountResponse: {
             /** Format: int64 */
             count: number;
         };
+        CreateBackupRequest: {
+            /** @description Only effective for `all`/`kv` scopes (auth records live in the KV instance). */
+            include_auth?: boolean;
+            /**
+             * @description `all` | `kv` | `json` | `rel` | `kv:<domain>` | `json:<domain>` |
+             *     `rel:<domain>` | `domain:<name>`. `all` covers every enabled engine;
+             *     `domain:<name>` covers the domain of that name in each engine that has
+             *     it. Relational domains go in with schema, rows and AUTOINCREMENT state.
+             */
+            scope: string;
+        };
         CreateDomainRequest: {
-            /** @description User-visible domain name (max 50 chars, [a-zA-Z0-9_-]). */
+            /** @description Domain name: [a-zA-Z0-9_-], 1 to `domains.max_name_length` (default 50) characters. */
             name: string;
+            require_conditional_writes?: components["schemas"]["ConditionalWritesSetting"] | null;
+        };
+        CreateFromFileColumn: {
+            name: string;
+            primary_key: boolean;
+            source_header?: string | null;
+            type: string;
+        };
+        CreateFromFileErrorEntry: {
+            error: string;
+            /** Format: int64 */
+            row: number;
+        };
+        CreateFromFileResponse: {
+            columns: components["schemas"]["CreateFromFileColumn"][];
+            errors: components["schemas"]["CreateFromFileErrorEntry"][];
+            /** Format: int64 */
+            failed: number;
+            /** Format: int64 */
+            imported: number;
+            table: string;
         };
         CreateIndexRequest: {
             /** @description JSON field path, dot notation for nested fields (e.g. "address.city"). */
             field: string;
             /** @description Value type: "string" | "number" | "boolean". */
             type: string;
-        };
-        CreateJsonDomainRequest: {
-            /** @description User-visible domain name (max 50 chars, [a-zA-Z0-9_-]). */
-            name: string;
-        };
-        CreateRelDomainRequest: {
-            /** @description Domain name (max 50 chars, `[a-zA-Z0-9_-]`; `"domains"` is reserved). */
-            name: string;
         };
         CreateUserRequest: {
             /** @description Username (1-50 chars, only [a-zA-Z0-9_-]). */
@@ -771,7 +1280,7 @@ export interface components {
         };
         DocumentListResponse: {
             /** @description Loaded documents incl. `_key`/`_version` (empty when keys_only). */
-            documents: Record<string, never>[];
+            documents: components["schemas"]["DocumentResponse"][];
             /** @description Document keys of the page. */
             keys: string[];
             /** Format: int32 */
@@ -781,14 +1290,53 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        /**
+         * @description A document as returned by the store: `_key`/`_version` metadata merged
+         *     into the user's fields.
+         */
+        DocumentResponse: {
+            /** @description Document key. */
+            _key: string;
+            /**
+             * Format: int64
+             * @description Write counter: 1 on create, incremented on every write.
+             */
+            _version: number;
+        } & {
+            [key: string]: unknown;
+        };
         DomainResponse: {
             /**
              * Format: int64
              * @description Creation timestamp (Unix seconds).
              */
             created_at: number;
-            /** @description User-visible domain name. */
             name: string;
+            require_conditional_writes: components["schemas"]["ConditionalWritesSetting"];
+            /** @description Lifecycle state: "active" or "deleting" (background purge running). */
+            state: string;
+        };
+        HeartbeatMetrics: {
+            domain_count: number;
+            /** Format: int64 */
+            estimated_memtable_keys: number;
+            io?: components["schemas"]["IoState"] | null;
+            l0_sstable_count: number;
+            /** @description Whether disk space and the server's own memory are short. */
+            resources: components["schemas"]["ResourceState"];
+            /** @description Every data shard, by id. */
+            shards: components["schemas"]["ShardHealth"][];
+            /**
+             * @description `ok`, or `degraded` while a data shard does not answer, disk space
+             *     or memory runs short (`resources`) or writes of a data file fail
+             *     (`io`).
+             */
+            status: string;
+            /** Format: int64 */
+            uptime_secs: number;
+            version: string;
+            /** Format: int64 */
+            vlog_size_bytes: number;
         };
         IndexInfo: {
             column: string;
@@ -801,20 +1349,38 @@ export interface components {
             field: string;
             type: string;
         };
-        JsonDomainResponse: {
+        /** @description `io` of `GET /health`: the failed writes in a row, without the file. */
+        IoState: {
+            /**
+             * Format: int32
+             * @description Failed writes in a row of the data file with the most.
+             */
+            failures: number;
+        };
+        KeyMetaResponse: {
             /**
              * Format: int64
-             * @description Creation timestamp (Unix seconds).
+             * @description Absolute Unix-seconds TTL expiry; `null` when the key has no TTL. Equal to the `X-Expires-At` header when present.
              */
-            created_at: number;
+            expires_at?: number | null;
             /**
              * Format: int64
-             * @description Number of documents — only set on the detail endpoint.
+             * @description Unix-milliseconds write time of the newest visible version (PUT, or PATCH …/null) — not a creation timestamp; every overwrite advances it.
              */
-            document_count?: number | null;
-            name: string;
-            /** @description Lifecycle state: "active" or "deleting" (background purge running). */
-            state: string;
+            last_modified_at: number;
+        };
+        KeyScanResponse: {
+            /** @description The page, in scan order (sorted). */
+            keys: string[];
+            /** @description Effective limit applied (after capping to the maximum). */
+            limit: number;
+            /** @description Effective offset applied. */
+            offset: number;
+            /**
+             * Format: int64
+             * @description Matches after `prefix`/`contains` filtering, before `offset`/`limit`.
+             */
+            total: number;
         };
         ListParams: {
             keys_only?: boolean | null;
@@ -823,6 +1389,60 @@ export interface components {
             /** Format: int32 */
             offset?: number | null;
         };
+        LogFileInfo: {
+            file: string;
+            /** Format: int64 */
+            modified: number;
+            /** Format: int64 */
+            size: number;
+        };
+        LogFilesResponse: {
+            files: components["schemas"]["LogFileInfo"][];
+        };
+        LogQuery: {
+            /** @description Name of a file listed by `GET /logs/files`. Defaults to the newest `luradb.log*` file. */
+            file?: string | null;
+            /** @description Tail line count from the file end (default 100, capped at 1000). `0` is rejected. */
+            lines?: number | null;
+            /** @description Case-sensitive substring filter; only matching lines count toward `lines`. */
+            q?: string | null;
+        };
+        LogResponse: {
+            /** @description Name of the file actually read, without a path. */
+            file: string;
+            /** @description Mirrors `log.format` ("json" | "text") — the client parses `lines` itself. */
+            format: string;
+            /** @description Chronologically ascending (oldest first), like `tail`. */
+            lines: string[];
+            /** @description `true` iff the scan budget was exhausted before `lines` matches and before file start. */
+            truncated: boolean;
+        };
+        /**
+         * @description Per engine, a write-ahead-log position that every write in the archive is
+         *     at or below; 0 for an engine outside the scope and for format version 1.
+         *     Positions keep growing across restarts, so they compare across runs of
+         *     the server.
+         */
+        LsnCutResponse: {
+            /** Format: int64 */
+            json: number;
+            /** Format: int64 */
+            kv: number;
+            /** Format: int64 */
+            rel: number;
+        };
+        /**
+         * @description One entry of a user's domain permission matrix. `engine`/`access` are
+         *     lowercase and match the write-endpoint vocabulary exactly — usable as-is
+         *     in a follow-up request.
+         */
+        PermissionItem: {
+            /** @description `"read"`, `"write"`, or `"ddl"`. */
+            access: string;
+            domain: string;
+            /** @description `"kv"`, `"json"` or `"rel"`; missing for a permission on the whole domain. */
+            engine?: string | null;
+        };
         ReindexAcceptedResponse: {
             task_id: string;
         };
@@ -830,18 +1450,53 @@ export interface components {
             /** @description Optional: re-index only this field's index. Omit for all indexes. */
             field?: string | null;
         };
-        RelDomainResponse: {
+        /**
+         * @description `resources` of `GET /health`: the states of the report, without volumes,
+         *     paths or numbers.
+         */
+        ResourceState: {
+            /** @description The worst state of the data volumes: `ok`, `warning` or `blocked`. */
+            disk_state: string;
+            /** @description `ok`, `warning` or `blocked`. */
+            memory_state: string;
+            /** @description `ok`, `warning` (below a warn threshold) or `blocked` (writes refused). */
+            state: string;
+        };
+        RestoreAcceptedResponse: {
+            restore_id: string;
+            state: string;
+        };
+        RestoreErrorEntry: {
+            error: string;
+            key: string;
+        };
+        RestoreRequest: {
+            /** @description Apply auth-user/auth-perm lines from the archive (upsert). Default false. */
+            include_auth?: boolean;
             /**
-             * Format: int64
-             * @description Creation timestamp (Unix seconds).
+             * @description Only legal when the archive contains exactly one domain name
+             *     (`kv:*`/`json:*`/`rel:*`/`domain:*` scopes). Links of relational
+             *     tables (KVREF/JSONREF) then point to the KV and JSON domain of the new
+             *     name.
              */
-            created_at: number;
-            name: string;
-            /**
-             * @description Lifecycle state: "active" or "deleting" (background purge running, rel/013).
-             *     Always present — so rel/013's later `list_domains` visibility change
-             *     (surfacing `Deleting` domains too) needs no REST-contract change.
-             */
+            into_domain?: string | null;
+            /** @description `"fail_if_exists"` (default) or `"replace"`. */
+            mode?: string | null;
+        };
+        RestoreStatusResponse: {
+            backup_id: string;
+            errors: components["schemas"]["RestoreErrorEntry"][];
+            /** Format: int64 */
+            failed: number;
+            /** Format: int64 */
+            finished_at?: number | null;
+            /** Format: int64 */
+            imported: number;
+            restore_id: string;
+            /** Format: int64 */
+            skipped: number;
+            /** Format: int64 */
+            started_at: number;
             state: string;
         };
         RotateKeyResponse: {
@@ -859,9 +1514,15 @@ export interface components {
             /**
              * @description One JSON object per row (catalog column order in principle; `serde_json`'s
              *     default map is unordered/alphabetical here, see rel_browse.rs module docs),
-             *     with an optional `_expanded` block (spec §6).
+             *     with an optional `_expanded` block.
              */
             rows: Record<string, never>[];
+        };
+        RunningBackupInfo: {
+            id: string;
+            scope: string;
+            /** Format: int64 */
+            started_at: number;
         };
         SearchRequest: {
             /** @description Field → value (Eq) or `{"$gt": …}` / `$gte` / `$lt` / `$lte` / `$eq`. */
@@ -873,7 +1534,7 @@ export interface components {
         };
         SearchResponse: {
             /** @description Matching documents incl. `_key`/`_version` metadata. */
-            documents: Record<string, never>[];
+            documents: components["schemas"]["DocumentResponse"][];
             /** Format: int32 */
             limit: number;
             /** Format: int32 */
@@ -882,25 +1543,40 @@ export interface components {
             total: number;
         };
         SetPermissionRequest: {
-            /** @description Access level: `"read"`, `"write"` or `"ddl"` (spec rel/011). */
+            /**
+             * @description Access level: `"read"`, `"write"` or `"ddl"`; `"ddl"` acts as
+             *     `"write"` on keys and documents.
+             */
             access: string;
             /** @description Domain name. */
             domain: string;
-            /** @description Store type of the domain: `"kv"` (default), `"json"` (spec json/012) or `"rel"` (spec rel/011). */
-            store_type?: string | null;
+            /**
+             * @description Limits the permission to one engine of the domain: `"kv"`, `"json"`
+             *     or `"rel"`. Without it, the permission covers the whole domain.
+             */
+            engine?: string | null;
+        };
+        /**
+         * @description A data shard as `GET /health` reports it: `ok` once it answered its
+         *     ping, `timeout` otherwise.
+         */
+        ShardHealth: {
+            /** Format: int32 */
+            id: number;
+            status: string;
         };
         SqlRequest: {
             /**
              * @description REFERENCES columns to resolve into embedded objects, or `["*"]` for
-             *     all of them (§5). Only valid for SELECT; non-empty on DML/DDL → 400.
+             *     all of them. Only valid for SELECT; non-empty on DML/DDL → 400.
              */
             expand?: string[];
             /**
-             * @description Positional parameters (JSON array), bound to the `?` placeholders
-             *     (rel/004/005). Omitted ⇒ empty array.
+             * @description Positional parameters (JSON array), bound to the `?` placeholders.
+             *     Omitted ⇒ empty array.
              */
             params?: Record<string, never>[];
-            /** @description Exactly one LuraSQL statement (more → 400 `MultipleStatements`, rel/004). */
+            /** @description Exactly one LuraSQL statement (more → 400 `MultipleStatements`). */
             sql: string;
         };
         TableDetail: {
@@ -923,6 +1599,8 @@ export interface components {
             /** Format: int64 */
             created_at: number;
             name: string;
+            /** @description Domain permission matrix — see `list_users` doc for `role == "Admin"` semantics. */
+            permissions: components["schemas"]["PermissionItem"][];
             role: string;
         };
         VersionResponse: {
@@ -936,6 +1614,20 @@ export interface components {
             created_at: number;
             name: string;
             sql: string;
+        };
+        /**
+         * @description Caller identity. `role` is the only discriminator between the four cases —
+         *     see `whoami` for the full mapping; `name` is `null` whenever no
+         *     `UserRecord` backs the caller (`TrustedPeer`, `Disabled`).
+         */
+        WhoamiResponse: {
+            name?: string | null;
+            /**
+             * @description `"Admin"`, `"User"`, or a pseudo-role: `"TrustedPeer"` (UDS peer
+             *     authenticated by the kernel) or `"Disabled"`
+             *     (`auth.enabled = false`).
+             */
+            role: string;
         };
     };
     responses: never;
@@ -955,12 +1647,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description System is healthy */
+            /** @description Every data shard answered. Status `ok`, or `degraded` while disk space or memory runs short: below a warn threshold (`warning`), or below a block threshold (`blocked`), while writes answer 507 and reads go on; `resources` gives the state of the disk space and of the memory, without volume, path or number. Also `degraded` while writes of a data file fail; `io` gives their failures in a row, without the file (the server stops at the third, or at the first on a read-only file system) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HeartbeatMetrics"];
+                };
+            };
+            /** @description A data shard did not answer within 250 ms; the full report with status `degraded`; its `shards` list names the shard with status `timeout` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartbeatMetrics"];
+                };
             };
         };
     };
@@ -973,7 +1676,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of all users (without API keys) */
+            /** @description List of all users (without API keys), including their domain permissions */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1011,14 +1714,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description User already exists */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1046,13 +1753,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
     set_permission: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Skip the domain existence check (pre-provisioning). Default false. */
+                allow_missing?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Username */
@@ -1073,27 +1785,31 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid access or domain value */
+            /** @description Invalid access, engine or domain value, an unknown field, or `store_type`, which is no longer accepted (use `engine`) */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description User or domain not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
     remove_permission: {
         parameters: {
             query?: {
-                /** @description 'kv' (default), 'json' or 'rel' */
-                store_type?: string;
+                /** @description 'kv', 'json' or 'rel': revoke the permission on that engine only. Without it, every permission of the user on the domain. */
+                engine?: string;
             };
             header?: never;
             path: {
@@ -1113,12 +1829,23 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Permission not found */
+            /** @description Invalid engine, or `store_type`, which is no longer accepted (use `engine`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Neither a permission on the domain nor on the engine */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1148,7 +1875,476 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    whoami: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Caller identity — name (if any) and role */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WhoamiResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    list_backups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backup list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupListResponse"];
+                };
+            };
+            /** @description Backup is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    create_backup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBackupRequest"];
+            };
+        };
+        responses: {
+            /** @description Backup job started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupAcceptedResponse"];
+                };
+            };
+            /** @description Invalid scope */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Scope targets a missing domain */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description A backup or restore job is already running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Backup is disabled, or scope requires the JSON or relational engine, which is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    upload_backup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description NDJSON backup archive, raw bytes streamed to disk (no multipart) */
+        requestBody: {
+            content: {
+                "text/plain": string;
+            };
+        };
+        responses: {
+            /** @description Archive accepted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupDetailResponse"];
+                };
+            };
+            /** @description Invalid backup file — checksum/manifest verification failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Backup is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    get_backup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Backup id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backup details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupDetailResponse"];
+                };
+            };
+            /** @description Invalid backup id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Backup not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Backup is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    delete_backup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Backup id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backup deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
                 content?: never;
+            };
+            /** @description Invalid backup id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Backup not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description The backup job for this id is still running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Backup is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    download_backup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Backup id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full NDJSON archive */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": unknown;
+                };
+            };
+            /** @description Partial content (Range request) */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": unknown;
+                };
+            };
+            /** @description Invalid backup id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Backup not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description The backup job for this id is still running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Backup is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    restore_backup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Backup id to restore from */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Restore job started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreAcceptedResponse"];
+                };
+            };
+            /** @description Invalid id/mode, remap requires a single domain, unsupported format version, or invalid backup file */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Backup not found, or scope targets a missing domain */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description A backup or restore job is already running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Backup is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    get_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description config_path (resolved path, always set), config_file_loaded (whether a file existed there), and config (the effective LuraConfig — see config.rs for field docs) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Forbidden — Admin only */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1161,7 +2357,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of active domains */
+            /** @description The active domains the key holds any permission on */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1185,7 +2381,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Domain created */
+            /** @description Domain created in every engine */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -1194,19 +2390,42 @@ export interface operations {
                     "application/json": components["schemas"]["DomainResponse"];
                 };
             };
-            /** @description Invalid domain name */
+            /** @description Invalid domain name, unusable body, or `require_conditional_writes` not an object */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
-            /** @description Domain already exists */
+            /** @description Domain exists, also while it is being deleted */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description An engine could not create its part; the domain is deleted again */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1231,12 +2450,32 @@ export interface operations {
                     "application/json": components["schemas"]["DomainResponse"];
                 };
             };
+            /** @description Forbidden — no permission on the domain in any engine (also when it does not exist) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
             /** @description Domain not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted (background purge running) */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1252,7 +2491,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Deletion accepted — background purge started */
+            /** @description Deletion accepted — background purge of every engine follows */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -1264,158 +2503,72 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-        };
-    };
-    json_list_domains_1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of active JSON domains */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
                 content: {
-                    "application/json": components["schemas"]["JsonDomainResponse"][];
+                    "text/plain": string;
                 };
             };
-            /** @description JSON engine disabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    json_create_domain_1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateJsonDomainRequest"];
-            };
-        };
-        responses: {
-            /** @description JSON domain created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JsonDomainResponse"];
-                };
-            };
-            /** @description Invalid domain name */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Domain already exists */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description JSON engine disabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    json_get_domain_1: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description JSON domain name */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Domain found */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JsonDomainResponse"];
-                };
-            };
-            /** @description Domain not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Domain is being deleted (background purge running) */
+            /** @description Domain is already being deleted */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
-            /** @description JSON engine disabled */
-            503: {
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
                 headers: {
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
-    json_delete_domain_1: {
+    get_events: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description JSON domain name */
-                name: string;
+            query?: {
+                /** @description Resume id from a previous `id:` (or `event: reset`) — for callers that cannot set headers. Ignored when the `Last-Event-ID` header is present. */
+                last_event_id?: string;
             };
+            header?: {
+                /** @description Resume id from a previous `id:` (or `event: reset`); set automatically by a native `EventSource`'s auto-reconnect. Takes precedence over `?last_event_id=`. */
+                "Last-Event-ID"?: string | null;
+            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Deletion accepted — background purge follows */
-            202: {
+            /** @description SSE stream of lifecycle/DDL events across the KV, JSON and relational engines: domains created/deleted/purged, and (rel) table/view/index DDL, (json) index DDL. No per-key data events — use a domain's `watch` for those. Every event carries an `id:`; `event:` matches its `type` field (e.g. `domain_created`, `table_altered`). `data:` is JSON `{engine?, type, domain, object?, ts}` — `engine` (`kv`, `json` or `rel`) and `object`, the table/view/index/field name, are absent for domain events, which come once per domain. `event: reset` (`data: {"reason": ...}`) is emitted whenever gapless resume cannot be guaranteed. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/event-stream": unknown;
+                };
             };
-            /** @description Domain not found */
-            404: {
+            /** @description Missing or invalid API key */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
-            /** @description JSON engine disabled */
-            503: {
+            /** @description Non-admin caller — this endpoint has no `{domain}` segment, so it is admin-only */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1450,14 +2603,37 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description JSON engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1494,14 +2670,27 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description JSON engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1526,28 +2715,64 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentResponse"];
+                };
+            };
+            /** @description Reserved top-level field (_key, _version, _content) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Payload too large */
             413: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description JSON engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1577,14 +2802,27 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description JSON engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1605,30 +2843,52 @@ export interface operations {
             /** @description Document content with _key/_version metadata */
             200: {
                 headers: {
+                    /** @description Opaque version tag for If-Match / If-None-Match */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentResponse"];
+                };
             };
             /** @description Document or domain not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description JSON engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
     put_document: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Opaque ETag from a prior read: write only if it is still the document's current version, else 412 */
+                "If-Match"?: string | null;
+                /** @description Only `*` is supported: create-only write, 412 if the document exists. Evaluated after If-Match */
+                "If-None-Match"?: string | null;
+            };
             path: {
                 /** @description JSON domain */
                 domain: string;
@@ -1648,49 +2908,98 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentResponse"];
+                };
             };
             /** @description Document created */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DocumentResponse"];
+                };
             };
-            /** @description Invalid key or If-Match header */
+            /** @description Invalid key, reserved top-level field (_key, _version, _content), or invalid If-Match or If-None-Match header */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
-            /** @description Domain not found, or If-Match on missing document */
+            /** @description Domain not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
-            /** @description Version conflict (If-Match mismatch) */
-            409: {
+            /** @description Domain is being deleted */
+            410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description If-Match or If-None-Match does not hold (version mismatch, missing document, or document already exists); nothing was written */
+            412: {
+                headers: {
+                    /** @description ETag of the document's current version; absent when the document does not exist */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description The domain requires conditional writes and neither If-Match nor If-None-Match is set */
+            428: {
+                headers: {
+                    /** @description no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description JSON engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
     delete_document: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Opaque ETag from a prior read: delete only if it is still the document's current version, else 412 */
+                "If-Match"?: string | null;
+                /** @description Only `*` is supported: 412 if the document exists. Evaluated after If-Match */
+                "If-None-Match"?: string | null;
+            };
             path: {
                 /** @description JSON domain */
                 domain: string;
@@ -1708,26 +3017,73 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Invalid key, or invalid If-Match or If-None-Match header */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
             /** @description Document or domain not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
-            /** @description Version conflict (If-Match mismatch) */
-            409: {
+            /** @description Domain is being deleted */
+            410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description If-Match or If-None-Match does not hold (version mismatch, missing document, or document exists); nothing was deleted */
+            412: {
+                headers: {
+                    /** @description ETag of the document's current version; absent when the document does not exist */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description The domain requires conditional writes and neither If-Match nor If-None-Match is set */
+            428: {
+                headers: {
+                    /** @description no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description JSON engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1757,14 +3113,27 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description JSON engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1794,14 +3163,27 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description JSON engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1835,21 +3217,46 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Index already exists */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description JSON engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1879,14 +3286,37 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description JSON engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1921,28 +3351,55 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Re-index already running for this domain */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description JSON engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -1972,14 +3429,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description JSON engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -2013,25 +3474,40 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description JSON engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
-    scan_keys: {
+    count_keys: {
         parameters: {
             query?: {
                 /** @description Key prefix filter */
@@ -2046,13 +3522,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of matching keys */
+            /** @description Number of live keys matching the prefix. A full key scan under the hood (same cost as the equivalent `keys?prefix=` call) — cost grows linearly with domain size, so this is meant for on-demand use, not high-frequency polling. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string[];
+                    "application/json": components["schemas"]["CountResponse"];
                 };
             };
             /** @description Domain is being deleted */
@@ -2060,7 +3536,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Rate limit exceeded */
             429: {
@@ -2068,7 +3546,144 @@ export interface operations {
                     "Retry-After"?: number;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    scan_keys: {
+        parameters: {
+            query?: {
+                /** @description Key prefix filter */
+                prefix?: string;
+                /** @description Case-sensitive substring filter on the user key, applied before total/offset/limit */
+                contains?: string;
+                /** @description Page size (default 1000, max 10000; over-max is silently capped) */
+                limit?: number;
+                /** @description Keys to skip */
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Domain name */
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of matching keys */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyScanResponse"];
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Rate limit exceeded */
+            429: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    delete_keys_by_prefix: {
+        parameters: {
+            query: {
+                /** @description Key prefix — required, must not be empty. A domain-emptying request needs the admin-only DELETE /store-api/domains/{name} instead. */
+                prefix: string;
+                /** @description Case-sensitive substring filter on the user key, applied to the prefix scan's results before the cap check */
+                contains?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Domain name */
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matched keys deleted atomically (one write batch); an empty selection is a no-op */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkDeleteResponse"];
+                };
+            };
+            /** @description Missing or empty prefix */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description The selection exceeds max_bulk_delete_keys; no key was deleted */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Rate limit exceeded */
+            429: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -2086,9 +3701,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Value (raw bytes; an empty value yields an empty body) */
+            /** @description Value (raw bytes; an empty value yields an empty body). The `X-Expires-At` header (absolute Unix seconds) is present only when the key has a TTL. */
             200: {
                 headers: {
+                    /** @description Strong, opaque version tag for If-Match / If-None-Match */
+                    ETag?: string;
+                    "X-Expires-At"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2098,6 +3716,8 @@ export interface operations {
             /** @description Key exists in the explicit null state (set via PATCH …/null) */
             204: {
                 headers: {
+                    /** @description Strong, opaque version tag for If-Match / If-None-Match */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -2107,21 +3727,27 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Key or domain not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain is being deleted */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Rate limit exceeded */
             429: {
@@ -2129,7 +3755,9 @@ export interface operations {
                     "Retry-After"?: number;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -2139,7 +3767,12 @@ export interface operations {
                 /** @description TTL in seconds (optional) */
                 ttl?: number;
             };
-            header?: never;
+            header?: {
+                /** @description ETag from a prior read: write only if it is still the key's current version, else 412 */
+                "If-Match"?: string | null;
+                /** @description Only `*`: write only if the key does not exist, else 412. Evaluated after If-Match */
+                "If-None-Match"?: string | null;
+            };
             path: {
                 /** @description Domain name */
                 domain: string;
@@ -2161,26 +3794,63 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid key */
+            /** @description Invalid key, or invalid If-Match / If-None-Match header */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain is being deleted */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description If-Match or If-None-Match does not hold; nothing was written */
+            412: {
+                headers: {
+                    /** @description ETag of the key's current version; absent when the key does not exist */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description The value exceeds lsm.max_value_size; nothing was written */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description The domain requires conditional writes and neither If-Match nor If-None-Match is set */
+            428: {
+                headers: {
+                    /** @description no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Rate limit exceeded */
             429: {
@@ -2188,14 +3858,31 @@ export interface operations {
                     "Retry-After"?: number;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
     delete_key: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description ETag from a prior read: delete only if it is still the key's current version, else 412 */
+                "If-Match"?: string | null;
+                /** @description Only `*`: delete only if the key does not exist, else 412. Evaluated after If-Match */
+                "If-None-Match"?: string | null;
+            };
             path: {
                 /** @description Domain name */
                 domain: string;
@@ -2213,19 +3900,45 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid key */
+            /** @description Invalid key, or invalid If-Match / If-None-Match header */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain is being deleted */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description If-Match or If-None-Match does not hold; nothing was deleted */
+            412: {
+                headers: {
+                    /** @description ETag of the key's current version; absent when the key does not exist */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description The domain requires conditional writes and neither If-Match nor If-None-Match is set */
+            428: {
+                headers: {
+                    /** @description no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Rate limit exceeded */
             429: {
@@ -2233,14 +3946,93 @@ export interface operations {
                     "Retry-After"?: number;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    get_key_meta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Domain name */
+                domain: string;
+                /** @description Key (valid UTF-8, max 256 bytes) */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Key metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyMetaResponse"];
+                };
+            };
+            /** @description Invalid key */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Key or domain not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Rate limit exceeded */
+            429: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
     set_null: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description ETag from a prior read: write only if it is still the key's current version, else 412 */
+                "If-Match"?: string | null;
+                /** @description Only `*`: write only if the key does not exist, else 412. Evaluated after If-Match */
+                "If-None-Match"?: string | null;
+            };
             path: {
                 /** @description Domain name */
                 domain: string;
@@ -2258,19 +4050,45 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid key */
+            /** @description Invalid key, or invalid If-Match / If-None-Match header */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain is being deleted */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description If-Match or If-None-Match does not hold; nothing was written */
+            412: {
+                headers: {
+                    /** @description ETag of the key's current version; absent when the key does not exist */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description The domain requires conditional writes and neither If-Match nor If-None-Match is set */
+            428: {
+                headers: {
+                    /** @description no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Rate limit exceeded */
             429: {
@@ -2278,7 +4096,19 @@ export interface operations {
                     "Retry-After"?: number;
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -2287,8 +4117,13 @@ export interface operations {
             query?: {
                 /** @description Key prefix filter */
                 prefix?: string;
+                /** @description Resume id from a previous `id:` (or `event: reset`) — for callers that cannot set headers. Ignored when the `Last-Event-ID` header is present. */
+                last_event_id?: string;
             };
-            header?: never;
+            header?: {
+                /** @description Resume id from a previous `id:` (or `event: reset`); set automatically by a native `EventSource`'s auto-reconnect. Takes precedence over `?last_event_id=`. */
+                "Last-Event-ID"?: string | null;
+            };
             path: {
                 /** @description Domain name */
                 domain: string;
@@ -2297,7 +4132,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description SSE stream of key change events */
+            /** @description SSE stream of key change events. Every event carries an `id:`. Event types: `set` / `delete` (data: the key) and `reset` (data: `{"reason": ...}`, emitted whenever gapless resume cannot be guaranteed — the client should re-read the domain, then keep applying events normally). */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2311,7 +4146,110 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    get_logs: {
+        parameters: {
+            query?: {
+                /** @description Tail line count from file end (default 100, capped at 1000). 0 is rejected. */
+                lines?: number;
+                /** @description Case-sensitive substring filter; only matching lines count toward `lines`. */
+                q?: string;
+                /** @description Name of a file listed by GET /logs/files. Defaults to the newest luradb.log* file. */
+                file?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tail of the selected log file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogResponse"];
+                };
+            };
+            /** @description lines = 0, or invalid file name */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description file does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description log directory unreadable, no luradb.log* file found, or read failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Log HTTP access is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    list_files: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All luradb.log* files, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogFilesResponse"];
+                };
+            };
+            /** @description log directory unreadable */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Log HTTP access is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -2336,14 +4274,27 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Forbidden — Admin only */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description A data shard is not running */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -2371,175 +4322,21 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Forbidden */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain not found or no metrics yet */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    rel_list_domains_2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of active relational domains */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RelDomainResponse"][];
-                };
-            };
-            /** @description Relational engine disabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    rel_create_domain_2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateRelDomainRequest"];
-            };
-        };
-        responses: {
-            /** @description Relational domain created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RelDomainResponse"];
-                };
-            };
-            /** @description Invalid domain name */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Domain already exists */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Relational engine disabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    rel_get_domain_2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Relational domain name */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Domain found */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RelDomainResponse"];
-                };
-            };
-            /** @description Domain not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Domain is being deleted (background purge running) */
-            410: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Relational engine disabled */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    rel_delete_domain_2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Relational domain name */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deletion accepted — background purge follows (rel/013) */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Domain not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Domain is already being deleted */
-            410: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Relational engine disabled */
-            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2577,56 +4374,82 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
-            /** @description Access level too low for this statement (rel/011) */
+            /** @description Access level too low for this statement */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain, table, column, or index not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Conflict — duplicate key, unique violation, name collision, … */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain is being deleted */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Response exceeds max_response_bytes */
             413: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Per-domain request budget exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Relational engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -2656,28 +4479,155 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain is being deleted */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Per-domain request budget exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Relational engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    create_table_from_file: {
+        parameters: {
+            query: {
+                /** @description Name of the table to create; a LuraSQL keyword (for example `select`) is rejected with 400 */
+                name: string;
+                /** @description "csv" or "tsv" -- no format sniffing */
+                format: string;
+                /** @description Whether the first line is a header row (default true); without one the columns are named `col_1`, `col_2`, ... */
+                header?: boolean;
+                /** @description Column to use as primary key, named as the response shows it in `name`. Only upper/lower case is ignored, and for a LuraSQL keyword the trailing `_` may be left out (`key` matches `key_`); any other difference gives 400. Omitted -> the generated `_row` column */
+                pk?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Relational domain */
+                domain: string;
+            };
+            cookie?: never;
+        };
+        /** @description Raw CSV/TSV file bytes -- Content-Type is not enforced, `format` decides */
+        requestBody: {
+            content: {
+                "text/plain": string;
+            };
+        };
+        responses: {
+            /** @description Table created and its rows imported (imported/failed counts, per-row error log) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateFromFileResponse"];
+                };
+            };
+            /** @description Missing/invalid name or format, a `header` value other than `true` or `false`, a table name that is a LuraSQL keyword, empty file, too many columns, invalid UTF-8 in the first line (the header row, or the first row with `header=false`), an unknown pk column, or a header that becomes `_row` without `pk=_row` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Missing DDL access on the domain */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description A table or view with that name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Body exceeds rel.import_body_limit_bytes */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Per-domain request budget exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Relational engine disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -2709,28 +4659,97 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain is being deleted */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Per-domain request budget exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Relational engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    count_rows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Relational domain */
+                domain: string;
+                /** @description Table name */
+                table: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Row count. A full key scan under the hood — cost grows linearly with table size; meant for on-demand use, not high-frequency polling. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CountResponse"];
+                };
+            };
+            /** @description Domain or table not found (a view has no count resource, same as `rows`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Domain is being deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Per-domain request budget exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Relational engine disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -2769,42 +4788,54 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain or table not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain is being deleted */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Response exceeds max_response_bytes */
             413: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Per-domain request budget exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Relational engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -2840,42 +4871,73 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Missing read access to a linked KV/JSON domain */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain, table, or referenced body column not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description PK collision, unique violation, or missing REFERENCES target */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain is being deleted */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Per-domain request budget exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Relational engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -2912,42 +4974,54 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain, table, or row not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain is being deleted */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Response exceeds max_response_bytes */
             413: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Per-domain request budget exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Relational engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -2985,42 +5059,73 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Missing read access to a linked KV/JSON domain */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain, table, column, or row not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Unique violation, or missing REFERENCES target */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain is being deleted */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Per-domain request budget exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Relational engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -3054,35 +5159,55 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain, table, or row not found */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain is being deleted */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Per-domain request budget exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Relational engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Insufficient Storage — disk space or memory runs short; the write was not applied. Reads go on; retry after the seconds in Retry-After. */
+            507: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -3112,28 +5237,77 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Domain is being deleted */
             410: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Per-domain request budget exceeded */
             429: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
             /** @description Relational engine disabled */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
+            };
+        };
+    };
+    get_restore_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Restore id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restore status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreStatusResponse"];
+                };
+            };
+            /** @description Restore not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Backup is disabled */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };
@@ -3160,7 +5334,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "text/plain": string;
+                };
             };
         };
     };

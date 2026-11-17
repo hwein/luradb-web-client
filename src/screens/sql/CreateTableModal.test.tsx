@@ -17,13 +17,13 @@ function makeConnection(): Connection {
   return {
     id: 'conn-1',
     name: 'local',
-    type: { kind: 'rest', url: 'http://127.0.0.1:3000' },
+    type: { kind: 'rest', url: '' },
     auth: { kind: 'api-key', key: 'lura_secret' },
   }
 }
 
-function makeDomain(overrides?: Partial<DomainSummary['engines']>): DomainSummary {
-  return { name: 'shop', engines: { kv: true, json: { state: 'active' }, rel: { state: 'active' }, ...overrides } }
+function makeDomain(): DomainSummary {
+  return { name: 'shop', conditionalWrites: [] }
 }
 
 function tablesHandler(names: string[]) {
@@ -60,21 +60,21 @@ function DocsRouteProbe() {
   return <p data-testid="docs-route-state">{location.pathname}</p>
 }
 
-function Harness({ domain, onClose }: { domain: DomainSummary; onClose: () => void }) {
+function Harness({ domain, onClose, onFromFile }: { domain: DomainSummary; onClose: () => void; onFromFile: () => void }) {
   const session = useSession()
   const apiClient = session.status === 'connected' ? session.apiClient : undefined
-  return <CreateTableForm domain={domain} apiClient={apiClient} onClose={onClose} />
+  return <CreateTableForm domain={domain} apiClient={apiClient} onClose={onClose} onFromFile={onFromFile} />
 }
 
-async function renderForm(domain: DomainSummary, onClose: () => void = () => {}) {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
+async function renderForm(domain: DomainSummary, onClose: () => void = () => {}, onFromFile: () => void = () => {}) {
+  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })))
   await act(() => connect(makeConnection()))
 
   const queryClient = createAppQueryClient()
   const result = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={['/sql']}>
-        <Harness domain={domain} onClose={onClose} />
+        <Harness domain={domain} onClose={onClose} onFromFile={onFromFile} />
         <Routes>
           <Route path="/sql" element={<SqlRouteProbe />} />
           <Route path="/docs" element={<DocsRouteProbe />} />
@@ -177,19 +177,14 @@ describe('CreateTableForm', () => {
     expect(screen.getByRole('button', { name: 'insert into editor' })).not.toBeDisabled()
   })
 
-  it('shows the KVREF hint with a docs link, and disables JSONREF when the domain has no json engine', async () => {
+  it('shows the KVREF hint with a docs link', async () => {
     server.use(tablesHandler([]), viewsHandler([]))
-    await renderForm(makeDomain({ json: undefined }))
+    await renderForm(makeDomain())
 
     fireEvent.click(screen.getByRole('button', { name: '+ add column' }))
     fireEvent.change(screen.getByLabelText('column 2 type'), { target: { value: 'KVREF' } })
 
     expect(await screen.findByText(/points to a kv key in this domain/)).toBeInTheDocument()
-
-    const typeSelect = screen.getByLabelText('column 2 type')
-    const jsonOption = within(typeSelect).getByRole('option', { name: 'JSONREF' })
-    expect(jsonOption).toBeDisabled()
-    expect(jsonOption.getAttribute('title')).toMatch(/json engine not enabled/)
 
     fireEvent.click(screen.getByRole('button', { name: 'docs' }))
     expect(await screen.findByTestId('docs-route-state')).toHaveTextContent('/docs')
@@ -322,5 +317,17 @@ describe('CreateTableForm', () => {
       "/sql · CREATE TABLE orders (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  total REAL NOT NULL,\n  warehouse_id INTEGER REFERENCES warehouses,\n  status TEXT UNIQUE DEFAULT 'pending'\n);",
     )
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('the "from csv/tsv file…" link closes the form and requests the file import', async () => {
+    server.use(tablesHandler([]), viewsHandler([]))
+    const onClose = vi.fn()
+    const onFromFile = vi.fn()
+    await renderForm(makeDomain(), onClose, onFromFile)
+
+    fireEvent.click(screen.getByRole('button', { name: 'from csv/tsv file…' }))
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onFromFile).toHaveBeenCalledTimes(1)
   })
 })

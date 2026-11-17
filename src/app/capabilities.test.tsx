@@ -1,7 +1,8 @@
-import { QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider, focusManager } from '@tanstack/react-query'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
+import { getRecordedCalls } from '../api/recorder'
 import { server } from '../test/msw'
 import { useCapabilities } from './capabilities'
 import type { Connection } from './connections'
@@ -14,61 +15,148 @@ function makeConnection(): Connection {
   return {
     id: 'conn-1',
     name: 'local',
-    type: { kind: 'rest', url: 'http://127.0.0.1:3000' },
+    type: { kind: 'rest', url: '' },
     auth: { kind: 'api-key', key: 'lura_secret' },
   }
 }
 
 function CapabilitiesProbe() {
-  const { admin } = useCapabilities()
-  return <p data-testid="capabilities">admin: {String(admin)}</p>
+  const { admin, adminError, identity } = useCapabilities()
+  return (
+    <p data-testid="capabilities">
+      admin: {admin}
+      {adminError !== undefined && <span data-testid="admin-error">{adminError}</span>}
+      {identity !== undefined && <span data-testid="identity">{`${identity.name}/${identity.role}`}</span>}
+    </p>
+  )
 }
 
 async function connectSuccessfully(): Promise<void> {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.2.0', server_version: '0.2.0' })))
+  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })))
   await act(() => connect(makeConnection()))
 }
 
+function renderProbe() {
+  const queryClient = createAppQueryClient()
+  render(
+    <QueryClientProvider client={queryClient}>
+      <CapabilitiesProbe />
+    </QueryClientProvider>,
+  )
+  return queryClient
+}
+
+function whoamiReturns(body: { name: string | null; role: string }) {
+  return http.get(`${ORIGIN}/store-api/auth/whoami`, () => HttpResponse.json(body))
+}
+
+function whoamiStatus(status: number) {
+  return http.get(`${ORIGIN}/store-api/auth/whoami`, () => new HttpResponse('Unauthorized', { status }))
+}
+
 describe('useCapabilities', () => {
-  it('derives admin from a 200 on /auth/users', async () => {
+  it('derives admin: yes plus the identity from whoami role Admin', async () => {
     await connectSuccessfully()
-    server.use(http.get(`${ORIGIN}/store-api/auth/users`, () => HttpResponse.json([])))
+    server.use(whoamiReturns({ name: 'admin', role: 'Admin' }))
 
-    const queryClient = createAppQueryClient()
-    render(
-      <QueryClientProvider client={queryClient}>
-        <CapabilitiesProbe />
-      </QueryClientProvider>,
-    )
+    renderProbe()
 
-    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: true'))
+    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: yes'))
+    expect(screen.getByTestId('identity')).toHaveTextContent('admin/Admin')
     act(() => disconnect())
   })
 
-  it('derives non-admin from a non-200 on /auth/users', async () => {
+  it('derives admin: no plus the identity from whoami role User', async () => {
     await connectSuccessfully()
-    server.use(http.get(`${ORIGIN}/store-api/auth/users`, () => new HttpResponse(null, { status: 403 })))
+    server.use(whoamiReturns({ name: 'alice', role: 'User' }))
 
-    const queryClient = createAppQueryClient()
-    render(
-      <QueryClientProvider client={queryClient}>
-        <CapabilitiesProbe />
-      </QueryClientProvider>,
-    )
+    renderProbe()
 
-    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: false'))
+    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: no'))
+    expect(screen.getByTestId('identity')).toHaveTextContent('alice/User')
     act(() => disconnect())
   })
 
-  it('is false while not connected', () => {
+  it('maps an unknown role to admin: no (least privilege) and keeps the identity', async () => {
+    await connectSuccessfully()
+    server.use(whoamiReturns({ name: 'eve', role: 'Auditor' }))
+
+    renderProbe()
+
+    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: no'))
+    expect(screen.getByTestId('identity')).toHaveTextContent('eve/Auditor')
+    act(() => disconnect())
+  })
+
+  it('maps TrustedPeer (no name) to admin: no without an identity', async () => {
+    await connectSuccessfully()
+    server.use(whoamiReturns({ name: null, role: 'TrustedPeer' }))
+
+    renderProbe()
+
+    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: no'))
+    expect(screen.queryByTestId('identity')).not.toBeInTheDocument()
+    act(() => disconnect())
+  })
+
+  it('maps Disabled (open server, no name) to admin: yes without an identity', async () => {
+    await connectSuccessfully()
+    server.use(whoamiReturns({ name: null, role: 'Disabled' }))
+
+    renderProbe()
+
+    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: yes'))
+    expect(screen.queryByTestId('identity')).not.toBeInTheDocument()
+    act(() => disconnect())
+  })
+
+  it.each([500, 404])('derives admin: error (with the response detail) from a %s on whoami (404 = server too old)', async (status) => {
+    await connectSuccessfully()
+    server.use(whoamiStatus(status))
+
+    renderProbe()
+
+    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: error'))
+    expect(screen.getByTestId('admin-error')).toHaveTextContent(`unexpected response (HTTP ${status})`)
+    expect(screen.queryByTestId('identity')).not.toBeInTheDocument()
+    act(() => disconnect())
+  })
+
+  it.each([401, 403])('derives admin: no without identity or error from a %s on whoami — a regular gate, not an error', async (status) => {
+    await connectSuccessfully()
+    server.use(whoamiStatus(status))
+
+    renderProbe()
+
+    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: no'))
+    expect(screen.queryByTestId('admin-error')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('identity')).not.toBeInTheDocument()
+    act(() => disconnect())
+  })
+
+  it('records exactly one whoami call per session — no second one after a focus refetch', async () => {
+    await connectSuccessfully()
+    server.use(whoamiReturns({ name: 'admin', role: 'Admin' }))
+    const whoamiCalls = () => getRecordedCalls().filter((call) => call.path === '/store-api/auth/whoami')
+
+    renderProbe()
+    await waitFor(() => expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: yes'))
+    expect(whoamiCalls()).toHaveLength(1)
+
+    await act(async () => {
+      focusManager.setFocused(false)
+      focusManager.setFocused(true)
+    })
+
+    expect(whoamiCalls()).toHaveLength(1)
+    expect(whoamiCalls()[0]).toMatchObject({ method: 'GET', status: 200 })
+    act(() => disconnect())
+  })
+
+  it('is pending while not connected (the probe never runs, no false "no")', () => {
     disconnect()
-    const queryClient = createAppQueryClient()
-    render(
-      <QueryClientProvider client={queryClient}>
-        <CapabilitiesProbe />
-      </QueryClientProvider>,
-    )
+    renderProbe()
 
-    expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: false')
+    expect(screen.getByTestId('capabilities')).toHaveTextContent('admin: pending')
   })
 })

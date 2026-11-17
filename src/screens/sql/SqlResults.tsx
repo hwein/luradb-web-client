@@ -64,7 +64,7 @@ function ResultGrid({ result, onOpenDoc }: { result: SqlSelectResult; onOpenDoc:
   }
 
   return (
-    <table className="sql-grid">
+    <table className="sql-grid selectable">
       <thead>
         <tr>
           {result.columns.map((column) => (
@@ -107,7 +107,7 @@ function ResultGrid({ result, onOpenDoc }: { result: SqlSelectResult; onOpenDoc:
 function ResultBody({ outcome, onOpenDoc }: { outcome: SqlOutcome; onOpenDoc: (docId: string) => void }) {
   if (outcome.status === 'error') {
     return (
-      <div className="sql-results__error">
+      <div className="sql-results__error selectable">
         {outcome.message} ·{' '}
         <button type="button" className="sql-link" onClick={() => onOpenDoc(outcome.docId)}>
           {docLinkLabel(outcome.docId)}
@@ -142,7 +142,7 @@ export function SqlResults({ outcome, running, onExport, onOpenDoc }: SqlResults
         <span className="sql-results__label mono-label">RESULTS</span>
         {outcome && (
           <span className="sql-results__meta">
-            {summaryFor(outcome)} · {outcome.call.ms.toFixed(1)} ms · <CallLine method="POST" path={outcome.call.path} />
+            <span className="sql-results__summary">{summaryFor(outcome)}</span> · {outcome.call.ms.toFixed(1)} ms · <CallLine method="POST" path={outcome.call.path} />
             {selectResult?.limitApplied ? ' · limit applied' : ''}
           </span>
         )}

@@ -7,12 +7,12 @@ interface KvMasterListProps {
   onNew: () => void
   loading: boolean
   hasMore: boolean
+  loadingMore: boolean
   onLoadMore: () => void
 }
 
-/** Master-Liste (spec §2): reine Key-Liste aus dem Prefix-Scan, Auswahl per 2px-Accent-Border. "load more" ist eine
- *  sofortige Client-Slice (der Scan lädt bereits alle Treffer, keine Server-Paginierung — s. kvEntries.ts). */
-export function KvMasterList({ keys, selectedKey, onSelect, onNew, loading, hasMore, onLoadMore }: KvMasterListProps) {
+/** Master list (spec §2): keys from the server-side scan, the selected row keeps the hover surface, offset-based "load more" (spec data/011). */
+export function KvMasterList({ keys, selectedKey, onSelect, onNew, loading, hasMore, loadingMore, onLoadMore }: KvMasterListProps) {
   // Einmal je Selektion zur Zeile scrollen, sobald sie gerendert ist (?key=-Ankunft liegt tief in der Liste);
   // 'nearest' macht sichtbare Zeilen zum No-Op, und "load more" scrollt nie zurück (scrolledFor-Guard).
   const selectedRef = useRef<HTMLButtonElement>(null)
@@ -24,7 +24,7 @@ export function KvMasterList({ keys, selectedKey, onSelect, onNew, loading, hasM
   }, [selectedKey, keys])
 
   return (
-    <div className="kv-list">
+    <div className="kv-list selectable">
       <div className="kv-list__head">
         <span className="kv-list__label">key</span>
         <button type="button" className="kv-list__new" onClick={onNew}>
@@ -36,9 +36,10 @@ export function KvMasterList({ keys, selectedKey, onSelect, onNew, loading, hasM
       ) : keys.length === 0 ? (
         <div className="kv-list__hint">no keys</div>
       ) : (
-        keys.map((key) => (
+        // Index im React-Key: Offset-Paging kann bei parallelen Writes dieselbe Zeile auf zwei Seiten liefern (kvEntries.ts).
+        keys.map((key, index) => (
           <button
-            key={key}
+            key={`${index}:${key}`}
             ref={key === selectedKey ? selectedRef : undefined}
             type="button"
             className={`kv-list__row${key === selectedKey ? ' kv-list__row--selected' : ''}`}
@@ -49,8 +50,8 @@ export function KvMasterList({ keys, selectedKey, onSelect, onNew, loading, hasM
         ))
       )}
       {hasMore && (
-        <button type="button" className="kv-list__load-more" onClick={onLoadMore}>
-          load more
+        <button type="button" className="kv-list__load-more" onClick={onLoadMore} disabled={loadingMore}>
+          {loadingMore ? 'loading…' : 'load more'}
         </button>
       )}
     </div>

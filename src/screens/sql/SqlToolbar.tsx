@@ -6,7 +6,7 @@ import { relTableDetailQueryOptions, relTablesQueryOptions } from '../../shell/d
 interface SqlToolbarProps {
   apiClient: ApiClient | undefined
   domainName: string | null
-  hasRel: boolean
+  domainListed: boolean
   /** Spiegelt exakt den Klick-Guard des Screens (canRun) — enabled heißt: der Klick wirkt. */
   runDisabled: boolean
   expand: string[]
@@ -45,7 +45,7 @@ function ExpandFreetext({ onAdd }: { onAdd: (column: string) => void }) {
 export function SqlToolbar({
   apiClient,
   domainName,
-  hasRel,
+  domainListed,
   runDisabled,
   expand,
   onExpandChange,
@@ -57,7 +57,7 @@ export function SqlToolbar({
   docsOpen,
   onToggleDocs,
 }: SqlToolbarProps) {
-  const refEnabled = hasRel && domainName !== null
+  const refEnabled = domainListed && domainName !== null
   const tablesQuery = useQuery(relTablesQueryOptions(apiClient, domainName ?? '', refEnabled))
   const tables = tablesQuery.data ?? []
   const detailQueries = useQueries({

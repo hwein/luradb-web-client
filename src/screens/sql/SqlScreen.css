@@ -8,7 +8,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-width: 420px;
+  min-width: 460px;
   min-height: 0;
 }
 
@@ -31,11 +31,15 @@
   padding: 7px 14px;
   color: var(--mut);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-data);
   cursor: pointer;
   border: 1px solid transparent;
   border-bottom: none;
   border-radius: var(--rad) var(--rad) 0 0;
+}
+
+.sql-tab:not(.sql-tab--active):hover {
+  background: var(--panel2);
 }
 
 .sql-tab--active {
@@ -64,7 +68,7 @@
   border-radius: var(--rad-chip);
   color: var(--tx);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-data);
   padding: 1px 5px;
   outline: none;
 }
@@ -73,13 +77,15 @@
   padding: 7px 12px;
   background: none;
   border: none;
+  border-radius: var(--rad) var(--rad) 0 0;
   color: var(--mut);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-data);
   cursor: pointer;
 }
 
 .sql-tab__add:hover {
+  background: var(--panel2);
   color: var(--tx);
 }
 
@@ -108,7 +114,7 @@
   padding: 6px 16px;
   font-family: var(--font-sans);
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--fs-data);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -120,7 +126,7 @@
 
 .sql-toolbar__expand-label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   color: var(--mut);
 }
 
@@ -133,7 +139,7 @@
   border: 1px solid transparent;
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 10.5px;
+  font-size: var(--fs-label);
   cursor: pointer;
 }
 
@@ -171,7 +177,7 @@
 
 .sql-toolbar__params-error {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-label);
   color: var(--err);
   white-space: nowrap;
 }
@@ -179,7 +185,7 @@
 .sql-toolbar__hint {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   color: var(--mut);
   white-space: nowrap;
   overflow: hidden;
@@ -198,7 +204,7 @@
   color: var(--tx);
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 11px;
+  font-size: var(--fs-meta);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -233,7 +239,7 @@
   border-radius: var(--rad-input);
   color: var(--tx);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-data);
   padding: 6px 10px;
   outline: none;
 }
@@ -246,17 +252,23 @@
   padding: 6px 14px;
   font-family: var(--font-sans);
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--fs-data);
   cursor: pointer;
 }
 
 .sql-saveview__cancel {
+  padding: 6px 10px;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--mut);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   cursor: pointer;
+}
+
+.sql-saveview__cancel:hover {
+  background: var(--panel);
 }
 
 /* --- Editor surface (Prototyp Z. 76) --------------------------------- */
@@ -299,25 +311,34 @@
 
 .sql-results__meta {
   min-width: 0;
-  font-size: 11px;
+  font-size: var(--fs-meta);
   color: var(--mut);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.sql-results__summary {
+  color: var(--tx);
+  font-size: var(--fs-data);
+  font-weight: 500;
+}
+
 .sql-results__export {
   margin-left: auto;
+  padding: 4px 8px;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--mut);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   white-space: nowrap;
   cursor: pointer;
 }
 
 .sql-results__export:hover {
+  background: var(--panel2);
   color: var(--tx);
 }
 
@@ -326,7 +347,7 @@
   min-height: 0;
   overflow: auto;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-data);
 }
 
 .sql-results__hint {
@@ -350,7 +371,7 @@
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-data);
 }
 
 .sql-grid thead th {
@@ -360,8 +381,11 @@
   background: var(--panel);
   text-align: left;
   font-weight: 400;
+  font-size: var(--fs-meta);
   color: var(--mut);
-  padding: 7px 14px;
+  box-sizing: border-box;
+  height: var(--row-h);
+  padding: 0 14px;
   border-bottom: 1px solid var(--bord);
   white-space: nowrap;
 }
@@ -371,11 +395,14 @@
 }
 
 .sql-grid tbody td {
-  padding: 7px 14px;
+  box-sizing: border-box;
+  height: var(--row-h);
+  padding: 0 14px;
   border-bottom: 1px solid var(--bord);
   color: var(--tx);
+  font-weight: 500;
   white-space: nowrap;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .sql-grid tbody tr:hover {
@@ -383,11 +410,13 @@
 }
 
 .sql-grid__row--selected td {
-  box-shadow: inset 2px 0 0 var(--acc);
+  background: var(--panel2);
 }
 
-.sql-grid__cell--muted {
+.sql-grid tbody .sql-grid__cell--muted {
   color: var(--mut);
+  font-size: var(--fs-meta);
+  font-weight: 400;
 }
 
 .sql-grid__expanded-cell {
@@ -413,9 +442,10 @@
 }
 
 .sql-link {
-  padding: 0;
+  padding: 0 4px;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--acc);
   font-family: var(--font-mono);
   font-size: inherit;
@@ -423,13 +453,18 @@
 }
 
 .sql-link:hover {
-  text-decoration: underline;
+  background: var(--panel2);
+}
+
+/* Inside the hovered grid row, which already carries --panel2. */
+.sql-grid tbody tr:hover .sql-link:hover {
+  background: var(--panel);
 }
 
 /* --- Docs split (Prototyp Z. 91–109) --------------------------------- */
 
 .sql-docs {
-  width: clamp(280px, 28vw, 360px);
+  width: clamp(300px, 28vw, 390px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -446,17 +481,22 @@
   border-bottom: 1px solid var(--bord);
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 11px;
+  font-size: var(--fs-meta);
 }
 
 .sql-docs__close {
   margin-left: auto;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--mut);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--fs-body);
   cursor: pointer;
+}
+
+.sql-docs__close:hover {
+  background: var(--panel2);
 }
 
 .sql-docs__search {
@@ -471,7 +511,7 @@
   border-radius: var(--rad-input);
   color: var(--tx);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--fs-meta);
   padding: 7px 10px;
   outline: none;
 }
@@ -488,11 +528,16 @@
 
 .sql-docs__full {
   align-self: flex-start;
-  padding: 0;
+  padding: 2px 6px;
   background: none;
   border: none;
+  border-radius: var(--rad);
   color: var(--acc);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   cursor: pointer;
+}
+
+.sql-docs__full:hover {
+  background: var(--panel2);
 }

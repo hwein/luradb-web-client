@@ -2,7 +2,6 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import { withCall, type ApiClient } from '../../api'
 import type { components } from '../../api/schema'
 import { relTableDetailQueryOptions, relTablesQueryOptions } from '../../shell/domainDetails'
-import { useDomainSummaries } from '../../shell/domains'
 
 type ColumnInfo = components['schemas']['ColumnInfo']
 
@@ -56,14 +55,11 @@ async function probeReference(apiClient: ApiClient, domain: string, table: strin
  * je Spalte eine COUNT(*)-Probe. Jede Kandidat-Spalte liefert eine Karte, auch bei 0 Treffern (spec 004 §3).
  */
 export function useReferencedBy(apiClient: ApiClient | undefined, domain: string, documentKey: string | undefined): ReferencedByCard[] {
-  const domains = useDomainSummaries(apiClient)
-  const hasRel = domains.find((entry) => entry.name === domain)?.engines.rel !== undefined
-
-  const tablesQuery = useQuery(relTablesQueryOptions(apiClient, domain, hasRel))
+  const tablesQuery = useQuery(relTablesQueryOptions(apiClient, domain, true))
   const tables = tablesQuery.data ?? []
 
   const detailQueries = useQueries({
-    queries: tables.map((table) => relTableDetailQueryOptions(apiClient, domain, table.name, hasRel)),
+    queries: tables.map((table) => relTableDetailQueryOptions(apiClient, domain, table.name, true)),
   })
 
   const jsonrefColumns: { table: string; column: string }[] = []

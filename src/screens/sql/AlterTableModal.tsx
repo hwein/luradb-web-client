@@ -10,7 +10,7 @@ import { openDocs } from '../docs/openDocs'
 import './AlterTableModal.css'
 import { buildAlterTableSql, type AddColumnDef, type AlterOperation } from './alterTable'
 import { COLUMN_TYPES, type ColumnDefault, type ColumnType } from './createTable'
-import { REF_HINTS, refEngineUnavailableReason, typeAllowsDefault, typeAllowsReferences } from './CreateTableModal'
+import { REF_HINTS, typeAllowsDefault, typeAllowsReferences } from './CreateTableModal'
 import { sqlReadOnlyExtensions } from './editor'
 import { identifierError } from './identifier'
 import { addTab } from './sqlStore'
@@ -225,14 +225,11 @@ export function AlterTableForm({ domain, apiClient, table, schema, onClose }: Al
                 value={colType}
                 onChange={(event) => handleTypeChange(event.target.value as ColumnType)}
               >
-                {COLUMN_TYPES.map((type) => {
-                  const reason = refEngineUnavailableReason(type, domain, 'ADD COLUMN')
-                  return (
-                    <option key={type} value={type} disabled={reason !== undefined} title={reason}>
-                      {type}
-                    </option>
-                  )
-                })}
+                {COLUMN_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
               </select>
               {REF_HINTS[colType] && (
                 <div className="atm__ref-hint">

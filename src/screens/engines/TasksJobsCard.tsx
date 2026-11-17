@@ -3,8 +3,9 @@ import { useEffect, useState, type FormEvent } from 'react'
 import type { ApiClient } from '../../api'
 import { updateReindexTaskStatus, useReindexTasks, type ReindexTask } from '../../lib/tasks'
 import { jsonIndexesQueryOptions } from '../../shell/domainDetails'
-import { jsonDomainsQueryOptions } from '../../shell/domains'
-import { formatNumber } from './format'
+import { domainsQueryOptions } from '../../shell/domains'
+import { formatNumber } from '../../lib'
+import { NOT_AVAILABLE } from './format'
 import type { SystemMetrics } from './metrics'
 import { reindexStatusQueryOptions } from './reindexPoll'
 import { startReindex, type StartReindexOutcome } from './reindexStart'
@@ -12,6 +13,8 @@ import { startReindex, type StartReindexOutcome } from './reindexStart'
 interface TasksJobsCardProps {
   apiClient: ApiClient | undefined
   system: SystemMetrics | undefined
+  /** The key never gets metrics (no admin role): dashes instead of 0. */
+  noMetrics?: boolean
 }
 
 /** Pollt den Status eines einzelnen Tasks alle 2s, solange er `running` ist; kein eigenes Markup. */
@@ -135,11 +138,10 @@ function ReindexTriggerForm({ apiClient, domains, onClose }: { apiClient: ApiCli
 }
 
 /** TASKS & JOBS-Karte (spec engines/001 §4, Trigger-Formular engines/002): client-gestartete Reindex-Tasks + Zählerzeilen aus /metrics.system. */
-export function TasksJobsCard({ apiClient, system }: TasksJobsCardProps) {
+export function TasksJobsCard({ apiClient, system, noMetrics }: TasksJobsCardProps) {
   const tasks = useReindexTasks()
   const [formOpen, setFormOpen] = useState(false)
-  const jsonDomainsQuery = useQuery(jsonDomainsQueryOptions(apiClient))
-  const domains = (jsonDomainsQuery.data ?? []).filter((domain) => domain.state !== 'deleting').map((domain) => domain.name)
+  const domains = (useQuery(domainsQueryOptions(apiClient)).data ?? []).map((domain) => domain.name)
   const triggerDisabled = domains.length === 0
 
   return (
@@ -150,7 +152,7 @@ export function TasksJobsCard({ apiClient, system }: TasksJobsCardProps) {
           type="button"
           className="engines__reindex-toggle"
           disabled={triggerDisabled}
-          title={triggerDisabled ? 'no JSON domains to reindex' : undefined}
+          title={triggerDisabled ? 'no domains to reindex' : undefined}
           onClick={() => setFormOpen((open) => !open)}
         >
           ▶ reindex…
@@ -168,12 +170,12 @@ export function TasksJobsCard({ apiClient, system }: TasksJobsCardProps) {
       <div className="engines__task-row">
         <span className="engines__dot" />
         <span className="engines__task-label">compaction runs</span>
-        <span className="engines__task-meta">{formatNumber(system?.compactionRuns ?? 0)}</span>
+        <span className="engines__task-meta">{noMetrics ? NOT_AVAILABLE : formatNumber(system?.compactionRuns ?? 0)}</span>
       </div>
       <div className="engines__task-row">
         <span className="engines__dot" />
         <span className="engines__task-label">janitor runs</span>
-        <span className="engines__task-meta">{formatNumber(system?.janitorRuns ?? 0)}</span>
+        <span className="engines__task-meta">{noMetrics ? NOT_AVAILABLE : formatNumber(system?.janitorRuns ?? 0)}</span>
       </div>
     </div>
   )

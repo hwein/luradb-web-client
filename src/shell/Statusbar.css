@@ -1,5 +1,5 @@
 .statusbar {
-  height: 28px;
+  height: 30px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -8,21 +8,28 @@
   background: var(--panel);
   border-top: 1px solid var(--bord);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-meta);
   color: var(--mut);
 }
 
+/* The negative left margin offsets the padding, so the content keeps its place. */
 .statusbar__connection {
   display: flex;
   align-items: center;
+  align-self: stretch;
   gap: 6px;
   background: transparent;
   border: none;
-  padding: 0;
-  margin: 0;
+  border-radius: var(--rad);
+  padding: 0 6px;
+  margin: 0 0 0 -6px;
   font: inherit;
   color: inherit;
   cursor: pointer;
+}
+
+.statusbar__connection:hover {
+  background: var(--panel2);
 }
 
 .statusbar__dot {
@@ -40,9 +47,24 @@
   background: var(--err);
 }
 
+.statusbar__identity {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Kein eigenes Warn-Token in tokens.css — nutzt den amber-Farbton des JSON-Engine-Hues (Design-Amber). */
 .statusbar__warning {
   color: var(--eng-json-label);
+}
+
+.statusbar__health {
+  color: var(--warn);
+}
+
+.statusbar__health--err {
+  color: var(--err);
 }
 
 .statusbar__server {
@@ -50,4 +72,22 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
+}
+
+/* The negative right margin offsets the padding, so the content stays where the plain span puts it. */
+.statusbar__server--button {
+  align-self: stretch;
+  background: transparent;
+  border: none;
+  border-radius: var(--rad);
+  padding: 0 6px;
+  margin-right: -6px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.statusbar__server--button:hover {
+  background: var(--panel2);
 }
