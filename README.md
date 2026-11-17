@@ -7,10 +7,11 @@
 
 The LuraDB Web Client is an **IDE for [LuraDB](https://github.com/hwein/luradb)** —
 dense, monospaced where the data lives, dark by default, and honest about the
-protocol underneath. It speaks nothing but the LuraDB REST API and ships
-primarily as a **cross-platform desktop app** (Tauri 2): the recommended first
-tool for LuraDB — install it, enter a server URL and key, and start working. No
-web server required; the same build optionally runs as a browser SPA — behind a
+protocol underneath. It reaches your server through nothing but the LuraDB REST
+API, reads its help pages from docs.luradb.org, and ships primarily as a
+**cross-platform desktop app** (Tauri 2): the recommended first tool for
+LuraDB — install it, enter a server URL and key, and start working. No web
+server required; the same build optionally runs as a browser SPA — behind a
 reverse proxy, or directly against a server that allows its origin via CORS.
 
 ## Workbench

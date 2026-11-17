@@ -7,7 +7,7 @@ export interface SqlColumn {
   type: string
 }
 
-/** Aufgelöste Link-Werte je expandierter Spalte, index-gleich zu `rows` (spec §5, cross-engine-links.md). */
+/** Resolved link values per expanded column, index-aligned with `rows` (spec §5). */
 export type ExpandedMap = Record<string, unknown[]>
 
 export interface SqlSelectResult {
