@@ -5,6 +5,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-17
+
 ### Added
 
 - REST Explorer lists the endpoints added in LuraDB 0.4.0.
@@ -153,7 +155,8 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   permissions, key rotation); configuration; and built-in docs. Packaged as a
   Tauri 2 desktop app.
 
-[unreleased]: https://github.com/hwein/luradb-web-client/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/hwein/luradb-web-client/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/hwein/luradb-web-client/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/hwein/luradb-web-client/compare/v0.0.3...v0.1.0
 [0.0.3]: https://github.com/hwein/luradb-web-client/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/hwein/luradb-web-client/compare/v0.0.1...v0.0.2
