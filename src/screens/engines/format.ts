@@ -1,6 +1,7 @@
 import { formatNumber } from '../../lib'
 
 export const NUMBER_PLACEHOLDER = '…'
+export const NOT_AVAILABLE = '—'
 
 export function formatRate(perSec: number): string {
   if (perSec === 0) return '0'

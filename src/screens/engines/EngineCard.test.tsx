@@ -65,6 +65,15 @@ describe('EngineCard metrics', () => {
     expect(container.querySelector('.engines__card-window')).not.toBeInTheDocument()
   })
 
+  it('shows a dash for ops per second when the key gets no metrics', () => {
+    const { container } = render(
+      <EngineCard tone="kv" title="KV ENGINE" online rows={[]} domains={[]} onOpenDomain={() => undefined} spark={[]} noMetrics />,
+    )
+
+    expect(text(container, '.engines__card-ops')).toBe('— ops/s')
+    expect(container.querySelector('.engines__card-lat')).not.toBeInTheDocument()
+  })
+
   it('renders a 12-bar sparkline', () => {
     const { container } = renderCard(METRICS)
 

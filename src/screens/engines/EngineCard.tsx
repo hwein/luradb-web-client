@@ -1,4 +1,4 @@
-import { formatLatency, formatRate, NUMBER_PLACEHOLDER } from './format'
+import { formatLatency, formatRate, NOT_AVAILABLE, NUMBER_PLACEHOLDER } from './format'
 import type { EngineMetrics, EngineTone } from './metrics'
 import { Sparkline } from './Sparkline'
 
@@ -15,6 +15,8 @@ interface EngineCardProps {
   domains: string[]
   onOpenDomain: (domain: string) => void
   metrics?: EngineMetrics
+  /** The key never gets metrics (no admin role): a dash instead of the loading sign. */
+  noMetrics?: boolean
   spark: number[]
 }
 
@@ -25,7 +27,7 @@ function latencyLine(label: string, ops: number, windowSecs: number, p50: number
 }
 
 /** One of the three engine cards: status dot, ops/s and latencies, real figures, "open in: <domains>" footer. */
-export function EngineCard({ tone, title, online, rows, domains, onOpenDomain, metrics, spark }: EngineCardProps) {
+export function EngineCard({ tone, title, online, rows, domains, onOpenDomain, metrics, noMetrics, spark }: EngineCardProps) {
   return (
     <div className={`engines__card engines__card--${tone}`}>
       <div className="engines__card-head">
@@ -34,7 +36,7 @@ export function EngineCard({ tone, title, online, rows, domains, onOpenDomain, m
         {metrics && <span className="engines__card-window">{metrics.windowSecs}s window</span>}
       </div>
       <div className="engines__card-ops">
-        {metrics ? formatRate((metrics.readOps + metrics.writeOps) / metrics.windowSecs) : NUMBER_PLACEHOLDER}
+        {metrics ? formatRate((metrics.readOps + metrics.writeOps) / metrics.windowSecs) : noMetrics ? NOT_AVAILABLE : NUMBER_PLACEHOLDER}
         <span className="engines__card-ops-unit"> ops/s</span>
       </div>
       {metrics && (

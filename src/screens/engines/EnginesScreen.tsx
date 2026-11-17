@@ -44,6 +44,9 @@ export function EnginesScreen() {
   const isAdmin = admin === 'yes'
   // Admin only (403 otherwise); a failed role check keeps the metrics of an admin.
   const metricsQuery = useQuery({ ...metricsQueryOptions(apiClient), enabled: apiClient !== undefined && (isAdmin || admin === 'error') })
+  const noMetrics = admin === 'no'
+  // No cached figures next to the dashes after a role change in a running session.
+  const metrics = noMetrics ? undefined : metricsQuery.data
   const history = useEngineOpsHistory(metricsQuery.data, metricsQuery.dataUpdatedAt)
   const health = healthQuery.data
 
@@ -86,7 +89,8 @@ export function EnginesScreen() {
           rows={kvRows}
           domains={domainNames}
           onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'kv')}
-          metrics={metricsQuery.data?.engines.kv}
+          metrics={metrics?.engines.kv}
+          noMetrics={noMetrics}
           spark={history.kv}
         />
         <EngineCard
@@ -96,7 +100,8 @@ export function EnginesScreen() {
           rows={jsonRows}
           domains={domainNames}
           onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'json')}
-          metrics={metricsQuery.data?.engines.json}
+          metrics={metrics?.engines.json}
+          noMetrics={noMetrics}
           spark={history.json}
         />
         <EngineCard
@@ -106,12 +111,13 @@ export function EnginesScreen() {
           rows={relRows}
           domains={domainNames}
           onOpenDomain={(domain) => openDomainIn(navigate, select, domain, 'rel')}
-          metrics={metricsQuery.data?.engines.rel}
+          metrics={metrics?.engines.rel}
+          noMetrics={noMetrics}
           spark={history.rel}
         />
       </div>
       <div className="engines__bottom">
-        <TasksJobsCard apiClient={apiClient} system={metricsQuery.data?.system} />
+        <TasksJobsCard apiClient={apiClient} system={metrics?.system} noMetrics={noMetrics} />
         <RecentRequestsCard />
       </div>
     </div>

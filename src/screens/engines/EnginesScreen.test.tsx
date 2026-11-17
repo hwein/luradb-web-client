@@ -220,6 +220,47 @@ describe('EnginesScreen', () => {
     expect(document.querySelector('.engines__tasks')?.textContent).toContain('janitor runs5')
   })
 
+  it('shows dashes for ops per second and the run counters to a key without the admin role', async () => {
+    const { queryClient } = await connectAndRender('/engines', [
+      http.get(`${ORIGIN}/store-api/auth/whoami`, () => HttpResponse.json({ name: 'bob', role: 'User' })),
+    ])
+
+    await waitFor(() => expect(queryClient.getQueryState(['capabilities', 'whoami'])?.status).toBe('success'))
+    await waitFor(() => {
+      const ops = Array.from(document.querySelectorAll('.engines__card-ops')).map((el) => el.textContent)
+      expect(ops).toEqual(['— ops/s', '— ops/s', '— ops/s'])
+    })
+    const tasks = document.querySelector('.engines__tasks')?.textContent ?? ''
+    expect(tasks).toContain('compaction runs—')
+    expect(tasks).toContain('janitor runs—')
+  })
+
+  it('drops cached metrics when the role turns out to be no admin', async () => {
+    let role = 'Admin'
+    const { queryClient } = await connectAndRender('/engines', [
+      http.get(`${ORIGIN}/store-api/auth/whoami`, () => HttpResponse.json({ name: 'bob', role })),
+    ])
+    await waitFor(() => expect(document.querySelector('.engines__tasks')?.textContent).toContain('compaction runs3'))
+
+    role = 'User'
+    await act(() => queryClient.invalidateQueries({ queryKey: ['capabilities', 'whoami'] }))
+
+    await waitFor(() => {
+      const ops = Array.from(document.querySelectorAll('.engines__card-ops')).map((el) => el.textContent)
+      expect(ops).toEqual(['— ops/s', '— ops/s', '— ops/s'])
+    })
+    expect(document.querySelector('.engines__tasks')?.textContent).toContain('compaction runs—')
+  })
+
+  it('keeps the loading sign while the role check is open', async () => {
+    await connectAndRender('/engines', [http.get(`${ORIGIN}/store-api/auth/whoami`, () => new Promise<Response>(() => undefined))])
+
+    await waitFor(() => expect(document.querySelector('.engines__health')).toBeInTheDocument())
+    const ops = Array.from(document.querySelectorAll('.engines__card-ops')).map((el) => el.textContent)
+    expect(ops).toEqual(['… ops/s', '… ops/s', '… ops/s'])
+    expect(document.querySelector('.engines__tasks')?.textContent).toContain('compaction runs0')
+  })
+
   it(
     'polls a client-started reindex task from running to completed, then stops showing a progress bar',
     async () => {
