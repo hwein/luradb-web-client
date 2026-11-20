@@ -176,7 +176,7 @@ export interface KvPutCondition {
 }
 
 /** `createOnly` wins over `etag`; no condition ⇒ no header (unconditional write). */
-function conditionHeaders(condition: KvPutCondition): Record<string, string> {
+export function conditionHeaders(condition: KvPutCondition): Record<string, string> {
   if (condition.createOnly) return { 'If-None-Match': '*' }
   if (condition.etag !== undefined) return { 'If-Match': condition.etag }
   return {}

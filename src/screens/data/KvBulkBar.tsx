@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import type { ApiClient } from '../../api'
 import { formatNumber } from '../../lib'
+import { useDomainSummaries } from '../../shell/domains'
 import { openDocs } from '../docs/openDocs'
 import {
   kvBulkCallPattern,
@@ -68,6 +69,8 @@ export function KvBulkBar({ domain, apiClient, scan }: KvBulkBarProps) {
   const total = keysQuery.data?.total ?? 0
   const capped = total > selectedKeys.length
   const serverDelete = action !== undefined && usesServerDelete(action, filter)
+  const domains = useDomainSummaries(apiClient)
+  const conditional = domains.find((summary) => summary.name === domain)?.conditionalWrites.includes('kv') ?? false
 
   const runMutation = useMutation<KvBulkOutcome, unknown, RunVariables>({
     mutationFn: async (variables) => {
@@ -79,7 +82,7 @@ export function KvBulkBar({ domain, apiClient, scan }: KvBulkBarProps) {
       const result = await runKvBulk(
         variables.keys,
         KV_BULK_CONCURRENCY,
-        (key) => runKvBulkOp(apiClient, domain, variables.action, key),
+        (key) => runKvBulkOp(apiClient, domain, variables.action, key, conditional),
         (done, total) => setProgress({ done, total }),
       )
       return { kind: 'fanout', ...result }
@@ -226,7 +229,7 @@ export function KvBulkBar({ domain, apiClient, scan }: KvBulkBarProps) {
 
       {action !== undefined && (
         <div className="kv-bulk__call-pattern mono-path">
-          {serverDelete ? `DELETE ${kvBulkDeletePath(domain, filter)}` : `${selectedKeys.length} × ${kvBulkCallPattern(action, domain)} · not recorded`}
+          {serverDelete ? `DELETE ${kvBulkDeletePath(domain, filter)}` : `${selectedKeys.length} × ${kvBulkCallPattern(action, domain, conditional)} · not recorded`}
         </div>
       )}
 

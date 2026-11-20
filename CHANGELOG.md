@@ -5,6 +5,10 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- KV bulk actions set value, set null and delete without prefix work on domains that require conditional writes.
+
 ## [0.2.0] - 2026-11-17
 
 ### Added

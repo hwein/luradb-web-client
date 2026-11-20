@@ -135,6 +135,127 @@ describe('runKvBulkOp', () => {
   })
 })
 
+describe('runKvBulkOp when conditional', () => {
+  const KEY_URL = `${BASE_URL}/store-api/kv/${DOMAIN}/keys/k1`
+
+  it('reads the ETag and sends If-Match for delete when conditional', async () => {
+    const calls: string[] = []
+    let ifMatch: string | null = null
+    server.use(
+      http.get(KEY_URL, () => {
+        calls.push('GET')
+        return new HttpResponse('some value', { status: 200, headers: { ETag: '"v1"' } })
+      }),
+      http.delete(KEY_URL, ({ request }) => {
+        calls.push('DELETE')
+        ifMatch = request.headers.get('If-Match')
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    await expect(runKvBulkOp(makeApi(), DOMAIN, 'delete', 'k1', true)).resolves.toBeUndefined()
+    expect(calls).toEqual(['GET', 'DELETE'])
+    expect(ifMatch).toBe('"v1"')
+  })
+
+  it('reads the ETag and sends If-Match for clear when conditional', async () => {
+    let ifMatch: string | null = null
+    let body: string | undefined
+    server.use(
+      http.get(KEY_URL, () => new HttpResponse('old', { status: 200, headers: { ETag: '"v2"' } })),
+      http.put(KEY_URL, async ({ request }) => {
+        ifMatch = request.headers.get('If-Match')
+        body = await request.text()
+        return new HttpResponse(null, { status: 200 })
+      }),
+    )
+    await runKvBulkOp(makeApi(), DOMAIN, 'clear', 'k1', true)
+    expect(ifMatch).toBe('"v2"')
+    expect(body).toBe('')
+  })
+
+  it('reads the ETag of a null key and sends If-Match for set null when conditional', async () => {
+    let ifMatch: string | null = null
+    server.use(
+      http.get(KEY_URL, () => new HttpResponse(null, { status: 204, headers: { ETag: '"n1"' } })),
+      http.patch(`${KEY_URL}/null`, ({ request }) => {
+        ifMatch = request.headers.get('If-Match')
+        return new HttpResponse(null, { status: 200 })
+      }),
+    )
+    await runKvBulkOp(makeApi(), DOMAIN, 'set-null', 'k1', true)
+    expect(ifMatch).toBe('"n1"')
+  })
+
+  it('reports a version conflict on 412 when conditional', async () => {
+    server.use(
+      http.get(KEY_URL, () => new HttpResponse('x', { status: 200, headers: { ETag: '"v1"' } })),
+      http.put(KEY_URL, () => new HttpResponse('precondition failed', { status: 412, headers: { ETag: '"v2"' } })),
+    )
+    await expect(runKvBulkOp(makeApi(), DOMAIN, 'clear', 'k1', true)).rejects.toThrow('version conflict — the key changed on the server')
+  })
+
+  it('counts a delete as done when the key is gone before the read', async () => {
+    let deletes = 0
+    server.use(
+      http.get(KEY_URL, () => HttpResponse.json({ error: 'key not found' }, { status: 404 })),
+      http.delete(KEY_URL, () => {
+        deletes += 1
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    await expect(runKvBulkOp(makeApi(), DOMAIN, 'delete', 'k1', true)).resolves.toBeUndefined()
+    expect(deletes).toBe(0)
+
+    server.use(
+      http.get(KEY_URL, () => new HttpResponse('x', { status: 200, headers: { ETag: '"v1"' } })),
+      http.delete(KEY_URL, () => new HttpResponse('precondition failed', { status: 412 })),
+      http.put(KEY_URL, () => new HttpResponse('precondition failed', { status: 412 })),
+    )
+    await expect(runKvBulkOp(makeApi(), DOMAIN, 'delete', 'k1', true)).resolves.toBeUndefined()
+    await expect(runKvBulkOp(makeApi(), DOMAIN, 'clear', 'k1', true)).rejects.toThrow('key no longer exists')
+  })
+
+  it('passes the server text through when the read of a clear fails', async () => {
+    server.use(http.get(KEY_URL, () => HttpResponse.json({ error: 'key or domain not found' }, { status: 404 })))
+    await expect(runKvBulkOp(makeApi(), DOMAIN, 'clear', 'k1', true)).rejects.toThrow('key or domain not found')
+
+    server.use(http.get(KEY_URL, () => new HttpResponse('rate limit exceeded, retry in 2s', { status: 429 })))
+    await expect(runKvBulkOp(makeApi(), DOMAIN, 'clear', 'k1', true)).rejects.toThrow('rate limit exceeded, retry in 2s')
+  })
+
+  it('reports a missing ETag when conditional', async () => {
+    let writes = 0
+    server.use(
+      http.get(KEY_URL, () => new HttpResponse('x', { status: 200 })),
+      http.delete(KEY_URL, () => {
+        writes += 1
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    await expect(runKvBulkOp(makeApi(), DOMAIN, 'delete', 'k1', true)).rejects.toThrow('no ETag from the server')
+    expect(writes).toBe(0)
+  })
+
+  it('sends no read and no If-Match when not conditional', async () => {
+    let reads = 0
+    let ifMatch: string | null = 'unset'
+    server.use(
+      http.get(KEY_URL, () => {
+        reads += 1
+        return new HttpResponse('x', { status: 200, headers: { ETag: '"v1"' } })
+      }),
+      http.delete(KEY_URL, ({ request }) => {
+        ifMatch = request.headers.get('If-Match')
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    await runKvBulkOp(makeApi(), DOMAIN, 'delete', 'k1')
+    await runKvBulkOp(makeApi(), DOMAIN, 'delete', 'k1', false)
+    expect(reads).toBe(0)
+    expect(ifMatch).toBeNull()
+  })
+})
+
 /** Polls microtasks until `predicate` holds; no fake timers, robust against engine details of the await tick count. */
 async function flushUntil(predicate: () => boolean): Promise<void> {
   for (let i = 0; i < 50 && !predicate(); i += 1) {

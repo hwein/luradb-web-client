@@ -1,6 +1,6 @@
 import { BASE_PATH, type ApiClient } from '../../api'
 import { messageFromError } from '../sql/sqlRun'
-import { kvKeyPath, type KvKeyFilter } from './kvEntries'
+import { conditionHeaders, kvKeyPath, type KvKeyFilter } from './kvEntries'
 
 export type KvBulkAction = 'delete' | 'clear' | 'set-null'
 
@@ -14,9 +14,11 @@ const METHOD_BY_ACTION: Record<KvBulkAction, string> = {
 }
 
 /** Display path with a literal `{key}` placeholder (not a real call), hence no `encodeURIComponent`. */
-export function kvBulkCallPattern(action: KvBulkAction, domain: string): string {
+export function kvBulkCallPattern(action: KvBulkAction, domain: string, conditional = false): string {
   const suffix = action === 'set-null' ? '/null' : ''
-  return `${METHOD_BY_ACTION[action]} ${BASE_PATH}/kv/${domain}/keys/{key}${suffix}`
+  const keyPath = `${BASE_PATH}/kv/${domain}/keys/{key}`
+  const write = `${METHOD_BY_ACTION[action]} ${keyPath}${suffix}`
+  return conditional ? `GET ${keyPath} + ${write} · If-Match` : write
 }
 
 const VERB_BY_ACTION: Record<KvBulkAction, string> = {
@@ -78,10 +80,45 @@ async function errorMessageOf(response: Response): Promise<string> {
   return messageFromError(body, response.status)
 }
 
-/** Single call of a bulk run via `fetchSilent`, so no recorder entry. */
-export async function runKvBulkOp(apiClient: ApiClient, domain: string, action: KvBulkAction, key: string): Promise<void> {
+/** Releases an unread body without waiting: awaiting `cancel()` never settles on the mocked streams of the tests. */
+function discardBody(response: Response): void {
+  response.body?.cancel().catch(() => undefined)
+}
+
+/** ETag of the key from an unrecorded read; undefined when the key is gone and the action is a delete (already done). */
+async function readEtag(apiClient: ApiClient, domain: string, action: KvBulkAction, key: string): Promise<string | undefined> {
+  const response = await apiClient.fetchSilent(kvKeyPath(domain, key))
+  if (response.status === 404 && action === 'delete') {
+    discardBody(response)
+    return undefined
+  }
+  if (!response.ok) throw new Error(await errorMessageOf(response))
+  discardBody(response)
+  const etag = response.headers.get('etag')
+  if (etag === null) throw new Error('no ETag from the server')
+  return etag
+}
+
+/**
+ * Single call of a bulk run via `fetchSilent`, so no recorder entry. `conditional` (domain requires
+ * conditional writes) reads the key first and writes with `If-Match`; a delete of a vanished key counts as done.
+ */
+export async function runKvBulkOp(apiClient: ApiClient, domain: string, action: KvBulkAction, key: string, conditional = false): Promise<void> {
   const { path, init } = requestFor(action, domain, key)
-  const response = await apiClient.fetchSilent(path, init)
+  if (!conditional) {
+    const response = await apiClient.fetchSilent(path, init)
+    if (!response.ok) throw new Error(await errorMessageOf(response))
+    return
+  }
+  const etag = await readEtag(apiClient, domain, action, key)
+  if (etag === undefined) return
+  const response = await apiClient.fetchSilent(path, { ...init, headers: { ...init.headers, ...conditionHeaders({ etag }) } })
+  if (response.status === 412) {
+    discardBody(response)
+    if (response.headers.has('etag')) throw new Error('version conflict — the key changed on the server')
+    if (action === 'delete') return
+    throw new Error('key no longer exists')
+  }
   if (!response.ok) throw new Error(await errorMessageOf(response))
 }
 

@@ -7,7 +7,7 @@ import { getRecordedCalls } from '../../api/recorder'
 import type { Connection } from '../../app/connections'
 import { createAppQueryClient } from '../../app/queryClient'
 import { connect, disconnect, useSession } from '../../app/session'
-import { kvKeyScan, server } from '../../test/msw'
+import { domainResponse, kvKeyScan, server } from '../../test/msw'
 import { resetDocsState, useDocsState } from '../docs/docsStore'
 import { KvBulkBar } from './KvBulkBar'
 
@@ -55,8 +55,13 @@ function keysHandler(keys: string[], onRequest?: (url: URL) => void) {
   })
 }
 
-async function renderBar(prefix = '', initialContains = '') {
-  server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })))
+async function renderBar(prefix = '', initialContains = '', requireConditionalKv = false) {
+  server.use(
+    http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
+    http.get(`${ORIGIN}/store-api/domains`, () =>
+      HttpResponse.json([domainResponse(DOMAIN, { require_conditional_writes: { kv: requireConditionalKv, json: false } })]),
+    ),
+  )
   await act(() => connect(makeConnection()))
 
   const queryClient = createAppQueryClient()
@@ -139,7 +144,7 @@ describe('KvBulkBar', () => {
     expect(screen.queryByText(/matching keys loaded/)).not.toBeInTheDocument()
   })
 
-  it('disables run with an empty selection and describes the pending call pattern as "not recorded"', async () => {
+  it('disables run with an empty selection and describes the pending call pattern', async () => {
     server.use(keysHandler([]))
     await renderBar()
     expect(await screen.findByText('0 keys selected')).toBeInTheDocument()
@@ -258,6 +263,105 @@ describe('KvBulkBar', () => {
     expect(await screen.findByText(/ok 1/)).toBeInTheDocument()
     expect(screen.getByText('failed 1')).toBeInTheDocument()
     expect(screen.getByText('rate-limited · rate limit exceeded, retry in 2s')).toBeInTheDocument()
+  })
+
+  describe('on a domain that requires conditional writes', () => {
+    async function pickAction(label: string): Promise<void> {
+      fireEvent.click(screen.getByLabelText(label))
+      await waitFor(() => expect(textOf('.kv-bulk__call-pattern')).toContain('If-Match'))
+    }
+
+    it('runs delete without prefix with If-Match on a domain that requires conditional writes', async () => {
+      const reads: string[] = []
+      const deletes: Array<{ key: string; ifMatch: string | null }> = []
+      server.use(
+        keysHandler(['a', 'b', 'c']),
+        http.get(`${KEYS_URL}/:key`, ({ params }) => {
+          reads.push(String(params.key))
+          return new HttpResponse('v', { status: 200, headers: { ETag: `"etag-${String(params.key)}"` } })
+        }),
+        http.delete(`${KEYS_URL}/:key`, ({ params, request }) => {
+          deletes.push({ key: String(params.key), ifMatch: request.headers.get('If-Match') })
+          return new HttpResponse(null, { status: 204 })
+        }),
+      )
+      await renderBar('', '', true)
+      expect(await screen.findByText('3 keys selected')).toBeInTheDocument()
+
+      await pickAction('delete')
+      fireEvent.click(screen.getByRole('button', { name: 'run…' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'run' }))
+
+      expect(await screen.findByText(/ok 3/)).toBeInTheDocument()
+      expect(screen.getByText('failed 0')).toBeInTheDocument()
+      expect([...reads].sort()).toEqual(['a', 'b', 'c'])
+      expect(deletes.map((entry) => entry.key).sort()).toEqual(['a', 'b', 'c'])
+      for (const entry of deletes) expect(entry.ifMatch).toBe(`"etag-${entry.key}"`)
+    })
+
+    it('lists a version conflict per key on a domain that requires conditional writes', async () => {
+      server.use(
+        keysHandler(['a', 'b', 'c']),
+        http.get(`${KEYS_URL}/:key`, () => new HttpResponse('v', { status: 200, headers: { ETag: '"e1"' } })),
+        http.put(`${KEYS_URL}/:key`, ({ params }) =>
+          params.key === 'b' ? new HttpResponse('precondition failed', { status: 412, headers: { ETag: '"e2"' } }) : new HttpResponse(null, { status: 200 }),
+        ),
+      )
+      await renderBar('', '', true)
+      expect(await screen.findByText('3 keys selected')).toBeInTheDocument()
+
+      await pickAction('set value to ""')
+      fireEvent.click(screen.getByRole('button', { name: 'run…' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'run' }))
+
+      expect(await screen.findByText(/ok 2/)).toBeInTheDocument()
+      expect(screen.getByText('failed 1')).toBeInTheDocument()
+      expect(screen.getByText('b · version conflict — the key changed on the server')).toBeInTheDocument()
+    })
+
+    it('keeps the prefix delete as one server call on a domain that requires conditional writes', async () => {
+      let reads = 0
+      let keyDeletes = 0
+      const serverDeletes: URL[] = []
+      server.use(
+        keysHandler(['user-1', 'user-2']),
+        http.get(`${KEYS_URL}/:key`, () => {
+          reads += 1
+          return new HttpResponse('v', { status: 200, headers: { ETag: '"e1"' } })
+        }),
+        http.delete(`${KEYS_URL}/:key`, () => {
+          keyDeletes += 1
+          return new HttpResponse(null, { status: 204 })
+        }),
+        http.delete(KEYS_URL, ({ request }) => {
+          serverDeletes.push(new URL(request.url))
+          return HttpResponse.json({ deleted: 2 })
+        }),
+      )
+      await renderBar('user-', '', true)
+      expect(await screen.findByText('2 keys selected')).toBeInTheDocument()
+
+      await pickAction('set null')
+      fireEvent.click(screen.getByLabelText('delete'))
+      fireEvent.click(screen.getByRole('button', { name: 'run…' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'run' }))
+
+      expect(await screen.findByText('deleted 2')).toBeInTheDocument()
+      expect(serverDeletes).toHaveLength(1)
+      expect(reads).toBe(0)
+      expect(keyDeletes).toBe(0)
+    })
+
+    it('names the read and If-Match in the call pattern on a domain that requires conditional writes', async () => {
+      server.use(keysHandler(['a', 'b', 'c']))
+      await renderBar('', '', true)
+      expect(await screen.findByText('3 keys selected')).toBeInTheDocument()
+
+      await pickAction('set null')
+      expect(textOf('.kv-bulk__call-pattern')).toBe(
+        `3 × GET /store-api/kv/${DOMAIN}/keys/{key} + PATCH /store-api/kv/${DOMAIN}/keys/{key}/null · If-Match · not recorded`,
+      )
+    })
   })
 
   describe('server-side delete', () => {
