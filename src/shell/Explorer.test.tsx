@@ -18,7 +18,7 @@ interface RecordedQueryOptions {
 
 const { useQuerySpy } = vi.hoisted(() => ({ useQuerySpy: vi.fn<(options: RecordedQueryOptions) => void>() }))
 
-/** Records the options every `useQuery` call receives (spec shell/007 §7) — delegates to the real implementation unchanged. */
+/** Records the options every `useQuery` call receives; delegates to the real implementation unchanged. */
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-query')>()
   return {
@@ -102,9 +102,9 @@ function relTableCountHandler(domain: string, table: string, count: number) {
 }
 
 /**
- * '▾ name' liegt seit spec shell/006 §1 auf einem Chevron-Span + einem Text-Node — RTL's Default-Textmatcher
- * sieht pro Element nur dessen direkte Text-Kinder, keine verschachtelten. Matcht daher gegen das volle
- * textContent, mit Kind-Ausschluss, damit nicht zusätzlich ein Vorfahre trifft (RTL-FAQ-Pattern).
+ * '▾ name' is split into a chevron span + a text node; RTL's default text matcher only sees an element's
+ * direct text children. So this matches the full textContent, excluding matches via children so that
+ * no ancestor matches as well (RTL FAQ pattern).
  */
 function expandedHeader(name: string): (content: string, element: Element | null) => boolean {
   const text = `▾ ${name}`
@@ -124,7 +124,7 @@ function DataRouteProbe() {
   )
 }
 
-/** Liest den aktiven SQL-Tab direkt aus dem Store (sqlStore.ts) — kein Rendern der echten SqlScreen nötig. */
+/** Reads the active SQL tab straight from the store (sqlStore.ts); no need to render the real SqlScreen. */
 function SqlRouteProbe() {
   const location = useLocation()
   const { tabs, activeId } = useSqlState()
@@ -318,7 +318,7 @@ describe('Explorer', () => {
     expect(await screen.findByRole('button', { name: /T orders/ })).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: /V v_paid/ })).toBeInTheDocument()
     expect(await screen.findByText('3 · idx 1')).toBeInTheDocument()
-    // kv count resolves 0 -> only the label row's "+" action, no active row (spec shell/004 §4).
+    // kv count resolves 0 -> only the label row's "+" action, no active row.
     expect(await screen.findByRole('button', { name: 'new key' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^K keys/ })).not.toBeInTheDocument()
 
@@ -349,7 +349,7 @@ describe('Explorer', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^J documents/ }))
     expect(screen.getByTestId('data-route-state')).toHaveTextContent('/data?engine=json')
 
-    // aktiver kv-Store zeigt den Zähler aus GET …/kv/{d}/count (spec shell/004 §4, shell/010 §2).
+    // an active kv store shows the counter from GET …/kv/{d}/count.
     const keysButton = await screen.findByRole('button', { name: /^K keys/ })
     expect(keysButton).toHaveTextContent('2')
     fireEvent.click(keysButton)
@@ -562,10 +562,10 @@ describe('Explorer', () => {
   })
 
   it('renders only the label row for an empty rel section; its "+" opens the create-table modal', async () => {
-    // Der "+" im Label öffnet seit spec sql/002 den Create-Table-Assistenten (natives <dialog> + showModal()).
-    // showModal() ist in diesem jsdom (25.0.1) nicht implementiert (nur die `open`-IDL-Property wird reflektiert)
-    // — hier gestubbt, weil dieser Test den öffnenden Klick tatsächlich auslöst. Der Formular-Flow selbst ist in
-    // CreateTableModal.test.tsx gegen die <dialog>-freie CreateTableForm getestet; hier nur der Einstiegspunkt.
+    // The label "+" opens the create-table wizard (native <dialog> + showModal()).
+    // showModal() is not implemented in this jsdom (25.0.1; only the `open` IDL property is reflected),
+    // so it is stubbed here because this test really triggers the opening click. The form flow itself is tested in
+    // CreateTableModal.test.tsx against the <dialog>-free CreateTableForm; this covers only the entry point.
     HTMLDialogElement.prototype.showModal = function showModalStub(this: HTMLDialogElement) {
       this.setAttribute('open', '')
     }
@@ -662,7 +662,7 @@ describe('Explorer', () => {
   })
 })
 
-describe('object counts via the count endpoints (spec shell/010)', () => {
+describe('object counts via the count endpoints', () => {
   it('shows the row count on table rows, leaves views without a number and never requests a view count', async () => {
     const countRequests: string[] = []
     server.use(
@@ -747,7 +747,7 @@ describe('object counts via the count endpoints (spec shell/010)', () => {
   })
 })
 
-describe('polling intervals (spec shell/007)', () => {
+describe('polling intervals', () => {
   it('gives ExpandedDomain a 30s refetchInterval and useEngineActivity a 60s refetchInterval on their detail/probe queries', async () => {
     useQuerySpy.mockClear()
     server.use(
@@ -795,7 +795,7 @@ describe('polling intervals (spec shell/007)', () => {
     expect(alphaKvProbe.length).toBeGreaterThan(0)
     expect(alphaKvProbe.every((value) => value === 60_000)).toBe(true)
 
-    // table row counts are O(n) server-side (spec shell/010 §7): 60s like the activity probes, never the 30s of the lists.
+    // table row counts are O(n) server-side: 60s like the activity probes, never the 30s of the lists.
     const alphaTableCount = refetchIntervalsFor(['rel-table-count', 'alpha', 'orders'])
     expect(alphaTableCount.length).toBeGreaterThan(0)
     expect(alphaTableCount.every((value) => value === 60_000)).toBe(true)

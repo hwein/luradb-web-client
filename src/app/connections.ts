@@ -1,8 +1,8 @@
 import { authWithoutSecret } from './connectionRegistry'
 
-// künftig: | { kind: 'shm'; … } (SHM/UDS-Local-Bypass, Backlog)
+// future: | { kind: 'shm'; … } (SHM/UDS local bypass)
 export type ConnectionType = { kind: 'rest'; url: string; acceptInvalidCerts?: boolean }
-// künftig: | { kind: 'user-password'; … } (Server-Konzept steht aus)
+// future: | { kind: 'user-password'; … } (needs a server concept)
 export type AuthMethod = { kind: 'api-key'; key?: string }
 
 export interface Connection {
@@ -13,7 +13,7 @@ export interface Connection {
   lastUsed?: number
 }
 
-/** Migrations-tolerant: unbekannte Varianten werden nie verworfen, nur nicht angeboten. */
+/** Migration-tolerant: unknown variants are never dropped, only not offered. */
 export type ConnectionEntry = { supported: true; connection: Connection } | { supported: false; id: string; name: string }
 
 const STORAGE_KEY = 'luradb.connections'
@@ -61,7 +61,7 @@ function readRawStore(): RawStore {
       return { schemaVersion: SCHEMA_VERSION, connections: parsed.connections }
     }
   } catch {
-    // fällt durch zum leeren Store
+    // falls through to empty store
   }
   return { schemaVersion: SCHEMA_VERSION, connections: [] }
 }
@@ -85,7 +85,7 @@ export function loadConnections(): ConnectionEntry[] {
   })
 }
 
-/** Persistiert `auth.key` nur, wenn `remember` gesetzt ist — sonst bleibt der Key nur im Session-Speicher. */
+/** Persists `auth.key` only when `remember` is set — otherwise the key stays in session memory only. */
 export function upsertConnection(connection: Connection, options: { remember: boolean }): void {
   const store = readRawStore()
   const persisted: Connection = options.remember ? connection : { ...connection, auth: authWithoutSecret(connection.auth) }
@@ -110,7 +110,7 @@ export function touchLastUsed(id: string): void {
   writeRawStore(store)
 }
 
-/** Secret-Hygiene: Keys erscheinen im UI nie im Klartext. */
+/** Secret hygiene: the UI never shows keys in plain text. */
 export function maskKey(key: string): string {
   if (key.length <= 8) return '•'.repeat(key.length)
   return `${key.slice(0, 5)}…${key.slice(-2)}`

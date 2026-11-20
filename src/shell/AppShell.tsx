@@ -14,7 +14,7 @@ import { SelectedDomainProvider } from './SelectedDomainContext'
 import { Statusbar } from './Statusbar'
 import { useStoreEvents } from './useStoreEvents'
 
-/** F1 ist global für die Docs-Suche reserviert. Hook-Punkt für sql/001: CodeMirror fängt F1 im Editor-Fokus selbst ab. */
+/** F1 is reserved globally for docs search. */
 function useDocsShortcut(): void {
   const navigate = useNavigate()
 
@@ -29,13 +29,13 @@ function useDocsShortcut(): void {
   }, [navigate])
 }
 
-/** Ctrl+K/Cmd+K für die Command-Palette (spec shell/008 §1) — Capture-Phase, damit sie auch bei CodeMirror-Editor-Fokus greift. */
+/** Ctrl+K/Cmd+K for the command palette; capture phase so it also works while a CodeMirror editor has focus. */
 function useCommandPalette(): { open: boolean; close: () => void } {
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
-      // altKey ausgeschlossen: AltGr sendet unter Windows ctrl+alt — sonst fräße die Palette AltGr+K-Zeichen mancher Layouts.
+      // altKey excluded: AltGr sends ctrl+alt on Windows; the palette would swallow AltGr+K characters of some layouts.
       if (event.altKey || event.key.toLowerCase() !== 'k' || (!event.ctrlKey && !event.metaKey)) return
       event.preventDefault()
       setOpen((was) => !was)

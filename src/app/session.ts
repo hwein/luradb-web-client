@@ -21,8 +21,8 @@ export type SessionState =
 
 let state: SessionState = { status: 'unauthenticated' }
 const listeners = new Set<() => void>()
-// Recorder ist ein Modul-Singleton (general/005) — hängt an genau einem ApiClient; bei Verbindungswechsel
-// erst den alten Listener lösen, sonst würde ein abgelöster Client weiter mitprotokollieren.
+// The recorder is a module singleton bound to exactly one ApiClient; on a connection change detach the old
+// listener first, or a replaced client would keep recording.
 let unsubscribeRecorder: (() => void) | undefined
 
 function setState(next: SessionState): void {
@@ -49,14 +49,14 @@ export interface ConnectedSession {
   connectionId: string
 }
 
-/** Kondensierte Sicht für Verbraucher, die nur im verbundenen Zustand aktiv sind (spec admin/005 §1) — spart das `status === 'connected'`-Narrowing an jeder Aufrufstelle. */
+/** Condensed view for consumers that are only active when connected — saves the `status === 'connected'` narrowing at every call site. */
 export function useConnectedSession(): ConnectedSession | undefined {
   const session = useSession()
   if (session.status !== 'connected') return undefined
   return { apiClient: session.apiClient, serverVersion: session.serverVersion, connectionId: session.connection.id }
 }
 
-/** Version-Handshake gemäß api/COMPATIBILITY.md: 401 ⇒ ungültiger Key, Netzwerkfehler ⇒ unreachable, sonst Compat-Check. */
+/** Version handshake: 401 ⇒ invalid key, network error ⇒ unreachable, otherwise compat check. */
 export async function connect(connection: Connection): Promise<void> {
   setState({ status: 'connecting', connection })
 
@@ -81,11 +81,11 @@ export async function connect(connection: Connection): Promise<void> {
     return
   }
 
-  // Nur der Fetch selbst zählt als "unreachable" — ein Fehler in checkCompatibility/touchLastUsed danach
-  // wäre kein Erreichbarkeits-Problem und soll nicht als solches maskiert werden.
+  // Only the fetch itself counts as "unreachable" — a later error in checkCompatibility/touchLastUsed
+  // is no reachability problem and must not be masked as one.
   let failureDetail: string | undefined
   const probe = await apiClient.api.GET('/version').catch((error: unknown) => {
-    // Original-Fehlertext sichtbar machen (z. B. Tauri-Scope-Denial) statt ihn hinter "unreachable" zu verstecken.
+    // Show the original error text (e.g. a Tauri scope denial) instead of hiding it behind "unreachable".
     if (error instanceof Error && error.message !== 'server unreachable') {
       failureDetail = error.message.replace(/^server unreachable — /, '')
     }
@@ -93,8 +93,8 @@ export async function connect(connection: Connection): Promise<void> {
   })
   if (probe === undefined) {
     const suffix = failureDetail === undefined ? '' : ` — ${failureDetail}`
-    // Heuristik: ein TLS-Handshake-Fehler ist im Fetch-Exception-Text nicht von "Server aus" zu unterscheiden
-    // (spec 009) — der Hinweis erscheint deshalb bei jedem unreachable https://-Ziel ohne gesetztes Flag.
+    // Heuristic: a TLS handshake failure is indistinguishable from "server down" in the fetch exception text,
+    // so the hint appears for every unreachable https:// target without the flag set.
     const certHint =
       env === 'desktop' && connection.type.url.startsWith('https://') && connection.type.acceptInvalidCerts !== true
         ? ' — if this server uses a self-signed certificate, enable "Accept self-signed certificates" in the connection settings'
@@ -113,8 +113,8 @@ export async function connect(connection: Connection): Promise<void> {
     setState({ status: 'error', connection, message: 'invalid api key' })
     return
   }
-  // Same-origin-Proxy (Browser-Modus) meldet ein nicht erreichbares Backend als Gateway-Status,
-  // nicht als Fetch-Exception — 502/503/504 zählen deshalb ebenfalls als "unreachable".
+  // The same-origin proxy (browser mode) reports an unreachable backend as a gateway status, not as a
+  // fetch exception — so 502/503/504 also count as "unreachable".
   if ([502, 503, 504].includes(response.status)) {
     setState({ status: 'error', connection, message: `server unreachable at ${transport.baseUrl}` })
     return
@@ -141,7 +141,7 @@ export async function connect(connection: Connection): Promise<void> {
   })
 }
 
-/** Zurück ins Gate. Räumt keinen Query-Cache auf — das obliegt dem Aufrufer (hat den QueryClient). */
+/** Back to the gate. Does not clear the query cache; the caller does (it holds the QueryClient). */
 export function disconnect(): void {
   unsubscribeRecorder?.()
   unsubscribeRecorder = undefined

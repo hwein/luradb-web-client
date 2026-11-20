@@ -44,7 +44,7 @@ interface CommandPaletteContentProps {
   onClose: () => void
 }
 
-/** Inhalt der Command-Palette (spec shell/008) — ohne <dialog>-Hülle, damit Tests ihn ohne `showModal()` mounten können. */
+/** Command palette content without the <dialog> wrapper, so tests can mount it without `showModal()`. */
 export function CommandPaletteContent({ onClose }: CommandPaletteContentProps) {
   const navigate = useNavigate()
   const session = useSession()
@@ -130,7 +130,7 @@ interface CommandPaletteProps {
   onClose: () => void
 }
 
-/** Command-Palette (spec shell/008): natives `<dialog>` + `showModal()` um `CommandPaletteContent`, Backdrop-Klick schließt zusätzlich. */
+/** Native `<dialog>` + `showModal()` around `CommandPaletteContent`; a backdrop click also closes it. */
 export function CommandPalette({ onClose }: CommandPaletteProps) {
   const dialogRef = useRef<HTMLDialogElement | null>(null)
   const onCloseRef = useRef(onClose)
@@ -139,8 +139,8 @@ export function CommandPalette({ onClose }: CommandPaletteProps) {
   useEffect(() => {
     const dialog = dialogRef.current
     if (dialog === null) return
-    // `open`-Guard: der StrictMode-Zweitlauf trifft einen bereits offenen Dialog — showModal() würfe dann,
-    // bevor der close-Listener registriert ist.
+    // `open` guard: the StrictMode second run meets an already open dialog; showModal() would throw
+    // before the close listener is registered.
     if (!dialog.open) {
       dialog.showModal()
       dialog.querySelector('input')?.focus()

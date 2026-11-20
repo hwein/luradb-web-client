@@ -68,7 +68,7 @@ function labels(): string[] {
   return [...document.querySelectorAll('.admin-backups__label')].map((node) => node.textContent ?? '')
 }
 
-// Die Restore-Registry ist ein Modul-Singleton — vor jedem Test zurücksetzen (Muster src/lib/tasks.ts-Tests).
+// The restore registry is a module singleton; reset it before every test.
 beforeEach(() => clearRestoreEntry())
 
 // Fixed wall clock (Date only; timers stay real): relative times render the same on every run.

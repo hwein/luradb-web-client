@@ -2,9 +2,9 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// package.json ist die einzige Versionsquelle. tauri.conf.json referenziert sie
-// direkt; nur die [package]-Version in Cargo.toml driftet sonst — dieser Hook
-// zieht sie nach. Laeuft automatisch als npm-`version`-Lifecycle bei `npm version`.
+// package.json is the single version source. tauri.conf.json references it
+// directly; only the [package] version in Cargo.toml would drift, so this hook
+// syncs it. Runs automatically as the npm `version` lifecycle on `npm version`.
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const version = JSON.parse(readFileSync(path.join(rootDir, 'package.json'), 'utf-8')).version
 const cargoPath = path.join(rootDir, 'src-tauri', 'Cargo.toml')

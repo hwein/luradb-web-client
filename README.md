@@ -68,7 +68,7 @@ unmaintained.
 
 ## Build from source
 
-Requires **Node ≥ 22**. Desktop builds additionally require the **Rust
+Requires **Node 22.22+, 24 or 26+**. Desktop builds additionally require the **Rust
 toolchain** via [rustup](https://rustup.rs) plus the per-platform
 [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) (Windows: MSVC
 Build Tools + WebView2; Linux: `webkit2gtk`, `libayatana-appindicator3`,

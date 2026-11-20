@@ -5,8 +5,8 @@ import type { ProxyOptions } from 'vite'
 import { loadEnv } from 'vite'
 import { configDefaults, defineConfig } from 'vitest/config'
 
-// Backend nicht erreichbar ⇒ 502 statt Vites generischem 500 (general/004 unterscheidet "server unreachable" am Status).
-// Für SSE zusätzlich: Header sofort weiterreichen und die Browser-Response beenden, wenn der Upstream abreißt (spec general/015).
+// Backend unreachable => 502 instead of Vite's generic 500 (the client tells "server unreachable" apart by status).
+// For SSE additionally: flush headers immediately and end the browser response when the upstream drops.
 function localServerProxy(target: string): ProxyOptions {
   return {
     target,
@@ -19,9 +19,9 @@ function localServerProxy(target: string): ProxyOptions {
       })
       proxyServer.on('proxyRes', (proxyRes, _req, res) => {
         if (proxyRes.headers['content-type']?.includes('text/event-stream') !== true) return
-        // http-proxy schreibt Status/Header erst synchron nach diesem Event — sonst flushten wir ins Leere.
+        // http-proxy writes status/headers synchronously only after this event; earlier flushes go nowhere.
         process.nextTick(() => res.flushHeaders())
-        // Ohne das bliebe der Browser-Stream nach einem Upstream-Abriss halboffen hängen statt zu reconnecten.
+        // Without this the browser stream stays half-open after an upstream drop instead of reconnecting.
         const endResponse = (): void => void res.destroy()
         proxyRes.on('close', () => {
           if (!proxyRes.complete) endResponse()
@@ -46,12 +46,12 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // Nur Namen, nie Versionen (Härtungs-Invariante spec shell/005 §1) — die Client-Version selbst ist gewollt sichtbar.
+      // Names only, never versions (hardening invariant); the client's own version is deliberately visible.
       __APP_VERSION__: JSON.stringify(pkg.version),
       __APP_DEPENDENCIES__: JSON.stringify(Object.keys(pkg.dependencies).sort()),
     },
     server: {
-      // cargo sperrt Artefakte in src-tauri/target — der Watcher darf dort nie hinein (EBUSY-Crash bei app:dev)
+      // cargo locks artifacts in src-tauri/target; the watcher must never enter it (EBUSY crash in app:dev)
       watch: { ignored: ['**/src-tauri/**'] },
       proxy: {
         '/store-api': localServerProxy(target),
@@ -64,7 +64,7 @@ export default defineConfig(({ mode }) => {
       setupFiles: ['./src/test/setup.ts'],
       // Parallel runs under memory pressure exceed the 5 s default.
       testTimeout: 15_000,
-      // e2e/ gehört Playwright (braucht Server + Key); Vitest würde die *.spec.ts sonst einsammeln.
+      // e2e/ belongs to Playwright (needs server + key); else Vitest would collect its *.spec.ts.
       exclude: [...configDefaults.exclude, 'e2e/**'],
     },
   }

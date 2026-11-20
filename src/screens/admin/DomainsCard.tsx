@@ -6,7 +6,7 @@ import { useEngineActivity, type EngineActivity } from '../../shell/engineActivi
 
 export const NAME_PATTERN = /^[a-zA-Z0-9_-]+$/
 
-/** Geteilt mit UsersCard/BackupsCard (spec admin/005 §1) — eine Guard-Funktion statt dreifacher Kopie. */
+/** Shared with UsersCard/BackupsCard: one guard function instead of three copies. */
 export function requireApiClient(apiClient: ApiClient | undefined): ApiClient {
   if (!apiClient) throw new Error('admin action requires an active connection')
   return apiClient
@@ -25,7 +25,7 @@ export function invalidateDomainLists(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: DOMAINS_KEY })
 }
 
-/** One dot per engine only when it holds objects (spec shell/004 §2). */
+/** One dot per engine only when it holds objects. */
 function EngineDots({ activity }: { activity: EngineActivity }) {
   return (
     <span className="admin-domains__dots">
@@ -41,7 +41,7 @@ interface DomainRowProps {
   domain: DomainSummary
 }
 
-/** One domain row (spec admin/001 §3, addendum): dots, object count over all engines, 🗑 → inline confirm → one DELETE. */
+/** One domain row: dots, object count over all engines, 🗑 → inline confirm → one DELETE. */
 function DomainRow({ apiClient, domain }: DomainRowProps) {
   const queryClient = useQueryClient()
   const [armed, setArmed] = useState(false)
@@ -90,7 +90,7 @@ function DomainRow({ apiClient, domain }: DomainRowProps) {
   )
 }
 
-/** Inline row "new domain (max 50 chars)" + Create (spec admin/001 §3, shell/003 §2): one POST. */
+/** Inline row "new domain (max 50 chars)" + Create: one POST. */
 function CreateDomainRow({ apiClient }: { apiClient: ApiClient | undefined }) {
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
@@ -130,10 +130,10 @@ function CreateDomainRow({ apiClient }: { apiClient: ApiClient | undefined }) {
   )
 }
 
-/** DOMAINS card (spec admin/001 §3): the Explorer's domain list (shell/002), create, delete, footnote. */
+/** DOMAINS card: the Explorer's domain list, create, delete, footnote. */
 export function DomainsCard({ apiClient }: { apiClient: ApiClient | undefined }) {
   const domains = useDomainSummaries(apiClient)
-  // Same query options as useDomainSummaries (shared cache, no extra request) — only for the error line (spec admin/005 §2).
+  // Same query options as useDomainSummaries (shared cache, no extra request) — only for the error line.
   const listError = useQuery(domainsQueryOptions(apiClient)).error
 
   return (

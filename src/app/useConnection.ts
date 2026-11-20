@@ -39,7 +39,7 @@ function isHealthBlocked(health: HealthSnapshot | undefined): boolean {
   return resources.diskState === 'blocked' || resources.memoryState === 'blocked' || health.shards.some((shard) => shard.status !== 'ok')
 }
 
-/** Minutengenau — feiner löst das 60s-Poll-Intervall ohnehin nicht auf. */
+/** Minute precision; the 60s poll interval cannot resolve finer anyway. */
 function formatUptime(totalSecs: number): string {
   const days = Math.floor(totalSecs / 86_400)
   const hours = Math.floor((totalSecs % 86_400) / 3_600)
@@ -49,14 +49,14 @@ function formatUptime(totalSecs: number): string {
   return `up ${minutes}m`
 }
 
-/** Statusbar-Datenquelle: Werte spiegeln reale Antworten, nie hart verdrahtet. */
+/** Status bar data source: values mirror real responses, never hard-wired. */
 export function useConnection(): ConnectionInfo {
   const session = useSession()
   const capabilities = useCapabilities()
   const apiClient = session.status === 'connected' ? session.apiClient : undefined
 
-  // Query-Options geteilt mit dem Engines-Screen (ein Cache-Eintrag); dessen 5s-Intervall gilt nur,
-  // solange er subscribed ist — die Statusbar allein pollt alle 60s.
+  // Query options shared with the Engines screen (one cache entry); its 5s interval applies only while it
+  // is subscribed — the status bar alone polls every 60s.
   const health = useQuery({ ...healthQueryOptions(apiClient), refetchInterval: 60_000 })
 
   if (session.status !== 'connected') {
@@ -65,7 +65,7 @@ export function useConnection(): ConnectionInfo {
 
   const env = getEnvironment()
   const hostLabel = `${connectionHostLabel(session.connection.type, env)}${BASE_PATH}`
-  // pending/error: Rolle noch nicht bekannt — leeres Label statt eines geratenen "user" (spec admin/005 §Entscheidungen).
+  // pending/error: role not known yet — empty label instead of a guessed "user".
   const roleLabel = capabilities.admin === 'yes' ? 'admin' : capabilities.admin === 'no' ? 'user' : undefined
   const authLabel = roleLabel === undefined ? '' : authStatusLabel(session.connection.auth, roleLabel)
 

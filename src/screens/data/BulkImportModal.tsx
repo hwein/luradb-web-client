@@ -14,7 +14,7 @@ interface BulkImportFormProps {
   onClose: () => void
 }
 
-/** Formular+Ergebnis des Bulk-Imports (spec data/007) — ohne <dialog>-Hülle, damit Tests ihn ohne `showModal()` mounten können. */
+/** Form and result of the bulk import, without the <dialog> shell so tests can mount it without `showModal()`. */
 export function BulkImportForm({ domain, apiClient, onClose }: BulkImportFormProps) {
   const queryClient = useQueryClient()
   const [text, setText] = useState('')
@@ -102,7 +102,7 @@ interface BulkImportModalProps {
   apiClient: ApiClient | undefined
 }
 
-/** Einstiegspunkt "import ndjson ↑" (spec data/007 §1): natives `<dialog>` + `showModal()` um `BulkImportForm`. */
+/** Entry point "import ndjson ↑": native `<dialog>` + `showModal()` around `BulkImportForm`. */
 export function BulkImportModal({ domain, apiClient }: BulkImportModalProps) {
   const [open, setOpen] = useState(false)
   const dialogRef = useRef<HTMLDialogElement | null>(null)

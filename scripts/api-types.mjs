@@ -7,16 +7,16 @@ const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const targetJsonPath = path.join(rootDir, 'src', 'api', 'openapi.json')
 const targetSchemaPath = path.join(rootDir, 'src', 'api', 'schema.d.ts')
 
-// Contract-Quelle ist das LuraDB-Repo: Client-`main` bindet an LuraDB-`main`
-// (released), Client-`next` an `next` (in Arbeit). Ref via Arg oder Env
-// uebersteuerbar (auch Tag/Commit zum Pinnen): npm run api:types -- next
+// Contract source is the LuraDB repo: client `main` follows LuraDB `main`
+// (released), client `next` follows `next` (in progress). Override the ref by
+// arg or env (also a tag/commit to pin): npm run api:types -- next
 const ref = process.argv[2] ?? process.env.LURADB_API_REF ?? 'main'
 const url = `https://raw.githubusercontent.com/hwein/luradb/${ref}/api/openapi.json`
 
-// api/openapi.json wiederholt list/create/get/delete_domain-operationIds je Engine
-// (generisch + json + rel) – nur fuers Codegen in-memory eindeutig machen, damit
-// Redoclys operation-operationId-unique-Check nicht abbricht. Die committete Kopie
-// (src/api/openapi.json) bleibt unveraendert.
+// api/openapi.json repeats the list/create/get/delete_domain operationIds per engine
+// (generic + json + rel); make them unique in memory for codegen only, so Redocly's
+// operation-operationId-unique check does not abort. The committed copy
+// (src/api/openapi.json) stays unchanged.
 function dedupeOperationIds(schema) {
   const methods = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']
   const seen = new Map()
@@ -39,7 +39,7 @@ const response = await fetch(url)
 
 // exitCode instead of exiting directly: exiting right after fetch aborts node on Windows.
 if (!response.ok) {
-  console.error(`api:types: fetch ${url} → HTTP ${response.status}. Ref '${ref}' korrekt (main/next/tag)?`)
+  console.error(`api:types: fetch ${url} → HTTP ${response.status}. Bad ref '${ref}' (main/next/tag)?`)
   process.exitCode = 1
 } else {
   const source = await response.text()

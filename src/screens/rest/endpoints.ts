@@ -4,18 +4,18 @@ import { BASE_PATH } from '../../api'
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 const METHODS: readonly HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
-/** Farbschema der Methodenspalte (spec §1): GET accent, POST/PATCH/PUT amber, DELETE err. */
+/** Color scheme of the method column: GET accent, POST/PATCH/PUT amber, DELETE err. */
 export type MethodTone = 'acc' | 'json' | 'err'
 
 export interface Endpoint {
   method: HttpMethod
-  /** Vollständiger Pfad inkl. BASE_PATH, mit `{param}`-Templates. */
+  /** Full path incl. BASE_PATH, with `{param}` templates. */
   path: string
-  /** Pfad ohne BASE_PATH-Präfix — reine Anzeige (spec §1). */
+  /** Path without the BASE_PATH prefix — display only. */
   displayPath: string
   tag: string
   hasBody: boolean
-  /** JSON-Text des Minimal-Beispiels (required-Felder); '' wenn kein Body. */
+  /** JSON text of the minimal example (required fields); '' without body. */
   bodyExample: string
 }
 
@@ -55,12 +55,12 @@ export function displayPathOf(path: string): string {
   return path.startsWith(BASE_PATH) ? path.slice(BASE_PATH.length) : path
 }
 
-/** Namen der `{param}`-Templates in Reihenfolge ihres Auftretens. */
+/** Names of the `{param}` templates in order of appearance. */
 export function pathParamNames(path: string): string[] {
   return [...path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]!)
 }
 
-/** Ersetzt `{param}` durch den (URL-kodierten) Wert; leere Werte bleiben als `{param}` sichtbar. */
+/** Replaces `{param}` with the (URL-encoded) value; empty values stay visible as `{param}`. */
 export function applyPathParams(path: string, values: Record<string, string>): string {
   return path.replace(/\{([^}]+)\}/g, (whole, name: string) => {
     const value = values[name]
@@ -68,7 +68,7 @@ export function applyPathParams(path: string, values: Record<string, string>): s
   })
 }
 
-/** Destruktiver Guard (spec §3): DELETE oder key-rotierende Pfade verlangen einen Bestätigungsklick. */
+/** Destructive guard: DELETE or key-rotating paths require a confirming click. */
 export function isDestructive(method: HttpMethod, path: string): boolean {
   return method === 'DELETE' || path.includes('rotate-key')
 }
@@ -105,7 +105,7 @@ function typeDefault(schema: OpenApiSchema | undefined): unknown {
   }
 }
 
-/** Minimal-Beispiel: nur required-Felder mit Typ-Defaults; eine Rekursionsebene für required-Objektfelder. */
+/** Minimal example: required fields only, type defaults; one recursion level for required object fields. */
 function buildExample(schema: OpenApiSchema | undefined, depth: number): unknown {
   const resolved = derefSchema(schema)
   if (!isObjectSchema(resolved)) return typeDefault(resolved)
@@ -140,7 +140,7 @@ function buildEndpoint(method: HttpMethod, path: string, op: Operation): Endpoin
   }
 }
 
-/** Endpunktkatalog aus dem gebündelten Contract, gruppiert nach Tags (Tag-Reihenfolge aus dem Dokument). */
+/** Endpoint catalog from the bundled contract, grouped by tag (tag order from the document). */
 export function listEndpointGroups(): EndpointGroup[] {
   const byTag = new Map<string, Endpoint[]>()
   for (const [path, operations] of Object.entries(doc.paths)) {

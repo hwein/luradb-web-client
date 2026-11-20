@@ -1,5 +1,3 @@
-/* --- What's-new dialog --- */
-
 /* An author `display` would otherwise override the UA `display: none` of a closed dialog. */
 .whats-new:not([open]) {
   display: none;

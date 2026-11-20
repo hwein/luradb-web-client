@@ -11,7 +11,7 @@ interface SqlDocsSplitProps {
   onClose: () => void
 }
 
-/** Docs split (prototype lines 91–109): the fetched site page of a topic, search field, "open full docs tab →". */
+/** Docs split: the fetched site page of a topic, search field, "open full docs tab →". */
 export function SqlDocsSplit({ articleId, onArticleChange, onClose }: SqlDocsSplitProps) {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')

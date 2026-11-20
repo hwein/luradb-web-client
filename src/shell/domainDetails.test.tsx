@@ -22,7 +22,7 @@ function makeApiClient(): ApiClient {
   return createApi({ baseUrl: BASE_URL, fetchImpl: fetch, getAuthHeader: () => 'Bearer test-key' })
 }
 
-/** Erst-Load aufgezeichnet, Folge-Tick still (general/012) — für beide Zähler dasselbe Muster. */
+/** First load recorded, follow-up tick silent; the same pattern for every counter. */
 async function expectFirstLoadRecordedThenSilent<TKey extends readonly unknown[]>(
   apiClient: ApiClient,
   options: UseQueryOptions<number, Error, number, TKey>,
@@ -44,7 +44,7 @@ async function expectFirstLoadRecordedThenSilent<TKey extends readonly unknown[]
   expect(calls).toHaveLength(1)
 }
 
-describe('kvKeyCountQueryOptions (spec shell/010 §1)', () => {
+describe('kvKeyCountQueryOptions', () => {
   it('keys by domain, calls GET …/kv/{domain}/count without a prefix and returns the count', async () => {
     let url: URL | undefined
     server.use(
@@ -151,7 +151,7 @@ describe('engine queries of a switched-off engine', () => {
   })
 })
 
-describe('relTableRowCountQueryOptions (spec shell/010 §4)', () => {
+describe('relTableRowCountQueryOptions', () => {
   it('keys by domain and table and returns the count from GET …/tables/{table}/count', async () => {
     server.use(http.get(`${BASE_URL}/store-api/rel/shop/tables/orders/count`, () => HttpResponse.json({ count: 12400 })))
     const options = relTableRowCountQueryOptions(makeApiClient(), 'shop', 'orders')

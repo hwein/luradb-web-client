@@ -20,7 +20,7 @@ function makeWrapper(queryClient: ReturnType<typeof createAppQueryClient>) {
   }
 }
 
-describe('backupsQueryOptions recorder behaviour (general/012)', () => {
+describe('backupsQueryOptions recorder behaviour', () => {
   it('records the first load and an idle refetch, but silences a tick while a job is already known to be running', async () => {
     let requests = 0
     let running: { id: string; scope: string; started_at: number } | null = null
@@ -37,19 +37,19 @@ describe('backupsQueryOptions recorder behaviour (general/012)', () => {
 
     const { result } = renderHook(() => useQuery(backupsQueryOptions(apiClient, false)), { wrapper: makeWrapper(queryClient) })
 
-    // Erst-Load (Karten-Mount) — sichtbar.
+    // First load (card mount): visible.
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(requests).toBe(1)
     expect(calls).toHaveLength(1)
 
-    // Refetch im Leerlauf (z. B. Invalidierung nach einer Mutation) — der Cache zeigt noch keinen laufenden Job,
-    // bleibt also sichtbar statt pauschal still zu werden (spec §3: "nur die Intervall-Ticks").
+    // Idle refetch (e.g. invalidation after a mutation): the cache shows no running job yet,
+    // so it stays visible instead of going silent across the board.
     await result.current.refetch()
     expect(requests).toBe(2)
     expect(calls).toHaveLength(2)
 
-    // Ein Job ist jetzt bekanntermaßen aktiv (voriger Fetch lieferte running !== null) — der nächste Tick
-    // ist ein reiner Intervall-Poll und bleibt still.
+    // A job is now known to be active (the previous fetch returned running !== null), so the next tick
+    // is a pure interval poll and stays silent.
     running = { id: 'run_1', scope: 'all', started_at: 0 }
     await result.current.refetch()
     expect(requests).toBe(3)
@@ -57,11 +57,11 @@ describe('backupsQueryOptions recorder behaviour (general/012)', () => {
 
     await result.current.refetch()
     expect(requests).toBe(4)
-    expect(calls).toHaveLength(3) // weiterhin 3 — der 4. Call blieb still
+    expect(calls).toHaveLength(3) // still 3: the 4th call stayed silent
   })
 })
 
-describe('restoreStatusQueryOptions recorder behaviour (general/012)', () => {
+describe('restoreStatusQueryOptions recorder behaviour', () => {
   it('records the first load, then stays silent once the query already has cached data', async () => {
     let requests = 0
     server.use(
@@ -94,6 +94,6 @@ describe('restoreStatusQueryOptions recorder behaviour (general/012)', () => {
 
     await result.current.refetch()
     expect(requests).toBe(2)
-    expect(calls).toHaveLength(1) // Folge-Tick blieb still
+    expect(calls).toHaveLength(1) // next tick was silent
   })
 })

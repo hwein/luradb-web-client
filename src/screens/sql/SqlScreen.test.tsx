@@ -130,7 +130,7 @@ describe('SqlScreen', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'add expand customer_ref' }))
     expect(screen.getByRole('button', { name: 'remove expand customer_ref' })).toBeInTheDocument()
 
-    // REFERENCES-Spalten bekommen denselben Expand-Chip wie KVREF/JSONREF (spec sql/002 §9).
+    // REFERENCES columns get the same expand chip as KVREF/JSONREF.
     fireEvent.click(await screen.findByRole('button', { name: 'add expand warehouse_id' }))
     expect(screen.getByRole('button', { name: 'remove expand warehouse_id' })).toBeInTheDocument()
 
@@ -185,7 +185,7 @@ describe('SqlScreen', () => {
     expect(await screen.findByText('2 rows affected · last_pk 7')).toBeInTheDocument()
   })
 
-  it('invalidates the explorer row counts of the domain after DDL and DML, not after a SELECT (spec shell/010 §9)', async () => {
+  it('invalidates the explorer row counts of the domain after DDL and DML, not after a SELECT', async () => {
     server.use(
       http.post(SQL_URL, async ({ request }) => {
         const { sql } = (await request.json()) as { sql: string }

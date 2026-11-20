@@ -9,7 +9,7 @@ interface DataHeaderProps {
   children?: ReactNode
 }
 
-/** Kopfzeile des Data Browsers (spec §1): Engine-Chip + `{domain} / <objekt>`-Pfad, Rest der Zeile ist Modus-Inhalt. */
+/** Data browser header: engine chip + `{domain} / <object>` path; the rest of the row is mode content. */
 export function DataHeader({ tone, letter, path, children }: DataHeaderProps) {
   return (
     <div className="data__header">

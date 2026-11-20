@@ -3,17 +3,17 @@ import { ApiError, BASE_PATH, withCall, type ApiClient, type CallMeta } from '..
 import type { components } from '../../api/schema'
 import { kvCountKey } from '../../shell/domainDetails'
 
-/** Echtes Request-`limit` der Browser-Seiten — der Server blättert über `offset`/`limit` (Contract 0.6.1, spec data/011). */
+/** Real request `limit` of the browser pages; the server pages via `offset`/`limit`. */
 export const KV_KEYS_PAGE_SIZE = 100
 
-/** Server-Maximum (live bestätigt) — eine Seite für die Bulk-Leiste; `total` verrät, ob der Bestand darüber liegt. */
+/** Server maximum: one page for the bulk bar; `total` reveals whether more keys exist. */
 export const KV_BULK_SCAN_LIMIT = 10_000
 
 export function kvKeyPath(domain: string, key: string): string {
   return `${BASE_PATH}/kv/${encodeURIComponent(domain)}/keys/${encodeURIComponent(key)}`
 }
 
-/** Die beiden Server-Filter des Key-Scans — wandern immer gemeinsam (Kopf-Scan, Bulk-Leiste, Bulk-Delete). */
+/** The two server filters of the key scan; they always travel together. */
 export interface KvKeyFilter {
   prefix: string
   contains: string
@@ -26,7 +26,7 @@ export interface KvKeysQuery extends KvKeyFilter {
   offset: number
 }
 
-/** Anzeige-Query am `CallMeta`-Pfad (Muster `withQuery` in jsonDocuments.ts) — leere Filter ausgelassen, wie im echten Request. */
+/** Display query on the `CallMeta` path; empty filters omitted, as in the real request. */
 function withKeysQuery(path: string, query: KvKeysQuery): string {
   const search = new URLSearchParams()
   if (query.prefix !== '') search.set('prefix', query.prefix)
@@ -45,9 +45,9 @@ export interface KvKeysPage {
 }
 
 /**
- * Eine Seite des Key-Scans. `total`/`offset`/`limit` kommen aus dem Envelope, nie aus der Anfrage — nur so wird die
- * stille Kappung (`limit` > 10 000 ⇒ effektiv 10 000) sichtbar. Offset-Paging ohne Cursor: ein paralleler Write kann
- * das Fenster verschieben (Dublette/Lücke zwischen zwei Seiten) — nicht kompensiert, die Liste muss Dubletten überstehen.
+ * One page of the key scan. `total`/`offset`/`limit` come from the envelope, never the request, so the silent
+ * clamp (`limit` > 10 000 ⇒ effectively 10 000) shows. Offset paging has no cursor: a parallel write can shift the
+ * window (duplicate/gap between pages); not compensated, the list must tolerate duplicates.
  */
 export async function fetchKvKeysPage(apiClient: ApiClient, domain: string, query: KvKeysQuery): Promise<KvKeysPage> {
   const { data, call } = await withCall<components['schemas']['KeyScanResponse']>('GET', async () => {
@@ -68,8 +68,8 @@ export async function fetchKvKeysPage(apiClient: ApiClient, domain: string, quer
   return { keys: data.keys, total: data.total, offset: data.offset, limit: data.limit, call: { ...call, path: withKeysQuery(call.path, query) } }
 }
 
-/** Master-Liste: Seiten hängen sich an; `keys.length > 0` im Guard ist zwingend — eine leere Seite bei `offset < total`
- *  (parallel gelöschte Keys) ergäbe sonst denselben `pageParam` erneut, also eine Endlosschleife. */
+/** Master list: pages append; the `keys.length > 0` guard is mandatory, since an empty page at `offset < total`
+ *  (keys deleted in parallel) would yield the same `pageParam` again, an endless loop. */
 export function kvKeysQueryOptions(apiClient: ApiClient | undefined, domain: string, filter: KvKeyFilter) {
   return infiniteQueryOptions({
     queryKey: ['kv-keys', domain, filter.prefix, filter.contains] as const,
@@ -86,7 +86,7 @@ export function kvKeysQueryOptions(apiClient: ApiClient | undefined, domain: str
   })
 }
 
-/** Selektionsgrundlage der Bulk-Leiste (spec data/008 §2: der volle Scan, nicht die Seiten der Master-Liste) — eine Seite am Server-Maximum. */
+/** Selection basis of the bulk bar: the full scan, not the master list's pages; one page at the server maximum. */
 export function kvBulkKeysQueryOptions(apiClient: ApiClient | undefined, domain: string, filter: KvKeyFilter) {
   return queryOptions({
     queryKey: ['kv-keys-bulk', domain, filter.prefix, filter.contains] as const,
@@ -98,22 +98,22 @@ export function kvBulkKeysQueryOptions(apiClient: ApiClient | undefined, domain:
   })
 }
 
-/** Gemeinsamer Helfer für alle KV-Mutationsstellen — hält Master-Liste, Bulk-Scan und den Domänen-Key-Zähler
- *  (`kvKeyCountQueryOptions` in domainDetails.ts) synchron, damit Dots/Tags/Sektionen live nachziehen (spec shell/004 §1).
- *  `'kv-keys-bulk'` braucht die eigene Zeile: Array-Präfix-Matching von `['kv-keys', domain]` greift dort nicht. */
+/** Shared helper for all KV mutation sites: keeps the master list, bulk scan and the domain key counter
+ *  (`kvKeyCountQueryOptions` in domainDetails.ts) in sync so dots/tags/sections update live.
+ *  `'kv-keys-bulk'` needs its own line: array-prefix matching of `['kv-keys', domain]` does not reach it. */
 export function invalidateKvKeys(queryClient: QueryClient, domain: string): void {
   void queryClient.invalidateQueries({ queryKey: ['kv-keys', domain] })
   void queryClient.invalidateQueries({ queryKey: ['kv-keys-bulk', domain] })
   void queryClient.invalidateQueries({ queryKey: kvCountKey(domain) })
 }
 
-/** Ergebnis eines Value-Reads: `not-found` deckt "nie existiert", "gelöscht" und "abgelaufen" ab (404); `null` ist der explizite
- *  Null-State (204, Contract 0.2.0) — anders als `not-found` bleibt der Key registriert und im Scan sichtbar.
+/** Result of a value read: `not-found` covers "never existed", "deleted" and "expired" (404); `null` is the explicit
+ *  null state (204); unlike `not-found` the key stays registered and visible in the scan.
  *  `etag` is the opaque `ETag` header of 200/204 (undefined if absent). */
 export type KvValue = { state: 'found'; bytes: number; text: string; etag: string | undefined } | { state: 'not-found' } | { state: 'null'; etag: string | undefined }
 
-/** GET über `fetchRaw` (Roh-Body, kein JSON-Zwang) — 404 wird gefangen und als eigener Zustand modelliert statt als Query-Error;
- *  204 (expliziter Null-State) wird vor dem Body-Read abgefangen, da ein Null-Key sonst von einem Leer-Wert ununterscheidbar wäre. */
+/** GET via `fetchRaw` (raw body, no JSON coercion); 404 is caught and modelled as its own state, not a query error;
+ *  204 (explicit null state) is handled before the body read, since a null key would otherwise look like an empty value. */
 export function kvValueQueryOptions(apiClient: ApiClient | undefined, domain: string, key: string | undefined) {
   return queryOptions({
     queryKey: ['kv-value', domain, key ?? ''] as const,
@@ -134,14 +134,14 @@ export function kvValueQueryOptions(apiClient: ApiClient | undefined, domain: st
   })
 }
 
-/** Feldnamen tragen die Einheit, weil der Server sie in einem Body mischt: `expires_at` in Sekunden, `last_modified_at` in Millisekunden (Probe-Fakt data/012). */
+/** Field names carry the unit because the server mixes them in one body: `expires_at` in seconds, `last_modified_at` in milliseconds. */
 export interface KvMeta {
   expiresAtSecs: number | undefined
   lastModifiedMs: number
 }
 
-/** `…/keys/{key}/meta` (Contract 0.6.1) — aufgezeichnet, Antwort auf die Key-Auswahl. 404 (Key zwischen Value- und Meta-GET abgelaufen) ist
- *  kein Query-Fehler, sondern `null` (TanStack lässt `undefined` als Query-Ergebnis nicht zu). */
+/** `…/keys/{key}/meta`: recorded, answers the key selection. 404 (key expired between the value and meta GET) is
+ *  not a query error but `null` (TanStack does not allow `undefined` as a query result). */
 export function kvMetaQueryOptions(apiClient: ApiClient | undefined, domain: string, key: string | undefined) {
   return queryOptions({
     queryKey: ['kv-meta', domain, key ?? ''] as const,
@@ -156,8 +156,8 @@ export function kvMetaQueryOptions(apiClient: ApiClient | undefined, domain: str
   })
 }
 
-/** Kurze Wortform wie `formatUptime` (useConnection.ts): `42s` · `58m` · `5h 3m` · `12d 4h`; negativ ⇒ `0s` (Uhren-Versatz Host ↔ Container).
- *  Rein — kennt weder `Date.now()` noch die Copy, damit Tests ohne Fake-Timer auskommen. */
+/** Short form like `formatUptime` (useConnection.ts): `42s` · `58m` · `5h 3m` · `12d 4h`; negative ⇒ `0s` (clock skew host ↔ container).
+ *  Pure: knows neither `Date.now()` nor the copy, so tests need no fake timers. */
 export function formatShortDuration(totalSecs: number): string {
   const secs = Math.max(0, Math.floor(totalSecs))
   if (secs < 60) return `${secs}s`
@@ -183,7 +183,7 @@ function conditionHeaders(condition: KvPutCondition): Record<string, string> {
 }
 
 /** PUT is an upsert unless conditional (If-Match / If-None-Match: *, since 0.5.1; 412/428 on mismatch).
- *  `ttlSeconds` hängt `?ttl=` nur bei Angabe an — jeder PUT ohne ttl macht einen befristeten Key wieder unbefristet (Probe-Fakt, spec data/005). */
+ *  `ttlSeconds` appends `?ttl=` only when given; any PUT without ttl makes an expiring key permanent again. */
 export async function putValue(apiClient: ApiClient, domain: string, key: string, value: string, ttlSeconds?: number, condition: KvPutCondition = {}): Promise<void> {
   await apiClient.fetchRaw(withTtlQuery(kvKeyPath(domain, key), ttlSeconds), {
     method: 'PUT',
@@ -194,7 +194,7 @@ export async function putValue(apiClient: ApiClient, domain: string, key: string
 
 export type TtlParseResult = { ok: true; seconds: number | undefined } | { ok: false; error: string }
 
-/** Leer ⇒ kein Param (unbefristet); sonst ganze Zahl ≥ 1 — `ttl=0` wird bewusst nicht angeboten (sofort abgelaufen, s. Probe-Fakt). */
+/** Empty ⇒ no param (permanent); otherwise an integer ≥ 1; `ttl=0` is deliberately not offered (expires immediately). */
 export function parseTtlSeconds(text: string): TtlParseResult {
   const trimmed = text.trim()
   if (trimmed === '') return { ok: true, seconds: undefined }
@@ -210,7 +210,7 @@ export async function deleteValue(apiClient: ApiClient, domain: string, key: str
   await apiClient.fetchRaw(kvKeyPath(domain, key), { method: 'DELETE', headers: conditionHeaders({ etag }) })
 }
 
-/** `undefined` heißt "kein gültiges JSON" — `JSON.parse` kann nie echtes `undefined` liefern, der Sentinel ist eindeutig. */
+/** `undefined` means "not valid JSON"; `JSON.parse` never yields a real `undefined`, so the sentinel is unambiguous. */
 export function tryParseJson(text: string): unknown | undefined {
   try {
     return JSON.parse(text)

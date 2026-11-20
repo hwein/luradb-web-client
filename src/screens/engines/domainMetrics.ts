@@ -23,8 +23,8 @@ export interface RelEngineTotals {
 }
 
 /**
- * Sums document and index counts over all domains (spec engines/001 §3) via the Explorer's
- * query options — one cache with shell/domainDetails.ts. One fan-out query per domain is O(n).
+ * Sums document and index counts over all domains via the Explorer's
+ * query options, one cache with shell/domainDetails.ts. One fan-out query per domain is O(n).
  */
 export function useJsonEngineTotals(apiClient: ApiClient | undefined, domains: string[]): JsonEngineTotals {
   const countQueries = useQueries({
@@ -42,7 +42,7 @@ export function useJsonEngineTotals(apiClient: ApiClient | undefined, domains: s
   }
 }
 
-/** Sums table and view counts over all domains (spec engines/001 §3) — same fan-out pattern as above. */
+/** Sums table and view counts over all domains, same fan-out pattern as above. */
 export function useRelEngineTotals(apiClient: ApiClient | undefined, domains: string[]): RelEngineTotals {
   const tableQueries = useQueries({
     queries: domains.map((domain) => relTablesQueryOptions(apiClient, domain, true)),

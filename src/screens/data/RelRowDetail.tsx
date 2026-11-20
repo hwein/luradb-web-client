@@ -71,14 +71,14 @@ const JSONREF_DATALIST_ID = 'rel-row-form-jsonref-options'
 const KVREF_DATALIST_ID = 'rel-row-form-kvref-options'
 
 /**
- * Feld-Formular aus dem Schema (orchestrator §4): INTEGER/REAL → number, sonst Text; nullable → null-Schalter; PK read-only/auto.
- * KVREF-/JSONREF-Felder bekommen zusätzlich eine <datalist> aus dem Bestand der Domäne (spec 004 §2) — freie Eingabe bleibt möglich.
+ * Field form from the schema: INTEGER/REAL → number, else text; nullable → null switch; PK read-only/auto.
+ * KVREF/JSONREF fields also get a <datalist> from the domain's existing entries; free input stays possible.
  */
 function RelRowForm({ domain, apiClient, columns, form, isInsert, onFieldText, onFieldNull }: RelRowFormProps) {
   const hasJsonref = columns.some((column) => column.type === 'JSONREF')
   const hasKvref = columns.some((column) => column.type === 'KVREF')
 
-  // Geteilter Cache mit JsonBrowser/KvBrowser (gleiche Query-Options) — nur bereits geladene Seiten, kein fetch-all.
+  // Cache shared with JsonBrowser/KvBrowser (same query options): only already loaded pages, no fetch-all.
   const jsonrefQuery = useInfiniteQuery({
     ...jsonDocumentsQueryOptions(apiClient, domain, undefined),
     enabled: hasJsonref && apiClient !== undefined,
@@ -142,7 +142,7 @@ function RelRowForm({ domain, apiClient, columns, form, isInsert, onFieldText, o
   )
 }
 
-/** Auflösung einer REF-Spalte aus `_expanded` — Grundlage für die Wert-Sektion UND fürs Ausblenden der Key-Feldzeile (Nachtrag: der Key wird nicht wiederholt). */
+/** Resolution of a REF column from `_expanded`; drives the value section and hides the key field row (the key is not repeated). */
 function resolutionOf(column: ColumnInfo, expanded: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   if (column.type !== 'KVREF' && column.type !== 'JSONREF') return undefined
   const value = expanded?.[column.name]
@@ -157,14 +157,14 @@ interface ExpandedLinkSectionProps {
   onOpenDocs: () => void
 }
 
-/** KVREF `encoding==="utf8"` → roher `value`-Text; anderes Encoding → die Resolution unverfälscht als JSON (spec 009 §2). */
+/** KVREF `encoding==="utf8"` → raw `value` text; other encodings → the resolution unaltered as JSON. */
 function expandedContentText(column: ColumnInfo, resolution: Record<string, unknown>): string {
   if (column.type === 'JSONREF') return JSON.stringify(resolution.document, null, 2)
   if (resolution.encoding === 'utf8') return typeof resolution.value === 'string' ? resolution.value : String(resolution.value)
   return JSON.stringify(resolution, null, 2)
 }
 
-/** Eine Sektion je REF-Spalte mit Auflösung (spec 009 §1–3/§5): Kopf im Ziel-Farbton + Sprungaktion, Inhalt als mono-Block, Dangling wie im Grid. */
+/** One section per REF column with a resolution: head tinted like the target + jump action, content as mono block, dangling as in the grid. */
 function ExpandedLinkSection({ column, resolution, linkedKey, onOpenLink, onOpenDocs }: ExpandedLinkSectionProps) {
   const engine = column.type === 'JSONREF' ? 'json' : 'kv'
   const dangling = isDangling(resolution)
@@ -201,7 +201,7 @@ interface ExpandedLinkSectionsProps {
   onOpenDocs: () => void
 }
 
-/** Verlinkte Store-Inhalte einer Zeile (spec 009 §1): eine Sektion je KVREF/JSONREF-Spalte mit Auflösung, Reihenfolge = Schema. */
+/** Linked store contents of a row: one section per KVREF/JSONREF column with a resolution, in schema order. */
 function ExpandedLinkSections({ columns, row, onOpenLink, onOpenDocs }: ExpandedLinkSectionsProps) {
   const expanded = expandedOf(row)
   if (expanded === undefined) return null
@@ -225,7 +225,7 @@ function ExpandedLinkSections({ columns, row, onOpenLink, onOpenDocs }: Expanded
   )
 }
 
-/** Detail-Spalte (spec §3): Feld-Formular aus dem Schema, edit/delete mit Bestätigung, "+ new row"-Formular, 409-Zeile mit why?-Link. */
+/** Detail column: field form from the schema, edit/delete with confirmation, "+ new row" form, 409 line with why? link. */
 export function RelRowDetail({ domain, apiClient, table, columns, mode, row, onCreated, onDeleted, onClear, onConflictDocs, onOpenLink }: RelRowDetailProps) {
   const queryClient = useQueryClient()
 
@@ -233,9 +233,9 @@ export function RelRowDetail({ domain, apiClient, table, columns, mode, row, onC
   const [form, setForm] = useState<RowFormState>(() => blankFormState(columns))
   const [deleteArmed, setDeleteArmed] = useState(false)
 
-  // Moduswechsel setzt Edit-/Bestätigungs-Zustände zurück, indem der Parent per key remountet (kein Reset-Effect:
-  // der lief NACH einem schnellen edit-Klick und schloss das Formular wieder). Das Edit-Formular wird erst in
-  // handleEditStart aus der aktuellen Zeile befüllt — ein Hintergrund-Refetch von `row` verwirft laufende Eingaben nicht.
+  // A mode change resets edit/confirmation state because the parent remounts via key (no reset effect: it ran
+  // AFTER a quick edit click and closed the form again). The edit form is only filled from the current row in
+  // handleEditStart, so a background refetch of `row` does not discard input in progress.
 
   function invalidateRows(): void {
     void queryClient.invalidateQueries({ queryKey: ['rel-rows', domain, table] })
@@ -391,7 +391,7 @@ export function RelRowDetail({ domain, apiClient, table, columns, mode, row, onC
         />
       ) : (
         <div className="rel-detail__fields">
-          {/* REF-Spalten mit gerenderter Wert-Sektion erscheinen nicht zusätzlich als Key-Zeile (Nachtrag data/009). */}
+          {/* REF columns with a rendered value section do not also appear as a key row. */}
           {columns
             .filter((column) => resolutionOf(column, expanded) === undefined)
             .map((column) => (

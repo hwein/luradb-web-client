@@ -28,7 +28,7 @@ const OPERATIONS: [OpKind, string][] = [
   ['rename-table', 'rename table'],
 ]
 
-/** PK-Spalte + indexierte Spalten (implizite `{t}_{c}_key`-Indexe stehen mit in schema.indexes) — spec sql/004 §4, Ausschluss über die column-Felder statt Namens-Parsing. */
+/** PK column or indexed column (implicit `{t}_{c}_key` indexes are in schema.indexes too); matched via the column field, not by parsing names. */
 function dropDisabledReason(column: ColumnInfo, indexes: IndexInfo[]): string | undefined {
   if (column.primary_key) return 'primary key'
   const index = indexes.find((entry) => entry.column === column.name)
@@ -39,14 +39,14 @@ function firstDroppableColumn(columns: ColumnInfo[], indexes: IndexInfo[]): stri
   return columns.find((column) => dropDisabledReason(column, indexes) === undefined)?.name ?? ''
 }
 
-/** Leerer Literal-Wert wäre `DEFAULT ` (Syntaxfehler) bzw. `DEFAULT ''` auf TIMESTAMP (400) — nur TEXT darf leer sein (wie sql/002). */
+/** An empty literal would be `DEFAULT ` (syntax error) or `DEFAULT ''` on TIMESTAMP (400); only TEXT may be empty. */
 function defaultValueError(type: ColumnType, enabled: boolean, currentTimestamp: boolean, text: string): string | undefined {
   if (!enabled || !typeAllowsDefault(type) || type === 'TEXT') return undefined
   if (type === 'TIMESTAMP' && currentTimestamp) return undefined
   return text.trim() === '' ? 'default value required' : undefined
 }
 
-/** NOT-NULL-Kopplung (spec sql/004 §3): nur mit literalem DEFAULT aktivierbar — CURRENT_TIMESTAMP zählt nicht als literal. */
+/** NOT NULL is only allowed with a literal DEFAULT; CURRENT_TIMESTAMP does not count as literal. */
 function hasLiteralDefault(type: ColumnType, enabled: boolean, currentTimestamp: boolean, text: string): boolean {
   if (!enabled || !typeAllowsDefault(type) || (type === 'TIMESTAMP' && currentTimestamp)) return false
   return defaultValueError(type, enabled, currentTimestamp, text) === undefined
@@ -62,12 +62,12 @@ interface AlterTableFormProps {
   onClose: () => void
 }
 
-/** Formular-Inhalt des Alter-Table-Assistenten (spec sql/004) — ohne <dialog>-Hülle, damit Tests ihn ohne `showModal()` mounten können. */
+/** Form content of the alter-table wizard, without the <dialog> shell so tests can mount it without `showModal()`. */
 export function AlterTableForm({ domain, apiClient, table, schema, onClose }: AlterTableFormProps) {
   const navigate = useNavigate()
   const enabled = apiClient !== undefined
 
-  // Aktuelles Schema kommt als Prop (RelBrowser hat es schon geladen); andere Tabellen braucht nur REFERENCES (add column) und der Namensraum-Check (rename table).
+  // The current schema arrives as a prop; other tables are only needed for REFERENCES (add column) and the name check (rename table).
   const tablesQuery = useQuery(relTablesQueryOptions(apiClient, domain.name, enabled))
   const viewsQuery = useQuery(relViewsQueryOptions(apiClient, domain.name, enabled))
   const tables = tablesQuery.data ?? []
@@ -98,8 +98,8 @@ export function AlterTableForm({ domain, apiClient, table, schema, onClose }: Al
   const effectiveNotNull = notNull && notNullAllowed
   const usingCurrentTimestamp = colType === 'TIMESTAMP' && defaultCurrentTimestamp
 
-  // Bricht die Kopplung (DEFAULT deaktiviert/geleert/auf CURRENT_TIMESTAMP umgestellt), verwirft NOT NULL statt es nur unsichtbar zu sperren —
-  // sonst würde ein späteres Wieder-Aktivieren des DEFAULT die Checkbox aus einem stillen `true` heraus überraschend wieder anhaken.
+  // When the DEFAULT is disabled, cleared or switched to CURRENT_TIMESTAMP, reset NOT NULL instead of only locking it;
+  // otherwise re-enabling the DEFAULT would re-check the box from a hidden `true`.
   useEffect(() => {
     if (!notNullAllowed) setNotNull(false)
   }, [notNullAllowed])
@@ -427,7 +427,7 @@ interface AlterTableModalProps {
   onClose: () => void
 }
 
-/** Alter-Table-Assistent (spec sql/004): natives `<dialog>` + `showModal()` um `AlterTableForm`, gleiche Mechanik wie CreateTableModal (sql/002). */
+/** Alter-table wizard: a native `<dialog>` + `showModal()` around `AlterTableForm`. */
 export function AlterTableModal({ domain, apiClient, table, schema, onClose }: AlterTableModalProps) {
   const dialogRef = useRef<HTMLDialogElement | null>(null)
   const onCloseRef = useRef(onClose)
@@ -436,8 +436,8 @@ export function AlterTableModal({ domain, apiClient, table, schema, onClose }: A
   useEffect(() => {
     const dialog = dialogRef.current
     if (dialog === null) return
-    // `open`-Guard: der StrictMode-Zweitlauf trifft einen bereits offenen Dialog — showModal() würfe dann,
-    // bevor der close-Listener registriert ist (ESC bliebe wirkungslos).
+    // `open` guard: the StrictMode second run meets an already open dialog, and showModal() would throw
+    // before the close listener is registered (ESC would do nothing).
     if (!dialog.open) {
       dialog.showModal()
       dialog.querySelector('input')?.focus()

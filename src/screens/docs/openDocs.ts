@@ -3,8 +3,8 @@ import { openArticle, setSearch } from './docsStore'
 export type DocsTarget = string | { search: string }
 
 /**
- * Kontext-API (spec docs/001 §6): von überall aufrufbar (409-„why?", Dangling-„docs", SQL-Toolbar
- * „? syntax"). Schreibt nur in den Docs-Store — Aufrufer navigieren selbst zu `/docs`.
+ * Context API, callable from anywhere (409 "why?", dangling "docs", SQL toolbar "? syntax").
+ * Writes only to the docs store; callers navigate to `/docs` themselves.
  */
 export function openDocs(target: DocsTarget): void {
   if (typeof target === 'string') {
@@ -14,7 +14,7 @@ export function openDocs(target: DocsTarget): void {
   setSearch(target.search)
 }
 
-/** Fehlerkontext → Artikel-Id, zentral gepflegt für künftige Aufrufer (409-Zeilen, Dangling-Links, SQL-Toolbar). */
+/** Error context to article id, kept in one place for callers (409 lines, dangling links, SQL toolbar). */
 export const DOCS_FOR_CONTEXT = {
   conflict: 'errors-status-codes',
   danglingLink: 'cross-engine-links',

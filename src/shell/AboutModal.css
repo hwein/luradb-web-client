@@ -1,6 +1,4 @@
-/* --- About-Dialog (spec shell/005) --- */
-
-/* Author-display würde sonst das UA-`display:none` geschlossener Dialoge überstimmen. */
+/* Author `display` would otherwise override the UA `display:none` of closed dialogs. */
 .about:not([open]) {
   display: none;
 }
@@ -77,7 +75,7 @@
   color: var(--mut);
 }
 
-/* Der SPDX-Code bricht sonst mitten im Identifier um. */
+/* The SPDX code would otherwise wrap mid-identifier. */
 .about__nowrap {
   white-space: nowrap;
 }
@@ -106,7 +104,7 @@
   color: var(--tx);
 }
 
-/* Trailing space in `content` kollabiert am Flex-Item-Ende — Abstand kommt aus column-gap. */
+/* Trailing space in `content` collapses at the flex item end; spacing is column-gap. */
 .about__list li:not(:last-child)::after {
   content: ',';
   color: var(--mut);

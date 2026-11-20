@@ -49,7 +49,7 @@ function metaLine(): string {
   return document.querySelector('.kv-detail__meta')?.textContent ?? ''
 }
 
-/** MSW-Handler, der die Frames streamt und den Body offen hält (kein Reconnect während des Tests) — Muster aus useKvWatch.test.tsx. */
+/** MSW handler that streams the frames and keeps the body open (no reconnect during the test), as in useKvWatch.test.tsx. */
 function watchStream(frames: string[]) {
   return http.get(WATCH_URL, () => {
     const body = new ReadableStream<Uint8Array>({
@@ -83,7 +83,7 @@ function footerText(): string {
   return document.querySelector('.data__footer')?.textContent ?? ''
 }
 
-// Fallback vor den Test-Handlern registriert (MSW: zuletzt registriert gewinnt) — ohne Metadaten sieht die Meta-Zeile aus wie vor data/012.
+// Fallback registered before the test handlers (MSW: last registered wins); without metadata the meta line shows no timing suffix.
 beforeEach(() => {
   server.use(http.get(`${KEYS_URL}/:key/meta`, () => HttpResponse.text('404 Not Found: key not found', { status: 404 })))
 })
@@ -93,7 +93,7 @@ afterEach(() => {
 })
 
 describe('KvBrowser', () => {
-  it('arrives with ?key= (cross-engine jump from the rel row detail): selects that key initially, even though it is not first in the list (spec data/009 §5)', async () => {
+  it('arrives with ?key= (cross-engine jump from the rel row detail): selects that key initially, even though it is not first in the list', async () => {
     server.use(
       http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha', 'cart_1']))),
       http.get(keyUrl('alpha'), () => rawValue('a')),
@@ -105,7 +105,7 @@ describe('KvBrowser', () => {
     expect(screen.getByText('cart-contents')).toBeInTheDocument()
   })
 
-  it('keeps a ?key= arrival open in the detail even when the key is on no loaded page (spec data/011 §6: list membership proves nothing)', async () => {
+  it('keeps a ?key= arrival open in the detail even when the key is on no loaded page (list membership proves nothing)', async () => {
     server.use(
       http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha'], { total: 5000 }))),
       http.get(keyUrl('alpha'), () => rawValue('a')),
@@ -120,13 +120,13 @@ describe('KvBrowser', () => {
     expect(screen.queryByRole('button', { name: 'far-away' })).not.toBeInTheDocument()
   })
 
-  it('keeps the ?key= arrival selection when the key list is already in the query cache (nachtrag data/009: auto-select overwrote it)', async () => {
+  it('keeps the ?key= arrival selection when the key list is already in the query cache (auto-select must not overwrite it)', async () => {
     server.use(
       http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha', 'cart_1']))),
       http.get(keyUrl('alpha'), () => rawValue('a')),
       http.get(keyUrl('cart_1'), () => rawValue('cart-contents')),
     )
-    // Erster Besuch ohne ?key= füllt den Query-Cache (Auto-Select auf den ersten Key), dann Ankunft per Jump.
+    // A first visit without ?key= fills the query cache (auto-select on the first key), then arrival by jump.
     const { queryClient, unmount } = await connectAndRender()
     expect(await screen.findByText('KEY alpha')).toBeInTheDocument()
     unmount()
@@ -166,7 +166,7 @@ describe('KvBrowser', () => {
 
     expect(await screen.findByText('alpha')).toBeInTheDocument()
     expect(screen.getByText('beta')).toBeInTheDocument()
-    // `total` ist die gefilterte Trefferzahl aus dem Envelope, nicht die Zahl geladener Keys.
+    // `total` is the filtered match count from the envelope, not the number of loaded keys.
     await waitFor(() => expect(footerText()).toContain('2 of 1,205 keys'))
     expect(footerText()).toContain(`GET /store-api/kv/${DOMAIN}/keys?limit=100&offset=0`)
     expect(footerText()).not.toContain('prefix=')
@@ -221,7 +221,7 @@ describe('KvBrowser', () => {
     expect(screen.queryByRole('button', { name: 'load more' })).not.toBeInTheDocument()
   })
 
-  it('opens the bulk panel from "bulk…" with its own limit=10000 scan rather than the 100-key pages (spec data/008 §2, data/011 §7)', async () => {
+  it('opens the bulk panel from "bulk…" with its own limit=10000 scan rather than the 100-key pages', async () => {
     const limits: string[] = []
     const allKeys = Array.from({ length: 150 }, (_, i) => `k${String(i).padStart(3, '0')}`)
     server.use(
@@ -398,7 +398,7 @@ describe('KvBrowser', () => {
     expect(await screen.findByText('select a key')).toBeInTheDocument()
   })
 
-  it('a bulk delete that removes the currently open key clears the detail selection like a single delete (spec data/008 §6)', async () => {
+  it('a bulk delete that removes the currently open key clears the detail selection like a single delete', async () => {
     let deleted = false
     server.use(
       http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(deleted ? [] : ['tomb-key']))),
@@ -674,7 +674,7 @@ describe('KvBrowser', () => {
     expect(await screen.findByText('key is required')).toBeInTheDocument()
   })
 
-  it('also invalidates the kv-count activity query on create and on delete, so dots/tags/sections can follow without reload (spec shell/004 §1, shell/010 §3)', async () => {
+  it('also invalidates the kv-count activity query on create and on delete, so dots/tags/sections can follow without reload', async () => {
     let freshCreated = false
     server.use(
       http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(freshCreated ? ['existing', 'fresh:1'] : ['existing']))),
@@ -803,7 +803,7 @@ describe('KvBrowser', () => {
     10000,
   )
 
-  it('sends ?ttl= on create only when a value is entered; empty stays unbefristet (no param)', async () => {
+  it('sends ?ttl= on create only when a value is entered; empty means no expiry (no param)', async () => {
     let noTtlUrl: string | undefined
     let withTtlUrl: string | undefined
     server.use(
@@ -898,7 +898,7 @@ describe('KvBrowser', () => {
     expect(await screen.findByLabelText('value editor')).toBeInTheDocument()
   })
 
-  describe('ttl and key metadata in the detail (spec data/012)', () => {
+  describe('ttl and key metadata in the detail', () => {
     // Fixed wall clock (Date only; timers stay real): relative times render the same on every run.
     beforeEach(() => {
       vi.setSystemTime(new Date(2026, 5, 15, 12, 0, 0))
@@ -972,7 +972,7 @@ describe('KvBrowser', () => {
       await waitFor(() => expect(metaLine()).toBe('explicit null state — GET answers 204 · modified 42s ago'))
     })
 
-    it('re-scanning with unchanged filters refetches the metadata of the open key as well (spec data/012 §4)', async () => {
+    it('re-scanning with unchanged filters refetches the metadata of the open key as well', async () => {
       let metaReads = 0
       server.use(
         http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['meta-key']))),

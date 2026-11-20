@@ -22,7 +22,7 @@ function numberOrPlaceholder(loaded: boolean, value: number): string {
   return loaded ? formatNumber(value) : NUMBER_PLACEHOLDER
 }
 
-/** Domänen-Ziellogik der "open in:"-Links — auch von der Command-Palette genutzt (spec shell/008 §4). */
+/** Target logic of the "open in:" domain links; the command palette uses it too. */
 export function openDomainIn(navigate: NavigateFunction, select: (name: string) => void, domain: string, engine: EngineTone): void {
   select(domain)
   void navigate(`/data?engine=${engine}`)
@@ -35,7 +35,7 @@ export function EnginesScreen() {
   const apiClient = session.status === 'connected' ? session.apiClient : undefined
   const { select } = useSelectedDomain()
 
-  // Shared query options with the Explorer (shell/002): same key and queryFn, one cache entry for all three cards.
+  // Shared query options with the Explorer: same key and queryFn, one cache entry for all three cards.
   const domainsQuery = useQuery(domainsQueryOptions(apiClient))
   const domainNames = (domainsQuery.data ?? []).map((domain) => domain.name)
 

@@ -16,7 +16,7 @@ export interface ArticleMeta extends DocEntry {
 export type ArticleChip = { kind: 'related'; label: string; targetId: string }
 
 export interface Article extends ArticleMeta {
-  /** Markdown-Rumpf ohne Frontmatter/Chip-Trailer — Eingabe für den Renderer (markdown.ts). */
+  /** Markdown body without frontmatter and chip trailer; input for the renderer. */
   body: string
   chips: ArticleChip[]
 }
@@ -33,8 +33,8 @@ interface RawSections {
   trailer: string | undefined
 }
 
-// Frontmatter/Chip-Trailer trennen zwei Zeilen, die exakt "---" sind — Beispiel-Codeblöcke dürfen daher
-// selbst keine solche Zeile enthalten.
+// Frontmatter and chip trailer are split at lines that are exactly "---", so example code blocks
+// must not contain such a line.
 function splitSections(raw: string): RawSections {
   const lines = raw.split(/\r?\n/)
   const delimiters: number[] = []
@@ -117,7 +117,7 @@ export function getRemoteTopic(id: string): RemoteTopic | undefined {
   return REMOTE_TOPICS.find((topic) => topic.id === id)
 }
 
-// Sidebar order of the design: the bundled article first, then the nine topics served from DOCS_SITE.
+// Sidebar order: the bundled article first, then the nine topics served from DOCS_SITE.
 export const DOC_ENTRIES: DocEntry[] = [...ARTICLES, ...REMOTE_TOPICS]
 
 export function getDocEntry(id: string): DocEntry | undefined {

@@ -21,7 +21,7 @@ interface DanglingReportContentProps {
   onClose: () => void
 }
 
-/** Inhalt des Dangling-Reports (spec 004 §4) — ohne <dialog>-Hülle, damit Tests ihn ohne `showModal()` mounten können. */
+/** Content of the dangling-links report, without the <dialog> shell so tests can mount it without `showModal()`. */
 export function DanglingReportContent({ apiClient, domain, table, columns, onClose }: DanglingReportContentProps) {
   const navigate = useNavigate()
 
@@ -34,7 +34,7 @@ export function DanglingReportContent({ apiClient, domain, table, columns, onClo
 
   const mutate = mutation.mutate
   useEffect(() => {
-    // Läuft genau einmal beim Öffnen (`mutate` ist stabil) — dieser Inhalt mountet erst, wenn der Dialog aufgeht.
+    // Runs once on open (`mutate` is stable); this content only mounts when the dialog opens.
     mutate()
   }, [mutate])
 
@@ -90,7 +90,7 @@ interface DanglingReportProps {
   columns: ColumnInfo[]
 }
 
-/** Toolbar-Report "check links" (spec 004 §4): natives `<dialog>` + `showModal()` um `DanglingReportContent`, nur mit Link-Spalten sichtbar. */
+/** Toolbar report "check links": native `<dialog>` + `showModal()` around `DanglingReportContent`, shown only with link columns. */
 export function DanglingReport({ apiClient, domain, table, columns }: DanglingReportProps) {
   const [open, setOpen] = useState(false)
   const dialogRef = useRef<HTMLDialogElement | null>(null)

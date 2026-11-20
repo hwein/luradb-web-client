@@ -4,7 +4,7 @@ import { kvKeyPath, type KvKeyFilter } from './kvEntries'
 
 export type KvBulkAction = 'delete' | 'clear' | 'set-null'
 
-/** Feste Schranke, schont das Request-Budget je Domäne (spec §5) — kein UI zum Verstellen. */
+/** Fixed limit that spares the per-domain request budget; no UI to change it. */
 export const KV_BULK_CONCURRENCY = 8
 
 const METHOD_BY_ACTION: Record<KvBulkAction, string> = {
@@ -13,7 +13,7 @@ const METHOD_BY_ACTION: Record<KvBulkAction, string> = {
   'set-null': 'PATCH',
 }
 
-/** Anzeige-Pfad mit literalem `{key}`-Platzhalter (spec §5, kein echter Call) — daher kein `encodeURIComponent`. */
+/** Display path with a literal `{key}` placeholder (not a real call), hence no `encodeURIComponent`. */
 export function kvBulkCallPattern(action: KvBulkAction, domain: string): string {
   const suffix = action === 'set-null' ? '/null' : ''
   return `${METHOD_BY_ACTION[action]} ${BASE_PATH}/kv/${domain}/keys/{key}${suffix}`
@@ -25,30 +25,30 @@ const VERB_BY_ACTION: Record<KvBulkAction, string> = {
   'set-null': 'set null on',
 }
 
-/** Bestätigungstext (spec §4), z. B. `delete 138 keys in "sessions"?` — Fanout-Wege (clear, set null, delete ohne Prefix). */
+/** Confirmation text, e.g. `delete 138 keys in "sessions"?`, for fan-out paths (clear, set null, delete without prefix). */
 export function kvBulkConfirmText(action: KvBulkAction, count: number, domain: string): string {
   return `${VERB_BY_ACTION[action]} ${count} keys in "${domain}"?`
 }
 
-/** Einzige Stelle, die den Weg entscheidet (spec data/013 §1): der Server-Endpunkt verlangt einen nicht-leeren Prefix. */
+/** The only place that picks the path: the server endpoint requires a non-empty prefix. */
 export function usesServerDelete(action: KvBulkAction, filter: KvKeyFilter): boolean {
   return action === 'delete' && filter.prefix !== ''
 }
 
-/** `DELETE …/keys?prefix=…[&contains=…]` — Anzeige und Call nutzen denselben String (spec data/013 §2/§5). */
+/** `DELETE …/keys?prefix=…[&contains=…]`; display and call use the same string. */
 export function kvBulkDeletePath(domain: string, filter: KvKeyFilter): string {
   const search = new URLSearchParams({ prefix: filter.prefix })
   if (filter.contains !== '') search.set('contains', filter.contains)
   return `${BASE_PATH}/kv/${encodeURIComponent(domain)}/keys?${search.toString()}`
 }
 
-/** Server-Weg nennt das Kriterium statt einer Zahl — der Endpunkt löscht auch Keys, die seit dem Scan dazukamen (spec data/013 §4). */
+/** The server path names the criterion instead of a count; the endpoint also deletes keys added since the scan. */
 export function kvBulkServerDeleteConfirmText(domain: string, filter: KvKeyFilter): string {
   const containing = filter.contains === '' ? '' : ` containing "${filter.contains}"`
   return `delete all keys with prefix "${filter.prefix}"${containing} in "${domain}"?`
 }
 
-/** Ein Call über `fetchRaw` — aufgezeichnet (bewusste Mutation, general/012); Nicht-2xx (413/400/404) wirft dort bereits den ApiError mit dem Servertext. */
+/** One call via `fetchRaw`, recorded (deliberate mutation); non-2xx (413/400/404) already throws the ApiError with the server text there. */
 export async function runKvBulkDelete(apiClient: ApiClient, domain: string, filter: KvKeyFilter): Promise<number> {
   const response = await apiClient.fetchRaw(kvBulkDeletePath(domain, filter), { method: 'DELETE' })
   const body: unknown = await response.json()
@@ -66,7 +66,7 @@ function requestFor(action: KvBulkAction, domain: string, key: string): { path: 
   return { path: `${path}/null`, init: { method: 'PATCH' } }
 }
 
-/** Wie `errorBodyOf` in jsonBulkImport.ts (live geprüft): Versuch JSON, sonst Rohtext — bewahrt den 429-Originaltext (spec §5/§7). */
+/** Like `errorBodyOf` in jsonBulkImport.ts: try JSON, else raw text; keeps the original 429 text. */
 async function errorMessageOf(response: Response): Promise<string> {
   const text = await response.text()
   let body: unknown
@@ -78,7 +78,7 @@ async function errorMessageOf(response: Response): Promise<string> {
   return messageFromError(body, response.status)
 }
 
-/** Einzel-Call eines Bulk-Laufs — über `fetchSilent`, also ohne Recorder-Eintrag (spec §5). */
+/** Single call of a bulk run via `fetchSilent`, so no recorder entry. */
 export async function runKvBulkOp(apiClient: ApiClient, domain: string, action: KvBulkAction, key: string): Promise<void> {
   const { path, init } = requestFor(action, domain, key)
   const response = await apiClient.fetchSilent(path, init)
@@ -100,9 +100,9 @@ function messageOf(error: unknown): string {
 }
 
 /**
- * UI-free fan-out core (spec §5): `concurrency` parallel workers pull from the same key list with
+ * UI-free fan-out core: `concurrency` parallel workers pull from the same key list with
  * `allSettled` semantics — one failure does not stop the remaining keys. `executeOp` is injected so tests
- * can check the concurrency limit without fake timers via deliberately resolved promises (spec §7).
+ * can check the concurrency limit without fake timers via deliberately resolved promises.
  */
 export async function runKvBulk(
   keys: string[],

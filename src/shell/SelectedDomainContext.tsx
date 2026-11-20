@@ -16,7 +16,7 @@ function readStoredSelection(): string | null {
   return sessionStorage.getItem(STORAGE_KEY)
 }
 
-/** App-weite Domänen-Auswahl (Context + sessionStorage). Default fällt auf die alphabetisch erste Domäne, sobald die Liste lädt. */
+/** App-wide domain selection (context + sessionStorage). Defaults to the alphabetically first domain once the list loads. */
 export function SelectedDomainProvider({ children }: { children: ReactNode }) {
   const session = useSession()
   const apiClient: ApiClient | undefined = session.status === 'connected' ? session.apiClient : undefined

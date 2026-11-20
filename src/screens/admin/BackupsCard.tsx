@@ -40,7 +40,7 @@ function statusOf(error: unknown): number | undefined {
   return error instanceof ApiError ? error.status : undefined
 }
 
-/** Ein Tick im Poll-Takt, damit die verstrichene Zeit eines laufenden Jobs mitläuft. */
+/** A tick at the poll rate so the elapsed time of a running job keeps moving. */
 function useTick(active: boolean): number {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -65,12 +65,12 @@ function RunningBackupRow({ running }: { running: RunningBackupInfo }) {
 interface RestoreRowProps {
   entry: RestoreEntry
   result: RestoreStatusResult | undefined
-  /** Status-Query im Fehlerzustand (kein 404) — nicht als "running" ausgeben, Dismiss anbieten. */
+  /** Status query in an error state (not 404): do not show "running", offer dismiss. */
   statusError: boolean
   onView: () => void
 }
 
-/** Der laufende/zuletzt gelaufene Restore ist server-seitig nicht auflistbar — die Karte hält ihn (spec §3b/§6). */
+/** The running/last restore cannot be listed server-side, so the card holds it. */
 function RestoreRow({ entry, result, statusError, onView }: RestoreRowProps) {
   const queryClient = useQueryClient()
   const label =
@@ -202,7 +202,7 @@ interface RunFormProps {
   onDone: () => void
 }
 
-/** Inline-Formular hinter "▶ run backup now" (spec §5): Scope-Segmente, optionale/pflichtige Domänenwahl, include_auth-Gating. */
+/** Inline form behind "▶ run backup now": scope segments, optional/required domain choice, include_auth gating. */
 function RunForm({ apiClient, onDone }: RunFormProps) {
   const queryClient = useQueryClient()
   const [kind, setKind] = useState<ScopeKind>('all')
@@ -313,16 +313,16 @@ function UploadAction({ apiClient }: { apiClient: ApiClient | undefined }) {
   )
 }
 
-/** BACKUPS-Karte (spec admin/003, Prototyp Z. 225–231): Liste, laufende Jobs, Run/Upload, Restore-Einstieg. */
+/** BACKUPS card: list, running jobs, run/upload, restore entry point. */
 export function BackupsCard({ apiClient }: { apiClient: ApiClient | undefined }) {
   const connected = useConnectedSession()
   const connectionId = connected?.connectionId
   const storedEntry = useRestoreEntry()
-  // Einträge fremder Verbindungen ignorieren (nicht löschen — bei Rückkehr zur Ursprungsverbindung wieder gültig).
+  // Ignore entries of other connections (do not delete them: valid again on return to the original connection).
   const entry = storedEntry !== undefined && storedEntry.connectionId === connectionId ? storedEntry : undefined
   const restoreStatus = useQuery(restoreStatusQueryOptions(apiClient, entry?.restore_id))
   const restoreResult = entry === undefined ? undefined : restoreStatus.data
-  // Fehlerzustand des Status-Querys (5xx/Netz/503) gilt NICHT als laufend — sonst sperrt ein toter Status die Karte dauerhaft.
+  // An error of the status query (5xx/network/503) does NOT count as running, or a dead status would lock the card for good.
   const restoreStatusError = entry !== undefined && restoreResult === undefined && restoreStatus.isError
   const restoreRunning =
     entry !== undefined &&
@@ -346,7 +346,7 @@ export function BackupsCard({ apiClient }: { apiClient: ApiClient | undefined })
       {notice !== undefined ? (
         <>
           <div className="admin-backups__notice">{notice}</div>
-          {/* Auch im Disabled-Zustand erreichbar lassen — sonst gäbe es keinen Weg, einen liegengebliebenen Restore-Eintrag zu dismissen. */}
+          {/* Keep reachable when disabled too, or a leftover restore entry could never be dismissed. */}
           {entry !== undefined && (
             <RestoreRow entry={entry} result={restoreResult} statusError={restoreStatusError} onView={() => setRestoreTarget(entry.backup_id)} />
           )}

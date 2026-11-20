@@ -5,13 +5,13 @@
   "license": "FSL-1.1-ALv2",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": "^22.22.0 || ^24.0.0 || >=26.0.0"
   },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "check": "tsc --noEmit && eslint .",
+    "check": "tsc --noEmit && eslint . && node scripts/check-public-text.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "version": "node scripts/sync-version.mjs && git add src-tauri/Cargo.toml",
@@ -55,6 +55,6 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.15.0",
     "vite": "^6.0.0",
-    "vitest": "^3.2.7"
+    "vitest": "^5.1.1"
   }
 }

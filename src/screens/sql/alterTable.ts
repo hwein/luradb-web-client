@@ -1,10 +1,10 @@
 import { columnClause, type ColumnDef, type ColumnDefault, type ColumnType } from './createTable'
 
-/** ADD-COLUMN-Definition (spec sql/004 §3) — kein PRIMARY KEY/AUTOINCREMENT/UNIQUE (v1-Einschränkung des Servers). */
+/** ADD COLUMN definition: no PRIMARY KEY/AUTOINCREMENT/UNIQUE (a v1 server restriction). */
 export interface AddColumnDef {
   name: string
   type: ColumnType
-  /** Aufrufer muss die NOT-NULL-Kopplung (§3: nur mit literalem DEFAULT) sicherstellen — der Generator formatiert nur. */
+  /** The caller must ensure NOT NULL only comes with a literal DEFAULT; the generator only formats. */
   notNull: boolean
   default?: ColumnDefault
   references?: string
@@ -30,7 +30,7 @@ function toColumnDef(column: AddColumnDef): ColumnDef {
   return def
 }
 
-/** Ein Statement pro Aufruf (api/LURASQL.md „Ein Statement pro Request“) — Formatregeln/Escaping wie buildCreateTableSql (columnClause wiederverwendet). */
+/** One statement per call (the server runs one statement per request); same format rules/escaping as buildCreateTableSql (reuses columnClause). */
 export function buildAlterTableSql(op: AlterOperation): string {
   switch (op.kind) {
     case 'add-column':

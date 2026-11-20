@@ -5,9 +5,9 @@ import { execFileSync, execSync } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { readChangelog, extractSection, latestVersion } from './changelog-extract.mjs'
 
-// Release-Automatik (Adaption des LuraDB-Verfahrens). Erst alle Checks, dann
-// Mutationen. Ablauf auf `next`: Changelog finalisieren → Version bumpen →
-// next→main mergen → taggen → pushen. --dry-run zeigt den Plan ohne Änderungen.
+// Release automation (adapted from the LuraDB procedure). All checks first, then
+// mutations. Flow on `next`: finalize changelog → bump version →
+// merge next→main → tag → push. --dry-run shows the plan without changes.
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const CHANGELOG = path.join(rootDir, 'CHANGELOG.md')
 const PKG = path.join(rootDir, 'package.json')
@@ -42,7 +42,7 @@ function bumpMinor(base) {
   return `${maj}.${min + 1}.0`
 }
 
-// Datei-Inhalt zum gegebenen Tag; null, wenn Tag/Datei fehlt.
+// File content at the tag; null if tag or file is missing.
 function fileAtTag(tag, relpath) {
   try {
     return execFileSync('git', ['show', `${tag}:${relpath}`], { cwd: rootDir, encoding: 'utf-8' })
@@ -70,7 +70,7 @@ function resolveRepoUrl() {
   return m ? `https://github.com/${m[1]}` : url
 }
 
-// Entfernt Kategorieblöcke ("### Name" ohne Bullet-Inhalt) aus dem Body.
+// Removes category blocks ("### Name" without bullets) from the body.
 function filterEmptyCategories(bodyText) {
   const out = []
   let block = null
@@ -86,8 +86,8 @@ function filterEmptyCategories(bodyText) {
   return out.join('\n')
 }
 
-// Baut CHANGELOG.md neu: [Unreleased] → [version] - heute, frisches leeres
-// [Unreleased], Referenzblock aus allen Versionen neu erzeugt.
+// Rebuilds CHANGELOG.md: [Unreleased] → [version] - today, a fresh empty
+// [Unreleased], reference block regenerated from all versions.
 function rebuildChangelog(version) {
   const date = new Date().toISOString().slice(0, 10)
   const text = readChangelog()
@@ -151,7 +151,6 @@ async function confirmVersion(proposed, last) {
   return version
 }
 
-// --- Preflight ---
 if (git('rev-parse', '--abbrev-ref', 'HEAD') !== 'next') die('must be on branch `next`')
 if (git('status', '--porcelain')) die('working tree not clean — commit or stash first')
 
@@ -164,11 +163,11 @@ const changelog = readChangelog()
 const unreleased = extractSection(changelog, 'Unreleased')
 if (!unreleased) die('[Unreleased] is missing or empty — nothing to release')
 
-// --- Version proposal (a mechanism, not a choice). The client produces no
+// Version proposal (a mechanism, not a choice). The client produces no
 // breaking changes; it consumes the LuraDB API. minor = a compatibility jump:
 // the committed API contract (openapi.json info.version) or MIN_SERVER_VERSION
-// changed since the last release. Otherwise patch. major is the author's only
-// manual override, typed at the confirm prompt. ---
+// changed since the last release. Otherwise patch. major is the maintainer's only
+// manual override, typed at the confirm prompt.
 const last = latestVersion(changelog)
 let proposed
 if (last) {
@@ -194,7 +193,6 @@ if (dryRun) {
   process.exit(0)
 }
 
-// --- Mutations ---
 step(`finalize CHANGELOG → [${version}]`)
 rebuildChangelog(version)
 step(`version → ${version}`)
@@ -213,7 +211,7 @@ step('next: merge --ff-only main')
 git('checkout', 'next')
 git('merge', '--ff-only', 'main')
 
-// Dev-Zyklus: next auf X.Y.(Z+1)-dev, damit Dev-Builds nie eine Release-Nummer melden.
+// Dev cycle: next moves to X.Y.(Z+1)-dev so dev builds never report a release number.
 const nextDev = `${bumpPatch(version)}-dev`
 step(`next: begin v${nextDev} cycle`)
 setVersion(nextDev)

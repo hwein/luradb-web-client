@@ -82,7 +82,7 @@ function ResultGrid({ result, onOpenDoc }: { result: SqlSelectResult; onOpenDoc:
       <tbody>
         {result.rows.map((row, rowIndex) => (
           <tr
-            // Ergebnis-Rows haben keinen stabilen Schlüssel (Arrays) — der Index ist hier die Identität.
+            // Result rows are arrays without a stable key, so the index is their identity.
             key={rowIndex}
             className={selectedRow === rowIndex ? 'sql-grid__row--selected' : undefined}
             onClick={() => setSelectedRow(rowIndex)}
@@ -132,7 +132,7 @@ function ResultBody({ outcome, onOpenDoc }: { outcome: SqlOutcome; onOpenDoc: (d
   }
 }
 
-/** Ergebnis-Panel (spec §5): Kopf mit CallLine + Export, darunter Grid / DDL·DML-Bestätigung / Fehlerzeile. */
+/** Results panel: header with CallLine + export, below it grid / DDL·DML confirmation / error line. */
 export function SqlResults({ outcome, running, onExport, onOpenDoc }: SqlResultsProps) {
   const selectResult = outcome?.status === 'ok' && outcome.result.kind === 'select' ? outcome.result : undefined
 

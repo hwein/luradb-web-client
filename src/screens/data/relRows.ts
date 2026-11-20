@@ -24,13 +24,13 @@ export function pkValueOf(row: RelRow, pkColumn: string): string {
   return value === null || value === undefined ? '' : String(value)
 }
 
-/** `_expanded`-Block einer Zeile (spec §2) — je Spalte eine Resolution wie `{"exists":true,"value":…}`. */
+/** `_expanded` block of a row: one resolution per column, like `{"exists":true,"value":…}`. */
 export function expandedOf(row: RelRow): Record<string, unknown> | undefined {
   const value = row._expanded
   return isRecord(value) ? value : undefined
 }
 
-/** Live geprüft (rel/{d}/tables/{t}/rows?expand=*): dangling ist `{"exists":false, …}`, unabhängig vom REF-Typ. */
+/** Verified live (rel/{d}/tables/{t}/rows?expand=*): dangling is `{"exists":false, …}`, whatever the REF type. */
 export function isDangling(resolution: unknown): boolean {
   return isRecord(resolution) && resolution.exists === false
 }
@@ -71,7 +71,7 @@ async function fetchRowsPage(apiClient: ApiClient, domain: string, table: string
   }
 }
 
-/** Zeilen-Grid (spec §2): `GET rows` mit limit 50, offset-Paging — `limit_applied` (nicht `row_count`, der ist seitenlokal, live geprüft) sagt, ob noch mehr Zeilen folgen. */
+/** Row grid: `GET rows` with limit 50, offset paging; `limit_applied` (not `row_count`, which is page-local, verified live) says whether more rows follow. */
 export function relRowsQueryOptions(apiClient: ApiClient | undefined, domain: string, table: string, expand: boolean, enabled: boolean) {
   return infiniteQueryOptions({
     queryKey: ['rel-rows', domain, table, expand] as const,
@@ -102,10 +102,10 @@ function rowsToObjects(result: SqlSelectResult): RelRow[] {
 }
 
 /**
- * Filter-Ankunft (spec §5): `SELECT * FROM t WHERE col = ? LIMIT 50` über `/sql`, damit der Filter serverseitig gilt;
- * Array-Zeilen auf die Objektform des Grids normalisiert. Der URL-Wert wird nach Spaltentyp koerziert — als String-Param
- * an einer INTEGER-Spalte (PK-Absprung aus dem Dangling-Report, spec 004 §4) antwortet der Server sonst 400 TypeMismatch;
- * bis der Typ aus dem Schema vorliegt, bleibt die Query disabled.
+ * Filter arrival: `SELECT * FROM t WHERE col = ? LIMIT 50` via `/sql`, so the filter applies server-side;
+ * array rows are normalized to the grid's object form. The URL value is coerced by column type: as a string param
+ * on an INTEGER column (PK jump from the dangling report) the server would answer 400 TypeMismatch;
+ * the query stays disabled until the type is known from the schema.
  */
 export function relFilteredRowsQueryOptions(
   apiClient: ApiClient | undefined,
@@ -162,7 +162,7 @@ function toWriteResult(data: unknown): RowWriteResult {
   return { affected: typeof record.affected === 'number' ? record.affected : 0, lastPk: record.last_pk ?? null }
 }
 
-/** `POST …/rows` (spec §3): autoincrement-PK bleibt im Payload weg. Antwort ist `{affected,last_pk}`, nie die volle Zeile (live geprüft). */
+/** `POST …/rows`: an autoincrement PK stays out of the payload. The answer is `{affected,last_pk}`, never the full row (verified live). */
 export async function insertRow(apiClient: ApiClient, domain: string, table: string, payload: Record<string, unknown>): Promise<RowWriteResult> {
   const data = await mutateRow(() =>
     apiClient.api.POST('/store-api/rel/{domain}/tables/{table}/rows', {
@@ -173,7 +173,7 @@ export async function insertRow(apiClient: ApiClient, domain: string, table: str
   return toWriteResult(data)
 }
 
-/** `PUT …/rows/{pk}` — Teil-Update: nur die im Body genannten Spalten ändern sich (live geprüft, PK nie im Payload). */
+/** `PUT …/rows/{pk}`: partial update, only columns named in the body change (verified live, PK never in payload). */
 export async function updateRow(apiClient: ApiClient, domain: string, table: string, pk: string, payload: Record<string, unknown>): Promise<void> {
   await mutateRow(() =>
     apiClient.api.PUT('/store-api/rel/{domain}/tables/{table}/rows/{pk}', {
@@ -191,7 +191,7 @@ export async function deleteRow(apiClient: ApiClient, domain: string, table: str
   )
 }
 
-/** Link-Validierungsfehler (KVREF/JSONREF-Ziel fehlt) antworten laut Contract 409 (spec §3). */
+/** Link validation errors (KVREF/JSONREF target missing) answer 409 per the contract. */
 export function isConflict(error: unknown): boolean {
   return error instanceof ApiError && error.status === 409
 }
@@ -227,14 +227,14 @@ function isNumericType(type: string): boolean {
   return type === 'INTEGER' || type === 'REAL'
 }
 
-/** Unparsbare Zahl-Eingabe geht als Text durch (statt `NaN`→`null` zu riskieren) — der Server antwortet dann mit einer klaren Typ-Fehlermeldung. */
+/** Unparsable number input passes through as text (instead of risking `NaN` → `null`); the server then answers with a clear type error. */
 export function parseColumnValue(type: string, text: string): unknown {
   if (!isNumericType(type)) return text
   const parsed = Number(text)
   return Number.isNaN(parsed) ? text : parsed
 }
 
-/** Formular → Payload (spec §3/orchestrator): leer ⇒ weglassen, `null`-Schalter ⇒ `null`, PK bei Update nie im Body, autoincrement-PK bei Insert nie im Body. */
+/** Form → payload: empty ⇒ omitted, `null` toggle ⇒ `null`, PK never in the body on update, autoincrement PK never in the body on insert. */
 export function buildRowPayload(columns: ColumnInfo[], form: RowFormState, mode: 'insert' | 'update'): Record<string, unknown> {
   const payload: Record<string, unknown> = {}
   for (const column of columns) {
@@ -252,7 +252,7 @@ export function buildRowPayload(columns: ColumnInfo[], form: RowFormState, mode:
   return payload
 }
 
-/** Link-Spalten fürs Dangling-Reporting (spec 004 §4): KVREF/JSONREF (cross-engine) und REFERENCES (rel→rel-FK, erkennbar an `references`). */
+/** Link columns for dangling reporting: KVREF/JSONREF (cross-engine) and REFERENCES (rel→rel FK, recognizable by `references`). */
 export function isLinkColumn(column: ColumnInfo): boolean {
   return column.type === 'KVREF' || column.type === 'JSONREF' || column.references != null
 }
@@ -268,14 +268,14 @@ export interface DanglingLinksReport {
   truncated: boolean
 }
 
-/** `max_limit` laut api/LURASQL.md — mehr kann ein einzelnes SELECT ohnehin nicht liefern. */
+/** The server's `max_limit`; a single SELECT cannot return more anyway. */
 const DANGLING_CHECK_LIMIT = 10000
 
 /**
- * Toolbar-Report "check links" (spec 004 §4): ein SELECT über PK + Link-Spalten mit `expand`.
- * Auflösungs-Formen via /sql (live vermessen): KVREF/JSONREF dangling ⇒ `{exists:false,…}`; REFERENCES
- * valide ⇒ Zielzeile ohne `exists`-Feld, dangling ⇒ `null`; NULL-Zelle ⇒ ebenfalls `null` (beide Typen).
- * Dangling ist eine Auflösung daher nur bei non-null Zellwert UND (Auflösung null ODER `exists:false`).
+ * Toolbar report "check links": one SELECT over the PK + link columns with `expand`.
+ * Resolution shapes via /sql (measured live): KVREF/JSONREF dangling ⇒ `{exists:false,…}`; REFERENCES
+ * valid ⇒ target row without an `exists` field, dangling ⇒ `null`; NULL cell ⇒ also `null` (both types).
+ * A resolution is therefore dangling only for a non-null cell value AND (resolution null OR `exists:false`).
  */
 export async function checkDanglingLinks(
   apiClient: ApiClient,
@@ -287,7 +287,7 @@ export async function checkDanglingLinks(
   const linkColumns = columns.filter(isLinkColumn).map((column) => column.name)
   if (pk === undefined || linkColumns.length === 0) return { entries: [], checked: 0, truncated: false }
 
-  // PK kann selbst Link-Spalte sein (REFERENCES-PK) — nicht doppelt projizieren.
+  // The PK can itself be a link column (REFERENCES PK); do not project it twice.
   const sql = `SELECT ${[pk, ...linkColumns.filter((column) => column !== pk)].join(', ')} FROM ${table} LIMIT ${DANGLING_CHECK_LIMIT}`
   const outcome = await executeSql(apiClient, domain, sql, linkColumns, [])
   if (outcome.status === 'error') throw new ApiError(outcome.call.status, outcome.message)
@@ -303,7 +303,7 @@ export async function checkDanglingLinks(
       const cellIndex = columnIndexes.get(column) ?? -1
       const cell = cellIndex >= 0 ? row[cellIndex] : undefined
       if (cell === null || cell === undefined) continue
-      // Nur explizite Evidenz zählt (JSON-`null` bzw. `exists:false`) — eine fehlende Auflösung ist kein Befund.
+      // Only explicit evidence counts (JSON `null` or `exists:false`); a missing resolution is no finding.
       const resolution = result.expanded?.[column]?.[rowIndex]
       if (resolution === null || isDangling(resolution)) {
         entries.push({ pk: pkValue === null || pkValue === undefined ? '' : String(pkValue), column })

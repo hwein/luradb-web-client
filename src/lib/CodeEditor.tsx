@@ -3,10 +3,10 @@ import { placeholder as cmPlaceholder } from '@codemirror/view'
 import { EditorView, minimalSetup } from 'codemirror'
 import './CodeEditor.css'
 
-/** Element-Typ der `extensions`-Prop (entspricht `Extension` aus @codemirror/state, ohne Direktimport). */
+/** Element type of the `extensions` prop (like `Extension` from @codemirror/state, no direct import). */
 type CmExtension = typeof minimalSetup
 
-// Theming über CSS-Variablen, damit beide Themes ohne JS-Neuaufbau greifen.
+// Theming via CSS variables so both themes apply without a JS rebuild.
 const baseTheme = EditorView.theme({
   '&': { backgroundColor: 'transparent', color: 'var(--tx)' },
   '&.cm-focused': { outline: 'none' },
@@ -20,13 +20,13 @@ const baseTheme = EditorView.theme({
 export interface CodeEditorProps {
   value: string
   onChange: (value: string) => void
-  /** Sprach-/Feature-Extensions; muss stabil sein (memoisieren), sonst baut der Editor bei jedem Render neu auf. */
+  /** Language/feature extensions; must be stable (memoize), otherwise the editor is rebuilt on every render. */
   extensions?: CmExtension[]
   ariaLabel?: string
   placeholder?: string
 }
 
-/** Dünne React-Anbindung an CodeMirror 6 (kein Wrapper-Paket). Wiederverwendbar; sql/001 baut darauf auf. */
+/** Thin React binding for CodeMirror 6 (no wrapper package). Reusable. */
 export function CodeEditor({ value, onChange, extensions, ariaLabel, placeholder }: CodeEditorProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)

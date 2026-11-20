@@ -43,7 +43,7 @@ function Harness({ columns, onClose }: { columns: ColumnInfo[]; onClose: () => v
   return <DanglingReportContent apiClient={apiClient} domain={DOMAIN} table={TABLE} columns={columns} onClose={onClose} />
 }
 
-/** Rendert `DanglingReportContent` ohne die native `<dialog>`-Hülle (showModal() ist in diesem jsdom nicht implementiert). */
+/** Renders `DanglingReportContent` without the native `<dialog>` shell (this jsdom lacks showModal()). */
 async function renderContent(onClose: () => void = () => {}, columns: ColumnInfo[] = COLUMNS) {
   server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })))
   await act(() => connect(makeConnection()))
@@ -107,8 +107,8 @@ describe('DanglingReportContent', () => {
     expect(screen.queryByText(/checked first/)).not.toBeInTheDocument()
   })
 
-  // Server-Realität (live vermessen): REFERENCES-Auflösung ist die Zielzeile ohne `exists`; dangling ⇒ `null`;
-  // NULL-Zellen liefern ebenfalls `null` und dürfen nie als dangling gemeldet werden.
+  // Measured on the live server: a REFERENCES resolution is the target row without `exists`; dangling => `null`;
+  // NULL cells also yield `null` and must never be reported as dangling.
   it('flags REFERENCES columns via explicit null resolutions, and never flags NULL cells', async () => {
     const fkColumns: ColumnInfo[] = [
       { name: 'id', type: 'INTEGER', nullable: false, primary_key: true, autoincrement: true, unique: false },

@@ -9,7 +9,7 @@ export interface FormFieldSpec {
   required?: boolean
   /** Field is visible but not editable. */
   disabled?: boolean
-  /** Kurzer Hinweis unter dem Feld (mono, muted). */
+  /** Short hint under the field (mono, muted). */
   hint?: string
 }
 
@@ -18,12 +18,10 @@ export interface Transport {
   fetchImpl: typeof fetch
 }
 
-/** Exhaustiveness-Anker: neue Union-Varianten lassen jeden Aufrufer hier nicht mehr kompilieren. */
+/** Exhaustiveness anchor: a new union variant stops every caller here from compiling. */
 function assertNever(value: never): never {
   throw new Error(`unhandled variant: ${JSON.stringify(value)}`)
 }
-
-// --- ConnectionType-Registry ---------------------------------------------
 
 type RestType = Extract<ConnectionType, { kind: 'rest' }>
 
@@ -103,8 +101,6 @@ export function connectionHostLabel(type: ConnectionType, env: Environment): str
   }
 }
 
-// --- AuthMethod-Registry --------------------------------------------------
-
 type ApiKeyAuth = Extract<AuthMethod, { kind: 'api-key' }>
 
 const apiKeyAuth = {
@@ -143,7 +139,7 @@ export function buildAuthHeader(auth: AuthMethod): string | undefined {
   }
 }
 
-/** `roleLabel` kommt aus der Capability-Fassade (heute admin/user) — die Registry kennt keine Rollen. */
+/** `roleLabel` comes from the capabilities facade (admin/user today) — the registry knows no roles. */
 export function authStatusLabel(auth: AuthMethod, roleLabel: string): string {
   switch (auth.kind) {
     case 'api-key':

@@ -14,7 +14,7 @@ import { useStoreEvents } from './useStoreEvents'
 const ORIGIN = window.location.origin
 const encoder = new TextEncoder()
 const ALL_STORE_KEYS = [DOMAINS_KEY, ['rel-tables'], ['rel-views'], ['json-indexes']]
-/** Mehrfaches Debounce-Fenster des Hooks (300 ms) — danach hätte ein gelesener Frame längst invalidiert. */
+/** Several debounce windows of the hook (300 ms); a read frame would have invalidated long before. */
 const PAST_DEBOUNCE_MS = 900
 
 function makeConnection(): Connection {
@@ -29,7 +29,7 @@ function makeConnection(): Connection {
 const adminWhoami: HttpResponseResolver = () => HttpResponse.json({ name: 'admin', role: 'Admin' })
 const userWhoami: HttpResponseResolver = () => HttpResponse.json({ name: 'alice', role: 'User' })
 
-/** Verbindet und liefert den ApiClient der Sitzung — Aufhänger für den `openStream`-Spy. */
+/** Connects and returns the session's ApiClient, the anchor for the `openStream` spy. */
 async function connectSession(whoami: HttpResponseResolver = adminWhoami): Promise<ApiClient> {
   server.use(
     http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
@@ -44,7 +44,7 @@ async function connectSession(whoami: HttpResponseResolver = adminWhoami): Promi
   return session.apiClient
 }
 
-/** Streamt die Frames und hält den Body offen (kein Reconnect während des Tests). */
+/** Streams the frames and keeps the body open (no reconnect during the test). */
 function eventStream(frames: string[]) {
   return http.get(`${ORIGIN}/store-api/events`, () => {
     const body = new ReadableStream<Uint8Array>({
@@ -56,7 +56,7 @@ function eventStream(frames: string[]) {
   })
 }
 
-/** Erster Open endet sofort (⇒ Reconnect nach Backoff), der zweite bleibt offen. */
+/** First open ends at once (⇒ reconnect after backoff), the second stays open. */
 function reconnectingStream() {
   let call = 0
   return http.get(`${ORIGIN}/store-api/events`, () => {
@@ -75,7 +75,7 @@ function storeFrame(id: string, type: string, payload: { engine?: string; domain
   return `id: ${id}\nevent: ${type}\ndata: ${JSON.stringify({ ...payload, type, ts: 1788007646 })}\n\n`
 }
 
-/** QueryClient plus Spy — die Invalidierungen sind die einzige Wirkung des Hooks. */
+/** QueryClient plus spy; the invalidations are the hook's only effect. */
 function probeQueryClient(): { queryClient: QueryClient; invalidate: InvalidateSpy } {
   const queryClient = createAppQueryClient()
   return { queryClient, invalidate: vi.spyOn(queryClient, 'invalidateQueries') }

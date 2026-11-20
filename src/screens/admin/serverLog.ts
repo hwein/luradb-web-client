@@ -7,7 +7,7 @@ const LOGS_FILES_PATH = `${BASE_PATH}/logs/files`
 
 const ANSI_PATTERN = /\u001b\[[0-9;]*[A-Za-z]/g
 
-/** CSI-Sequenzen entfernen — das Design zeigt schlichte muted-Zeilen, keine Level-Färbung (spec §Entscheidungen). */
+/** Strip CSI sequences: log lines are shown as plain muted text, without level coloring. */
 export function stripAnsi(line: string): string {
   return line.replace(ANSI_PATTERN, '')
 }
@@ -46,7 +46,7 @@ function parseLogResponse(body: unknown, status: number): LogTail {
   return { file: record.file, lines: record.lines.map(stripAnsi), truncated: record.truncated }
 }
 
-/** Fußzeilentext (spec §4) — ein leeres Ergebnis ersetzt "last N …" durch "no matching lines". */
+/** Footer text; an empty result replaces "last N …" with "no matching lines". */
 export function describeTail(tail: LogTail, q: string): string {
   if (tail.lines.length === 0) return 'no matching lines'
   return q === '' ? `last ${tail.lines.length} lines · ${tail.file}` : `last ${tail.lines.length} matches for "${q}" · ${tail.file}`

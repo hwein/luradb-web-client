@@ -8,9 +8,8 @@ type ReindexAcceptedResponse = components['schemas']['ReindexAcceptedResponse']
 export type StartReindexOutcome = { status: 'ok'; call: CallMeta; taskId: string } | { status: 'error'; call: CallMeta; message: string }
 
 /**
- * UI-freier Reindex-Start (spec engines/002 §1/§5, für data/006): der REST-Explorer-Haken `noteReindexStart`
- * (spec engines/001 Orchestrator-Hinweis 1) bleibt der zweite Auslöser — bei 202 registriert dieser Call
- * denselben Task über denselben Pfad in derselben Registry.
+ * UI-free reindex start. The REST explorer hook `noteReindexStart` stays the second trigger:
+ * on 202 this call registers the same task through the same path in the same registry.
  */
 export async function startReindex(apiClient: ApiClient, domain: string, field?: string): Promise<StartReindexOutcome> {
   let errorBody: unknown

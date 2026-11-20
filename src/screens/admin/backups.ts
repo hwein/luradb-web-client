@@ -16,12 +16,12 @@ export type BackupsResult = { kind: 'ok'; backups: BackupSummary[]; running: Run
 
 export type BackupDetailResult = { kind: 'ok'; detail: BackupDetail } | { kind: 'missing' }
 
-/** 404 = Status-RAM weg (Server-Neustart), sonst der Live-Status. */
+/** 404 = status RAM gone (server restart), else the live status. */
 export type RestoreStatusResult = { kind: 'status'; status: RestoreStatus } | { kind: 'lost' }
 
 export const BACKUPS_KEY = ['backups', 'list'] as const
 
-/** openapi-fetch liest den Fehler-Body selbst: Plaintext ⇒ String, JSON ⇒ Objekt (Body danach verbraucht). */
+/** openapi-fetch reads the error body itself: plain text ⇒ string, JSON ⇒ object (body then consumed). */
 function errorText(error: unknown): string | undefined {
   if (typeof error === 'string') return error.trim() === '' ? undefined : error.trim()
   return messageFromBody(error)
@@ -32,9 +32,8 @@ function apiError(status: number, error: unknown, fallback: string): ApiError {
 }
 
 export function backupsQueryOptions(apiClient: ApiClient | undefined, restoreRunning: boolean) {
-  // Deckt sich mit der refetchInterval-Bedingung unten: still nur, wenn schon VOR diesem Fetch ein Job lief —
-  // Erst-Load und ein im Leerlauf durch Mutation/Fokus ausgelöster Refetch bleiben sichtbar
-  // (general/012 §3: "nur die Intervall-Ticks").
+  // Matches the refetchInterval condition below: silent only if a job was already running BEFORE this fetch;
+  // the first load and an idle refetch triggered by mutation/focus stay visible (only interval ticks are silent).
   function wasPolling(context: Pick<QueryFunctionContext, 'client' | 'queryKey'>): boolean {
     const data = context.client.getQueryState<BackupsResult>(context.queryKey)?.data
     return (data?.kind === 'ok' && data.running !== null) || restoreRunning
@@ -51,7 +50,7 @@ export function backupsQueryOptions(apiClient: ApiClient | undefined, restoreRun
       return { kind: 'ok', backups: data.backups, running: data.running ?? null }
     },
     enabled: apiClient !== undefined,
-    // Poll nur solange ein Job läuft (spec §3) — der letzte Tick liefert den Endstand selbst.
+    // Poll only while a job runs; the last tick delivers the final state itself.
     refetchInterval: (query) => {
       const data = query.state.data
       if (data?.kind === 'ok' && data.running !== null) return 2000
@@ -90,8 +89,8 @@ export function restoreStatusQueryOptions(apiClient: ApiClient | undefined, rest
       return { kind: 'status', status: data }
     },
     enabled: apiClient !== undefined && restoreId !== undefined,
-    // Ohne Ergebnis (auch nach transientem 5xx/Netzfehler) weiter versuchen; Endzustände und
-    // 503 (Feature abgeschaltet — heilt nur durch den Operator, Fokus-Refetch reicht) beenden den Poll.
+    // Keep trying without a result (also after a transient 5xx/network error); final states and
+    // 503 (feature off; only the operator can fix it, a focus refetch suffices) end the poll.
     refetchInterval: (query) => {
       const error = query.state.error
       if (error instanceof ApiError && error.status === 503) return false
@@ -122,13 +121,13 @@ export async function startRestore(apiClient: ApiClient, id: string, body: Resto
   return accepted.restore_id
 }
 
-/** Roh-Body-Upload (Contract: text/plain); `postNdjson` wirft nicht — Nicht-2xx wird hier übersetzt (spec §8). */
+/** Raw-body upload (contract: text/plain); `postNdjson` does not throw, so non-2xx is translated here. */
 export async function uploadBackup(apiClient: ApiClient, ndjson: string): Promise<void> {
   const response = await apiClient.postNdjson(`${BASE_PATH}/backups/upload`, ndjson)
   if (!response.ok) throw await apiErrorFromResponse(response)
 }
 
-/** Blob+Anchor-Muster wie der JSON-Export (data/005) — die Datei läuft bewusst durch den RAM. */
+/** Blob+anchor pattern like the JSON export; the file deliberately passes through memory. */
 export async function downloadBackup(apiClient: ApiClient, id: string): Promise<void> {
   const response = await apiClient.fetchNdjson(`${BASE_PATH}/backups/${encodeURIComponent(id)}/download`)
   const blob = new Blob([await response.text()], { type: 'application/x-ndjson' })
@@ -142,14 +141,12 @@ export async function downloadBackup(apiClient: ApiClient, id: string): Promise<
   URL.revokeObjectURL(url)
 }
 
-// --- Restore-Registry: nur Identität, kein Status-Spiegeln (spec §6, Muster src/lib/tasks.ts) ---------
-
 export interface RestoreEntry {
   restore_id: string
   backup_id: string
   startedAt: number
   include_auth: boolean
-  /** Verbindung, auf der der Restore gestartet wurde — Einträge fremder Verbindungen werden ignoriert (restore_ids sind server-lokal). */
+  /** Connection the restore was started on; entries of other connections are ignored (restore_ids are server-local). */
   connectionId: string
 }
 
@@ -189,7 +186,7 @@ function getSnapshot(): RestoreEntry | undefined {
   return entry
 }
 
-/** Der zuletzt gestartete Restore — überlebt Modal-Close und Reload, bleibt bis zum Dismiss. */
+/** The last started restore; survives modal close and reload, stays until dismissed. */
 export function useRestoreEntry(): RestoreEntry | undefined {
   return useSyncExternalStore(subscribe, getSnapshot)
 }
@@ -202,13 +199,11 @@ export function clearRestoreEntry(): void {
   setEntry(undefined)
 }
 
-// --- Formatierung ------------------------------------------------------------------------------
-
 function pad(value: number): string {
   return String(value).padStart(2, '0')
 }
 
-/** `today HH:MM` / `yesterday HH:MM` (Grenze lokale Mitternacht), sonst `YYYY-MM-DD HH:MM` (spec §2). */
+/** `today HH:MM` / `yesterday HH:MM` (boundary local midnight), otherwise `YYYY-MM-DD HH:MM`. */
 export function formatBackupTime(unixSeconds: number, now: Date = new Date()): string {
   const date = new Date(unixSeconds * 1000)
   const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`
@@ -219,7 +214,7 @@ export function formatBackupTime(unixSeconds: number, now: Date = new Date()): s
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${time}`
 }
 
-/** Verstrichene Zeit eines laufenden Jobs: `<n>s` unter 60 s, sonst `M:SS` (spec §3). */
+/** Elapsed time of a running job: `<n>s` under 60 s, otherwise `M:SS`. */
 export function formatElapsed(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds))
   if (total < 60) return `${total}s`

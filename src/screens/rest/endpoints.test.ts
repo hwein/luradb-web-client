@@ -14,7 +14,6 @@ describe('listEndpointGroups', () => {
     expect(tags).toContain('Key-Value Store')
     expect(tags).toContain('JSON Document Store')
     expect(tags).toContain('Domains')
-    // Neu mit Contract 0.6.1 (general/013 §9).
     expect(tags).toContain('Relational Import')
     expect(tags).toContain('Events')
 
@@ -36,7 +35,7 @@ describe('listEndpointGroups', () => {
 
   it('shortens the display path by stripping the BASE_PATH prefix', () => {
     expect(find('GET', '/store-api/kv/{domain}/keys/{key}')?.displayPath).toBe('/kv/{domain}/keys/{key}')
-    // Pfade außerhalb von /store-api bleiben unverändert.
+    // Paths outside /store-api stay unchanged.
     expect(find('GET', '/version')?.displayPath).toBe('/version')
   })
 
@@ -50,9 +49,9 @@ describe('listEndpointGroups', () => {
   it('builds a minimal body example from required fields only', () => {
     expect(find('POST', '/store-api/domains')?.bodyExample).toBe(JSON.stringify({ name: '' }, null, 2))
     expect(find('POST', '/store-api/rel/{domain}/sql')?.bodyExample).toBe(JSON.stringify({ sql: '' }, null, 2))
-    // SearchRequest hat keine required-Felder -> leeres Objekt.
+    // SearchRequest has no required fields -> empty object.
     expect(find('POST', '/store-api/json/{domain}/search')?.bodyExample).toBe('{}')
-    // KV-PUT-Body ist ein roher String (text/plain) -> "" als Minimal-Beispiel.
+    // KV PUT body is a raw string (text/plain) -> "" as the minimal example.
     expect(find('PUT', '/store-api/kv/{domain}/keys/{key}')?.bodyExample).toBe('""')
   })
 })

@@ -7,7 +7,7 @@ export interface ServerEnv {
   adminKey: string
 }
 
-// npm-Scripts laufen im Paket-Root; kein dotenv-Paket, kein VITE_-Präfix (der Key gehört nie ins Bundle).
+// npm scripts run in the package root; no dotenv package, no VITE_ prefix (key never in the bundle).
 const ENV_FILE = resolve(process.cwd(), '.env.local')
 
 function parseEnvFile(content: string): Map<string, string> {
@@ -22,7 +22,7 @@ function parseEnvFile(content: string): Map<string, string> {
   return values
 }
 
-/** Wirft mit klarer Meldung statt still zu überspringen; Fehlertexte nennen nie den Key selbst. */
+/** Throws a clear message instead of skipping silently; error texts never name the key itself. */
 export function readServerEnv(): ServerEnv {
   let content: string
   try {

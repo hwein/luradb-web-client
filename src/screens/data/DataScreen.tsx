@@ -12,7 +12,7 @@ function parseEngine(value: string | null): Engine {
   return value === 'kv' || value === 'rel' ? value : 'json'
 }
 
-/** Screen-Gerüst (spec §1): Modus+Objekt aus `?engine=&table=&filterCol=&filterVal=&key=` (Deep-Link), ohne Ziel JSON-Modus der gewählten Domäne. */
+/** Screen frame: mode + object from `?engine=&table=&filterCol=&filterVal=&key=` (deep link); without a target, JSON mode of the selected domain. */
 export function DataScreen() {
   const [searchParams] = useSearchParams()
   const engine = parseEngine(searchParams.get('engine'))

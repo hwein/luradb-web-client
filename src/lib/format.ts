@@ -1,6 +1,6 @@
 const BYTE_UNITS = ['KB', 'MB', 'GB', 'TB']
 
-/** Menschenlesbare Byte-Größe (1024er-Schritte), z. B. "1.9 GB" wie im Prototyp (BACKUPS-Karte). */
+/** Human-readable byte size (steps of 1024), e.g. "1.9 GB". */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} ${bytes === 1 ? 'byte' : 'bytes'}`
   let value = bytes / 1024
@@ -12,7 +12,7 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(1)} ${BYTE_UNITS[unitIndex]}`
 }
 
-/** Ganzzahl mit Tausendertrennung wie im Prototyp (`8,102`); Nicht-Ganzzahlen werden gerundet (Engine-Metriken). */
+/** Integer with thousands separators (`8,102`); non-integers are rounded (engine metrics). */
 export function formatNumber(value: number): string {
   return Math.round(value).toLocaleString('en-US')
 }

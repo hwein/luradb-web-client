@@ -1,6 +1,4 @@
-/* --- Restore-Dialog (spec admin/003 §7) — gleiche Modal-Mechanik wie BulkImportModal (data/007) --- */
-
-/* Author-display würde sonst das UA-`display:none` geschlossener Dialoge überstimmen. */
+/* Author display would otherwise override the UA `display:none` of closed dialogs. */
 .rsm:not([open]) {
   display: none;
 }

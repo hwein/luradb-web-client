@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// Liest Abschnitte aus CHANGELOG.md (Keep a Changelog 1.1.0). Von release.mjs
-// und dem Release-Workflow (Release-Notes) genutzt.
+// Reads sections of CHANGELOG.md (Keep a Changelog 1.1.0). Used by release.mjs
+// and the release workflow (release notes).
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const CHANGELOG = path.join(rootDir, 'CHANGELOG.md')
 
@@ -11,7 +11,7 @@ export function readChangelog() {
   return readFileSync(CHANGELOG, 'utf-8')
 }
 
-/** Getrimmter Body von `## [target]` (ohne Überschrift, ohne Referenz-Linkblock), oder null. */
+/** Trimmed body of `## [target]` (without heading and reference link block), or null. */
 export function extractSection(text, target) {
   let state = 0
   const body = []
@@ -37,7 +37,7 @@ export function extractSection(text, target) {
   return body.slice(first, last + 1).join('\n')
 }
 
-/** Oberste veröffentlichte Version (erster Abschnitt außer Unreleased), oder null. */
+/** Latest released version (first section other than Unreleased), or null. */
 export function latestVersion(text) {
   for (const line of text.split(/\r?\n/)) {
     const m = /^## \[([^\]]+)\]/.exec(line)

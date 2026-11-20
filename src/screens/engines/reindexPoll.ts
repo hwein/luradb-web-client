@@ -6,7 +6,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-/** Server-Shape ist ein Serde-Tag-Enum (`#[serde(tag = "state", rename_all = "lowercase")]`, luradb engines/json/reindex.rs). */
+/** The server shape is a serde-tagged enum (`#[serde(tag = "state", rename_all = "lowercase")]`). */
 function parseReindexStatus(body: unknown): ReindexTaskStatus {
   if (!isRecord(body) || typeof body.state !== 'string') throw new Error('unexpected reindex status response shape')
   const processed = typeof body.processed === 'number' ? body.processed : 0
@@ -20,7 +20,7 @@ function parseReindexStatus(body: unknown): ReindexTaskStatus {
   return { kind: 'running', processed, totalEstimated: typeof body.total_estimated === 'number' ? body.total_estimated : 0 }
 }
 
-/** Poll von `GET /store-api/json/{domain}/reindex/{task_id}` alle 2s — nur aktiv, solange `enabled` (Task noch running). */
+/** Polls `GET /store-api/json/{domain}/reindex/{task_id}` every 2s, only while `enabled` (task still running). */
 export function reindexStatusQueryOptions(apiClient: ApiClient | undefined, domain: string, taskId: string, enabled: boolean) {
   return queryOptions({
     queryKey: ['reindex-status', domain, taskId] as const,

@@ -12,8 +12,6 @@
   text-align: center;
 }
 
-/* --- Kopfzeile (Prototyp Z. 116–121) ----------------------------------- */
-
 .data__header {
   display: flex;
   align-items: center;
@@ -70,7 +68,7 @@
   flex-shrink: 0;
 }
 
-/* JSON-Modus macht die Pill zum Panel-Toggle (spec data/006 §1); die REL-Pill (RelBrowser.tsx) bleibt ein reiner Anzeige-Span. */
+/* JSON mode makes the pill a panel toggle; the REL pill (RelBrowser.tsx) stays a plain display span. */
 .data__idx-pill--toggle {
   background: transparent;
   cursor: pointer;
@@ -84,8 +82,6 @@
   border-color: var(--acc);
   color: var(--tx);
 }
-
-/* --- JSON-Index-Panel (spec data/006) ----------------------------------- */
 
 .idx-panel {
   display: flex;
@@ -287,8 +283,6 @@
   font-size: var(--fs-meta);
 }
 
-/* --- Master-Detail-Rumpf (Prototyp Z. 122–145) ------------------------- */
-
 .data__body {
   flex: 1;
   min-height: 0;
@@ -418,8 +412,6 @@
   opacity: 0.55;
   cursor: default;
 }
-
-/* --- Detail-Spalte (Prototyp Z. 130–144) -------------------------------- */
 
 .json-detail {
   overflow: auto;
@@ -615,16 +607,12 @@
   color: var(--mut);
 }
 
-/* --- Footer (Prototyp Z. 146) ------------------------------------------- */
-
 .data__footer {
   padding: 8px 16px;
   border-top: 1px solid var(--bord);
   background: var(--panel);
   font-size: var(--fs-meta);
 }
-
-/* --- KV mode (spec data/002) --------------------------------------------- */
 
 .kv__scan {
   margin-left: auto;
@@ -699,8 +687,6 @@
 .data__body--watch {
   grid-template-columns: 1fr 410px 280px;
 }
-
-/* --- KV Bulk-Leiste (spec data/008) -------------------------------------- */
 
 .kv-bulk {
   display: flex;
@@ -1250,8 +1236,6 @@
   color: var(--mut);
 }
 
-/* --- KV watch feed panel -------------------------------------------------- */
-
 .kv-feed {
   overflow: auto;
   border-left: 1px solid var(--bord);
@@ -1319,8 +1303,6 @@
   font-family: var(--font-mono);
   font-size: var(--fs-meta);
 }
-
-/* --- REL mode (spec data/003) --------------------------------------------- */
 
 .rel__schema-bar {
   display: flex;
@@ -1427,8 +1409,6 @@
 .rel__filter-error {
   color: var(--err);
 }
-
-/* --- REL rows grid (Master) ------------------------------------------------ */
 
 .rel-list {
   display: flex;
@@ -1631,8 +1611,6 @@
   background: var(--panel);
 }
 
-/* --- REL row detail (Detail) ------------------------------------------------ */
-
 .rel-detail {
   overflow: auto;
   padding: 16px;
@@ -1812,9 +1790,7 @@
   background: var(--panel2);
 }
 
-/* --- REL row detail: expandierte Link-Werte (spec data/009) ------------- */
-
-/* Sektionen teilen sich den Restraum der Detail-Spalte; unter 160px scrollt die Spalte außen. */
+/* Sections share the detail column's remaining space; below 160px the column itself scrolls. */
 .rel-detail__expanded-section {
   display: flex;
   flex-direction: column;
@@ -1883,8 +1859,6 @@
   font-family: var(--font-mono);
   font-size: var(--fs-data);
 }
-
-/* --- Dangling-Report-Dialog (spec data/004 §4) -------------------------- */
 
 .dlr:not([open]) {
   display: none;
@@ -1985,8 +1959,6 @@
   font-size: var(--fs-data);
   cursor: pointer;
 }
-
-/* --- Bulk-Import-Dialog (spec data/007) --------------------------------- */
 
 .bim:not([open]) {
   display: none;

@@ -20,7 +20,7 @@ function makeConnection(): Connection {
   }
 }
 
-/** MSW-Handler, der die Frames streamt und den Body offen hält (kein Reconnect während des Tests). */
+/** MSW handler that streams the frames and keeps the body open (no reconnect during the test). */
 function watchStream(frames: string[]) {
   return http.get(`${ORIGIN}/store-api/kv/default/watch`, () => {
     const body = new ReadableStream<Uint8Array>({
@@ -121,7 +121,7 @@ describe('useKvWatch', () => {
         const body = new ReadableStream<Uint8Array>({
           start(controller) {
             for (const frame of frames) controller.enqueue(encoder.encode(frame))
-            if (call === 1) controller.close() // Abbruch ⇒ Reconnect mit Resume-Punkt
+            if (call === 1) controller.close() // abort ⇒ reconnect with resume point
           },
         })
         return new HttpResponse(body, { headers: { 'Content-Type': 'text/event-stream' } })

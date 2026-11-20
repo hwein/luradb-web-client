@@ -1,6 +1,4 @@
-/* --- Create-Table-Assistent (spec sql/002) — erstes Modal der App --- */
-
-/* Author-display würde sonst das UA-`display:none` geschlossener Dialoge überstimmen. */
+/* An author-set display would otherwise override the UA `display:none` of closed dialogs. */
 .ctm:not([open]) {
   display: none;
 }

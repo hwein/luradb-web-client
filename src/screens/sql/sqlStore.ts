@@ -5,7 +5,7 @@ export interface SqlTab {
   name: string
   text: string
   expand: string[]
-  /** Rohtext des params-Felds (auch ungültiges JSON übersteht so einen Tab-Wechsel, spec sql/003 §3). */
+  /** Raw text of the params field (so even invalid JSON survives a tab switch). */
   params: string
 }
 
@@ -55,7 +55,7 @@ function sanitizeTabs(value: unknown): SqlTab[] {
   return tabs
 }
 
-/** localStorage-Persistenz ist migrationstolerant: kaputtes/fremdes JSON ⇒ Default-Tab (spec §2). */
+/** localStorage persistence tolerates migrations: broken/foreign JSON yields the default tab. */
 function loadInitialState(): SqlState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -79,7 +79,7 @@ function persist(): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
   } catch {
-    // Persistenz ist best-effort (Storage voll/deaktiviert) — der In-Memory-Store bleibt maßgeblich.
+    // Persistence is best-effort (storage full/disabled); the in-memory store stays authoritative.
   }
 }
 
@@ -102,14 +102,14 @@ export function useSqlState(): SqlState {
   return useSyncExternalStore(subscribe, getSnapshot)
 }
 
-/** Neuer Tab (untitled-N.sql), optional mit Startinhalt, sofort aktiv. Gibt die neue Tab-Id zurück. */
+/** New tab (untitled-N.sql), optionally with initial text, active at once. Returns the new tab id. */
 export function addTab(text = ''): string {
   const tab: SqlTab = { id: makeId(), name: nextUntitledName(state.tabs), text, expand: [], params: '' }
   setState({ tabs: [...state.tabs, tab], activeId: tab.id })
   return tab.id
 }
 
-/** War der geschlossene Tab aktiv, übernimmt der linke Nachbar; der letzte Tab wird durch einen frischen ersetzt. */
+/** If the closed tab was active, its left neighbor takes over; the last tab is replaced by a fresh one. */
 export function closeTab(id: string): void {
   const index = state.tabs.findIndex((tab) => tab.id === id)
   if (index === -1) return
@@ -145,7 +145,7 @@ export function updateTabParams(id: string, params: string): void {
   setState({ ...state, tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, params } : tab)) })
 }
 
-/** Nur für Tests: In-Memory-Store aus dem aktuellen localStorage neu aufbauen. */
+/** Tests only: rebuild the in-memory store from the current localStorage. */
 export function resetSqlState(): void {
   state = loadInitialState()
   for (const listener of listeners) listener()

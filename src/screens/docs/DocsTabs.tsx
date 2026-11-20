@@ -7,7 +7,7 @@ interface DocsTabsProps {
   activeId: string | undefined
 }
 
-/** Tab-Strip (spec docs/001 §3): `◈ docs://<id>`, aktiver Tab `--edbg`. */
+/** Tab strip: `◈ docs://<id>`, the active tab uses `--edbg`. */
 export function DocsTabs({ tabs, activeId }: DocsTabsProps) {
   const activeRef = useRef<HTMLDivElement>(null)
   const visible = tabs.length > 0

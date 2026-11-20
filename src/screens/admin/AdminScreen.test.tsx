@@ -76,7 +76,7 @@ describe('AdminScreen', () => {
     expect(await screen.findByPlaceholderText('new domain (max 50 chars)')).toBeInTheDocument()
   })
 
-  it('shows "admin check failed" with the response detail instead of the role-gate hint on a whoami 500 (spec admin/005 §3)', async () => {
+  it('shows "admin check failed" with the response detail instead of the role-gate hint on a whoami 500', async () => {
     server.use(
       http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
       http.get(`${ORIGIN}/store-api/auth/whoami`, () => new HttpResponse(null, { status: 500 })),
@@ -97,7 +97,7 @@ describe('AdminScreen', () => {
     expect(screen.queryByText('admin role required — your key has per-domain permissions only')).not.toBeInTheDocument()
   })
 
-  it('shows no gate text and no cards while whoami is still pending — no false "admin role required" flash (spec admin/005 §3)', async () => {
+  it('shows no gate text and no cards while whoami is still pending — no false "admin role required" flash', async () => {
     let releaseProbe: (() => void) | undefined
     server.use(
       http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),

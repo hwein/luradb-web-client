@@ -50,7 +50,7 @@ function ExpandedCell({ resolution, onOpenDoc }: { resolution: unknown; onOpenDo
   return <span className="rel-grid__expanded-value">{formatCellValue(resolution)}</span>
 }
 
-/** Zeilen-Grid (spec §2): Spaltenreihenfolge aus TableDetail.columns, `_expanded`-Zusatzspalten im Farbton des Ziel-Engines, Dangling muted + Docs-Link. */
+/** Row grid: column order from TableDetail.columns, `_expanded` extra columns tinted like the target engine, dangling muted + docs link. */
 export function RelRowsGrid({
   apiClient,
   domain,

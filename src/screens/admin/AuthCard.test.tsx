@@ -76,7 +76,7 @@ describe('AuthCard', () => {
     expect(await screen.findByText(/admins live in luradb\.toml/)).toBeInTheDocument()
   })
 
-  it('shows a red inline error when the headerless probe itself fails (not 401/200), and stays at "…" (spec admin/005 §2/§4)', async () => {
+  it('shows a red inline error when the headerless probe itself fails (not 401/200), and stays at "…"', async () => {
     server.use(
       http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })),
       http.get(`${ORIGIN}/store-api/domains`, () => new HttpResponse(null, { status: 500 })),

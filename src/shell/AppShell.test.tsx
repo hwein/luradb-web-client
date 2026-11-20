@@ -38,7 +38,7 @@ async function renderConnectedShell(path = '/sql', whoami: WhoamiMock = ADMIN_WH
   eventStreamOpens = 0
   whoamiRequests = 0
   server.use(
-    // Der Shell-Stream (spec shell/009) läuft in jedem dieser Tests mit — offen gehalten, damit kein Reconnect dazwischenfunkt.
+    // The shell event stream runs in every test here; kept open so no reconnect interferes.
     http.get(`${ORIGIN}/store-api/events`, () => {
       eventStreamOpens += 1
       return new HttpResponse(new ReadableStream<Uint8Array>({ start() {} }), { headers: { 'Content-Type': 'text/event-stream' } })
@@ -74,8 +74,8 @@ afterEach(() => {
   Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal')
 })
 
-// jsdom kennt showModal() nicht (nur `open` wird reflektiert) — wie Rail.test.tsx gestubbt für Tests, die den
-// öffnenden Ctrl+K-Tastendruck tatsächlich auslösen.
+// jsdom lacks showModal() (only `open` is reflected); stubbed as in Rail.test.tsx for tests that
+// actually press the opening Ctrl+K.
 function stubShowModal(): void {
   HTMLDialogElement.prototype.showModal = function showModalStub(this: HTMLDialogElement) {
     this.setAttribute('open', '')
@@ -94,7 +94,7 @@ describe('AppShell', () => {
 
     fireEvent.click(screen.getByTitle('Data browser'))
 
-    // Keine Domänen in diesem Test-Setup ⇒ der Data-Browser zeigt seinen Leerzustand (spec data/001 §1).
+    // No domains in this setup, so the data browser shows its empty state.
     expect(await screen.findByText('no domain selected')).toBeInTheDocument()
     expect(screen.getByTitle('Data browser')).toHaveAttribute('aria-current', 'page')
     expect(screen.getByTitle('LuraSQL console')).not.toHaveAttribute('aria-current')

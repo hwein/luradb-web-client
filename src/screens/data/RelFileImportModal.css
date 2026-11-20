@@ -1,4 +1,4 @@
-/* --- Create table from file (spec s-55d9034e) — layout like .ctm and .bim --- */
+/* Create table from file: layout like .ctm and .bim */
 
 .rfi:not([open]) {
   display: none;

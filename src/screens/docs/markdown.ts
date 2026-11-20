@@ -7,7 +7,7 @@ marked.use({
         const id = href.slice('docs:'.length)
         return `<a href="#" class="docs-article__link" data-docs-link="${id}">${text}</a>`
       }
-      // Artikel sind gebündelt, keine externen Links (spec docs/001 §4).
+      // Articles are bundled, so external links are dropped.
       return text
     },
     image() {

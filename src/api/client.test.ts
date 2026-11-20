@@ -57,7 +57,7 @@ describe('createApi', () => {
     expect(calls[0]?.ms).toBeGreaterThanOrEqual(0)
   })
 
-  describe('silentRecord (general/012)', () => {
+  describe('silentRecord', () => {
     it('a typed call with silentRecord: true does not notify onCall listeners', async () => {
       server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([])))
 
@@ -179,7 +179,7 @@ describe('createApi', () => {
     await expect(response.text()).resolves.toBe('rate limited')
   })
 
-  it('fetchSilent does not notify onCall listeners — the one path around the recorder (data/008 §5)', async () => {
+  it('fetchSilent does not notify onCall listeners — the one path around the recorder', async () => {
     server.use(http.delete(`${BASE_URL}/store-api/kv/shop/keys/gone`, () => new HttpResponse(null, { status: 204 })))
 
     const { fetchSilent, onCall } = makeApi()
@@ -201,7 +201,7 @@ describe('createApi', () => {
     expect(calls).toHaveLength(0)
   })
 
-  describe('fetchAnonymous (admin/005)', () => {
+  describe('fetchAnonymous', () => {
     it('never sets an Authorization header, even when getAuthHeader is configured', async () => {
       let receivedAuth: string | null = 'unset'
       server.use(
@@ -218,7 +218,7 @@ describe('createApi', () => {
       expect(response.status).toBe(401)
     })
 
-    it('does not notify onCall listeners — a deliberate silent path pending general/012', async () => {
+    it('does not notify onCall listeners — a deliberate silent path', async () => {
       server.use(http.get(`${BASE_URL}/store-api/domains`, () => HttpResponse.json([])))
 
       const { fetchAnonymous, onCall } = makeApi()

@@ -18,23 +18,23 @@ function makeConnection(overrides: Partial<Connection> = {}): Connection {
 }
 
 describe('normalizeServerUrl', () => {
-  it('repariert einen fehlenden Slash nach dem Schema (http:/host)', () => {
+  it('repairs a missing slash after the scheme (http:/host)', () => {
     expect(normalizeServerUrl('http:/localhost:3000/')).toBe('http://localhost:3000')
   })
 
-  it('entfernt trailing Slashes', () => {
+  it('removes trailing slashes', () => {
     expect(normalizeServerUrl('http://127.0.0.1:3000/')).toBe('http://127.0.0.1:3000')
   })
 
-  it('lässt eine saubere URL unverändert', () => {
+  it('leaves a clean URL unchanged', () => {
     expect(normalizeServerUrl('http://127.0.0.1:3000')).toBe('http://127.0.0.1:3000')
   })
 
-  it('trimmt Whitespace', () => {
+  it('trims whitespace', () => {
     expect(normalizeServerUrl('  http://127.0.0.1:3000  ')).toBe('http://127.0.0.1:3000')
   })
 
-  it('lässt Unparsbares roh durch (Connect meldet dann unreachable)', () => {
+  it('passes unparsable input raw (connect reports unreachable)', () => {
     expect(normalizeServerUrl('not a url')).toBe('not a url')
   })
 })

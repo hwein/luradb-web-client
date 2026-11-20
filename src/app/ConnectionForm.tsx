@@ -31,7 +31,7 @@ function initialValues(target: FormTarget): Record<string, string | boolean> {
   }
 }
 
-/** Repariert Tippvarianten (`http:/host`, trailing Slash) über den WHATWG-Parser; Unparsbares bleibt roh (Connect meldet dann ehrlich unreachable). */
+/** Repairs typing variants (`http:/host`, trailing slash) via the WHATWG parser; unparsable input stays raw (connect then reports unreachable). */
 export function normalizeServerUrl(input: string): string {
   const trimmed = input.trim()
   try {

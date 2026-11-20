@@ -29,7 +29,7 @@ function getSnapshot(): DocsState {
   return state
 }
 
-/** Tab-/Suchzustand des Docs-Screens — Modul-Store statt useState, weil der Screen bei Routenwechsel unmountet. */
+/** Tab and search state of the docs screen; a module store because the screen unmounts on route changes. */
 export function useDocsState(): DocsState {
   return useSyncExternalStore(subscribe, getSnapshot)
 }
@@ -53,7 +53,7 @@ export function activateTab(id: string): void {
   setState({ ...state, activeId: id })
 }
 
-/** War der geschlossene Tab aktiv, übernimmt der linke Nachbar (sonst der neue erste Tab). */
+/** If the closed tab was active, its left neighbour takes over (else the new first tab). */
 export function closeTab(id: string): void {
   const index = state.tabs.indexOf(id)
   if (index === -1) return
@@ -66,7 +66,7 @@ export function setSearch(query: string): void {
   setState({ ...state, search: query })
 }
 
-/** Nur für Tests. */
+/** Tests only. */
 export function resetDocsState(): void {
   setState(initialState)
 }

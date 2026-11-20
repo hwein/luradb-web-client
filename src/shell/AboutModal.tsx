@@ -2,14 +2,14 @@ import { useEffect, useRef } from 'react'
 import { LogoMark } from '../brand/LogoMark'
 import './AboutModal.css'
 
-// src-tauri/Cargo.toml [dependencies] direkt ausgeliefert (tauri-build ist Build-Dependency, fehlt bewusst); änderungsarm ⇒ keine TOML-Parse-Automation.
+// Direct [dependencies] of src-tauri/Cargo.toml (tauri-build is a build dependency, omitted on purpose); rarely changes, so no TOML parsing.
 const RUST_DEPENDENCIES = ['serde', 'serde_json', 'tauri', 'tauri-plugin-http']
 
 interface AboutContentProps {
   onClose: () => void
 }
 
-/** Inhalt des About-Dialogs (spec shell/005) — ohne <dialog>-Hülle, damit Tests ihn ohne `showModal()` mounten können. */
+/** About dialog content without the <dialog> wrapper, so tests can mount it without `showModal()`. */
 export function AboutContent({ onClose }: AboutContentProps) {
   return (
     <>
@@ -67,7 +67,7 @@ interface AboutModalProps {
   onClose: () => void
 }
 
-/** About-Dialog (spec shell/005): natives `<dialog>` + `showModal()` (ESC/Fokus-Trap nativ) um `AboutContent`. */
+/** Native `<dialog>` + `showModal()` (ESC and focus trap built in) around `AboutContent`. */
 export function AboutModal({ onClose }: AboutModalProps) {
   const dialogRef = useRef<HTMLDialogElement | null>(null)
   const onCloseRef = useRef(onClose)
@@ -76,8 +76,8 @@ export function AboutModal({ onClose }: AboutModalProps) {
   useEffect(() => {
     const dialog = dialogRef.current
     if (dialog === null) return
-    // `open`-Guard: der StrictMode-Zweitlauf trifft einen bereits offenen Dialog — showModal() würfe dann,
-    // bevor der close-Listener registriert ist (ESC bliebe wirkungslos).
+    // `open` guard: the StrictMode second run meets an already open dialog; showModal() would throw
+    // before the close listener is registered (ESC would do nothing).
     if (!dialog.open) dialog.showModal()
     function handleClose(): void {
       onCloseRef.current()

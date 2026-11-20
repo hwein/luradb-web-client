@@ -17,7 +17,7 @@ interface TasksJobsCardProps {
   noMetrics?: boolean
 }
 
-/** Pollt den Status eines einzelnen Tasks alle 2s, solange er `running` ist; kein eigenes Markup. */
+/** Polls the status of one task every 2s while it is `running`; renders no markup. */
 function ReindexTaskPoller({ apiClient, task }: { apiClient: ApiClient | undefined; task: ReindexTask }) {
   const enabled = apiClient !== undefined && task.status.kind === 'running'
   const query = useQuery(reindexStatusQueryOptions(apiClient, task.domain, task.taskId, enabled))
@@ -82,7 +82,7 @@ interface ReindexFormVars {
   field: string
 }
 
-/** Inline-Trigger (spec engines/002 §2/§3): Domäne + optionales Feld aus dem geteilten Index-Cache, Start über `startReindex`. */
+/** Inline trigger: domain plus optional field from the shared index cache, started via `startReindex`. */
 function ReindexTriggerForm({ apiClient, domains, onClose }: { apiClient: ApiClient; domains: string[]; onClose: () => void }) {
   const [domain, setDomain] = useState(domains[0] ?? '')
   const [field, setField] = useState(ALL_INDEXES)
@@ -137,7 +137,7 @@ function ReindexTriggerForm({ apiClient, domains, onClose }: { apiClient: ApiCli
   )
 }
 
-/** TASKS & JOBS-Karte (spec engines/001 §4, Trigger-Formular engines/002): client-gestartete Reindex-Tasks + Zählerzeilen aus /metrics.system. */
+/** TASKS & JOBS card: client-started reindex tasks plus counter rows from /metrics.system. */
 export function TasksJobsCard({ apiClient, system, noMetrics }: TasksJobsCardProps) {
   const tasks = useReindexTasks()
   const [formOpen, setFormOpen] = useState(false)

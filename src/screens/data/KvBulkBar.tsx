@@ -21,7 +21,7 @@ import { invalidateKvKeys, kvBulkKeysQueryOptions, type KvKeyFilter } from './kv
 
 const ACTIONS: KvBulkAction[] = ['delete', 'clear', 'set-null']
 
-/** Nur die Vorschau ist gekappt (DOM-Last bei 10k-Selektionen) — Selektion und Lauf nutzen die ganze geladene Seite; ungekappt bleibt laut Spec §5 allein die Fehlerliste. */
+/** Only the preview is capped (DOM load with 10k selections); selection and run use the whole loaded page; only the error list is uncapped. */
 const PREVIEW_LIMIT = 200
 
 const ACTION_LABEL: Record<KvBulkAction, string> = {
@@ -37,7 +37,7 @@ function messageOf(error: unknown): string {
 interface KvBulkBarProps {
   domain: string
   apiClient: ApiClient | undefined
-  /** Der committete Kopf-Scan: Prefix gilt fest, `contains` ist der Startwert des Leisten-Filters (der Server kennt nur einen `contains`-Parameter). */
+  /** The committed header scan: the prefix is fixed, `contains` is the bar filter's start value (the server has only one `contains` parameter). */
   scan: KvKeyFilter
 }
 
@@ -48,10 +48,10 @@ interface RunVariables {
 }
 
 /**
- * Bulk-Leiste (spec data/008): Panel unter dem Header, Karten-Vokabular. Grundlage ist der committete Kopf-Scan
- * (Prefix + Contains), der Contains-Filter ist hier explizit neu committbar — serverseitig, eine Seite am
- * Server-Maximum (spec data/011 §7). KvBrowser remountet die Leiste je committetem Scan (`key`), daher reicht der Initial-State.
- * `delete` mit Prefix läuft als ein Server-Call (spec data/013), alle übrigen Wege als Fanout.
+ * Bulk bar: panel below the header. Basis is the committed header scan (prefix + contains); the contains
+ * filter can be re-committed here, server-side, one page at the server maximum. KvBrowser remounts the bar
+ * per committed scan (`key`), so the initial state suffices.
+ * `delete` with a prefix runs as one server call, all other paths as fan-out.
  */
 export function KvBulkBar({ domain, apiClient, scan }: KvBulkBarProps) {
   const queryClient = useQueryClient()
@@ -86,7 +86,7 @@ export function KvBulkBar({ domain, apiClient, scan }: KvBulkBarProps) {
     },
     onSuccess: () => {
       invalidateKvKeys(queryClient, domain)
-      // set null/clear ändern Wert und Metadaten eines ggf. offenen Details, ohne dass der Key die Liste verlässt (0.2.0-Upsert).
+      // set null/clear change value and metadata of a possibly open detail without the key leaving the list (upsert).
       void queryClient.invalidateQueries({ queryKey: ['kv-value', domain] })
       void queryClient.invalidateQueries({ queryKey: ['kv-meta', domain] })
     },
@@ -101,7 +101,7 @@ export function KvBulkBar({ domain, apiClient, scan }: KvBulkBarProps) {
     event.preventDefault()
     const next = containsText.trim()
     setConfirmArmed(false)
-    // Unveränderter Filter wäre ein State-No-Op — apply holt trotzdem den frischen Stand (Muster Kopf-Scan).
+    // An unchanged filter would be a state no-op; apply still fetches fresh data (as the header scan does).
     if (next === contains) {
       void queryClient.invalidateQueries({ queryKey: ['kv-keys-bulk', domain] })
       return

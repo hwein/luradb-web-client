@@ -1,14 +1,14 @@
 import { SPARKLINE_BARS } from './rate'
 
 interface SparklineProps {
-  /** Werte ältestes zuerst, beliebige Länge — wird auf die letzten 12 zurechtgeschnitten/links aufgefüllt. */
+  /** Oldest value first, any length; trimmed to the last 12 or padded on the left. */
   values: number[]
 }
 
 const BAR_HEIGHT_PX = 36
 const MIN_BAR_HEIGHT_PX = 2
 
-/** 12-Balken-Sparkline (Prototyp-Stil, spec engines/001 §2/Orchestrator-Hinweis 2): Höhe relativ zum Fenster-Max, Max=0 ⇒ flache Balken. */
+/** 12-bar sparkline: height relative to the window max; max 0 gives flat bars. */
 export function Sparkline({ values }: SparklineProps) {
   const recent = values.slice(-SPARKLINE_BARS)
   const leadingGap = SPARKLINE_BARS - recent.length

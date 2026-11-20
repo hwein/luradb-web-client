@@ -13,7 +13,7 @@ function AuthEnabledValue({ enabled }: { enabled: boolean | undefined }) {
   )
 }
 
-/** AUTH-Karte (spec admin/001 §4): auth.enabled per anonymer Probe abgeleitet, scheme statisch, Erklärtext. */
+/** AUTH card: auth.enabled derived from an anonymous probe, static scheme, explanatory note. */
 export function AuthCard() {
   const connected = useConnectedSession()
   const probe = useQuery(authEnabledProbeQueryOptions(connected?.apiClient))

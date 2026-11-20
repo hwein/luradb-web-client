@@ -27,7 +27,7 @@ function Harness({ onClose }: { onClose: () => void }) {
   return <BulkImportForm domain={DOMAIN} apiClient={apiClient} onClose={onClose} />
 }
 
-/** Rendert `BulkImportForm` ohne die native `<dialog>`-Hülle (showModal() ist in diesem jsdom nicht implementiert). */
+/** Renders `BulkImportForm` without the native `<dialog>` shell (this jsdom lacks showModal()). */
 async function renderForm(onClose: () => void = () => {}) {
   server.use(http.get(`${ORIGIN}/version`, () => HttpResponse.json({ api_version: '0.17.0', server_version: '0.7.1' })))
   await act(() => connect(makeConnection()))

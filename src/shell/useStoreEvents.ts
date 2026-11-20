@@ -11,22 +11,22 @@ import { invalidateAllStoreQueries, invalidationTargetsFor, parseStoreEvent } fr
 const INVALIDATE_DEBOUNCE_MS = 300
 
 /**
- * Hält den globalen Lifecycle-/DDL-Stream (spec shell/009) offen und invalidiert die Explorer-Queries.
- * Kein Rückgabewert, kein UI: das Intervall-Polling aus shell/007 trägt die Anzeige weiterhin allein.
+ * Keeps the global lifecycle/DDL stream open and invalidates the explorer queries.
+ * No return value, no UI: interval polling still carries the display on its own.
  */
 export function useStoreEvents(): void {
   const connected = useConnectedSession()
   const queryClient = useQueryClient()
   const { admin } = useCapabilities()
   const streamClient = admin === 'yes' ? connected?.apiClient : undefined
-  // Ref statt State: der Zähler darf kein Rendering auslösen.
+  // Ref, not state: the counter must not trigger a render.
   const connectCount = useRef(0)
 
   useEffect(() => {
     if (streamClient === undefined) return
     const controller = new AbortController()
 
-    // Ein Timer für alle offenen Ziele: ein Resume-Replay liefert bis zu 1024 Frames am Stück.
+    // One timer for all pending targets: a resume replay delivers up to 1024 frames in a row.
     const pending = new Map<string, QueryKey>()
     let timer: ReturnType<typeof setTimeout> | undefined
     const flush = (): void => {
@@ -48,7 +48,7 @@ export function useStoreEvents(): void {
       onStateChange: (state) => {
         if (state !== 'connected') return
         connectCount.current += 1
-        // Der erste Verbindungsaufbau fällt mit den Mount-Ladevorgängen zusammen; jeder spätere kann eine Lücke gehabt haben.
+        // The first connect coincides with the mount loads; any later one may have missed events.
         if (connectCount.current > 1) invalidateAllStoreQueries(queryClient)
       },
       onUnauthorized: () => endSession(queryClient),

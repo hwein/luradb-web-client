@@ -67,7 +67,7 @@ function modifierOf(level: string): string {
   return isCellValue(level) && level !== 'ddl' ? level : 'other'
 }
 
-/** Key nur bis Blur/Unmount im State (spec admin/002 §3/§5) — nie Storage, nie Log. */
+/** The key stays in state only until blur/unmount; never in storage, never logged. */
 function RevealKeyRow({ apiKey, onDismiss }: { apiKey: string; onDismiss: () => void }) {
   const [copied, setCopied] = useState(false)
   const onDismissRef = useRef(onDismiss)
@@ -300,7 +300,7 @@ function UserRow({ apiClient, user, domains, domainsLoaded }: UserRowProps) {
   )
 }
 
-/** Zeile unten "new user" + Create (spec admin/002 §4); Response-Key einmalig wie bei rotate. */
+/** Bottom row "new user" + Create; the response key is shown once, as with rotate. */
 function CreateUserRow({ apiClient }: { apiClient: ApiClient | undefined }) {
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
@@ -343,7 +343,7 @@ function CreateUserRow({ apiClient }: { apiClient: ApiClient | undefined }) {
   )
 }
 
-/** USERS & PER-DOMAIN PERMISSIONS-Karte (spec admin/002): Matrix + rotate/delete + Anlage. */
+/** USERS & PER-DOMAIN PERMISSIONS card: matrix, rotate/delete, create. */
 export function UsersCard({ apiClient }: { apiClient: ApiClient | undefined }) {
   const domains = useDomainSummaries(apiClient)
   const domainsLoaded = useQuery(domainsQueryOptions(apiClient)).data !== undefined

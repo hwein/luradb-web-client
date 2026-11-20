@@ -3,7 +3,7 @@ import { sseStream, type SseConnectionState, type SseEvent, type SseOpenContext,
 
 const encoder = new TextEncoder()
 
-/** Response, deren Body die Chunks liefert und danach schließt (Server beendet den Stream). */
+/** Response whose body yields the chunks and then closes (the server ends the stream). */
 function closedStream(...chunks: string[]): Response {
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -14,7 +14,7 @@ function closedStream(...chunks: string[]): Response {
   return new Response(body, { status: 200 })
 }
 
-/** Response mit offenem Body — Test steuert push/close von Hand. */
+/** Response with open body; the test drives push/close by hand. */
 function controllableStream(): { response: Response; push: (chunk: string) => void; close: () => void } {
   let controller!: ReadableStreamDefaultController<Uint8Array>
   const body = new ReadableStream<Uint8Array>({
@@ -176,7 +176,7 @@ describe('sseStream reconnect', () => {
     const promise = sseStream('/watch', { open, signal: new AbortController().signal, onEvent: () => {} })
     await vi.advanceTimersByTimeAsync(3000) // opens at 0, 1000, 3000 (now connected & stable)
     for (let i = 0; i < 3; i += 1) {
-      await vi.advanceTimersByTimeAsync(20_000) // Keep-Alives halten den Idle-Watchdog still
+      await vi.advanceTimersByTimeAsync(20_000) // keep-alives hold the idle watchdog off
       stable.push(':\n\n')
     }
     await vi.advanceTimersByTimeAsync(1000) // hold the connection past the 60s reset threshold
@@ -195,7 +195,7 @@ describe('sseStream resume', () => {
     const open = vi.fn(async (_path: string, context: SseOpenContext) => {
       contexts.push(context)
       if (contexts.length === 1) return closedStream('id: w-abc-7\nevent: set\ndata: k1\n\n')
-      if (contexts.length === 2) return closedStream('event: set\ndata: k2\n\n') // Frame ohne id lässt den Punkt stehen
+      if (contexts.length === 2) return closedStream('event: set\ndata: k2\n\n') // no-id frame keeps the resume point
       return new Response(null, { status: 410 })
     })
 
@@ -300,9 +300,9 @@ describe('sseStream idle watchdog', () => {
     await vi.advanceTimersByTimeAsync(0)
     silent.push('id: w-abc-3\nevent: set\ndata: k1\n\n')
     await vi.advanceTimersByTimeAsync(44_000)
-    expect(open).toHaveBeenCalledTimes(1) // Watchdog läuft noch
+    expect(open).toHaveBeenCalledTimes(1) // watchdog still runs
 
-    await vi.advanceTimersByTimeAsync(1_000 + 1_000) // 45s still ⇒ Abbruch, danach 1s Backoff
+    await vi.advanceTimersByTimeAsync(1_000 + 1_000) // 45s silent => abort, then 1s backoff
     await promise
 
     expect(contexts).toEqual([
@@ -323,7 +323,7 @@ describe('sseStream idle watchdog', () => {
       await vi.advanceTimersByTimeAsync(20_000)
       stream.push(':\n\n')
     }
-    await vi.advanceTimersByTimeAsync(20_000) // 80s Gesamtzeit, aber nie mehr als 20s Stille
+    await vi.advanceTimersByTimeAsync(20_000) // 80s total, but never over 20s of silence
 
     expect(open).toHaveBeenCalledTimes(1)
 

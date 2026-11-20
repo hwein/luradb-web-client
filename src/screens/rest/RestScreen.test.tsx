@@ -114,7 +114,7 @@ describe('RestScreen', () => {
 
     expect(await screen.findByText('200')).toBeInTheDocument()
     expect(hitUrl).toBe('/store-api/kv/default/keys/test')
-    // Nicht-JSON-Content-Type -> Rohtext.
+    // Non-JSON content type -> raw text.
     expect(responseBody(container)).toBe('cart-value')
   })
 
@@ -215,11 +215,11 @@ describe('RestScreen', () => {
     expect(screen.queryByRole('button', { name: 'send DELETE — sure?' })).not.toBeInTheDocument()
   })
 
-  it('registers a client-started task (spec engines/001) on a successful reindex POST, for the Engines screen to pick up', async () => {
+  it('registers a client-started task on a successful reindex POST, for the Engines screen to pick up', async () => {
     await connectAndRender()
 
     fireEvent.click(await screen.findByRole('button', { name: 'POST /json/{domain}/reindex' }))
-    // Explizit tippen statt auf die Context-Vorbelegung zu bauen — deren Effect-Timing ist unter Last nicht deterministisch.
+    // Type explicitly instead of relying on the context prefill — its effect timing is not deterministic under load.
     fireEvent.change(screen.getByLabelText('path parameter domain'), { target: { value: 'default' } })
 
     server.use(http.post(`${ORIGIN}/store-api/json/default/reindex`, () => HttpResponse.json({ task_id: 'task_9f1' }, { status: 202 })))

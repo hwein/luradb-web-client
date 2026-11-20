@@ -46,7 +46,7 @@ function baseHandlers() {
     http.get(TABLE_URL, () =>
       HttpResponse.json({ name: TABLE, created_at: 1, indexes: [{ name: 'idx_label', column: 'label', unique: false }], _links: { self: '', rows: '' }, columns: COLUMNS }),
     ),
-    // Ref-Picker-Quellen (spec 004 §2) — Default leer, einzelne Tests überschreiben mit echtem Bestand.
+    // Ref-picker sources: empty by default, individual tests override them with real data.
     http.get(`${ORIGIN}/store-api/json/${DOMAIN}/documents`, () => HttpResponse.json({ documents: [], keys: [], total: 0, offset: 0, limit: 50 })),
     http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json(kvKeyScan([]))),
   ]
@@ -57,7 +57,7 @@ function DocsRouteProbe() {
   return <p data-testid="docs-screen">docs: {docs.activeId ?? ''}</p>
 }
 
-/** `extraHandlers` registriert nach den Basis-Handlern (MSW: zuletzt registriert gewinnt) — für Tests, die z. B. TABLE_URL überschreiben müssen. */
+/** `extraHandlers` are registered after the base handlers (MSW: last registered wins), for tests that must override e.g. TABLE_URL. */
 async function connectAndRender(initialPath = `/data?engine=rel&table=${TABLE}`, extraHandlers: HttpHandler[] = []) {
   server.use(...baseHandlers())
   if (extraHandlers.length > 0) server.use(...extraHandlers)
@@ -97,7 +97,7 @@ describe('RelBrowser', () => {
     await connectAndRender()
 
     expect(await screen.findByText('shop / orders')).toBeInTheDocument()
-    // Schema-Zeile rendert erst, sobald TableDetail geladen ist — auf ein dort exklusives Element warten statt auf den Kopf (der schon im Loading-Zustand steht).
+    // The schema row renders only once TableDetail has loaded; wait for an element exclusive to it, not the header (already there while loading).
     await screen.findByText('idx: label')
 
     expect(chipFor('id·INTEGER')).toBeDefined()
@@ -108,8 +108,8 @@ describe('RelBrowser', () => {
     expect(chipFor('customer_ref·JSONREF')).toHaveClass('rel__col-chip--json')
   })
 
-  // Der Assistent selbst (Formular-Führung, Generator, Abschluss-Fluss) ist dialogfrei in AlterTableModal.test.tsx
-  // gegen AlterTableForm getestet (jsdom-Grenze wie sql/002) — hier nur der Einstiegspunkt neben der idx-Pill.
+  // The wizard itself (form guidance, generator, completion flow) is tested dialog-free against AlterTableForm
+  // in AlterTableModal.test.tsx (jsdom limit); here only the entry point next to the idx pill.
   it('shows the "alter table" entry point next to the index pill', async () => {
     server.use(http.get(ROWS_URL, () => HttpResponse.json({ rows: [], row_count: 0, limit: 50, offset: 0, limit_applied: false })))
     await connectAndRender()
@@ -202,7 +202,7 @@ describe('RelBrowser', () => {
     expect(await screen.findByTestId('docs-screen')).toHaveTextContent('docs: cross-engine-links')
   })
 
-  it('shows expanded link sections replacing the raw key field rows (KVREF utf8 raw text, JSONREF pretty document); hidden without _expanded and while editing (spec data/009 + nachtrag)', async () => {
+  it('shows expanded link sections replacing the raw key field rows (KVREF utf8 raw text, JSONREF pretty document); hidden without _expanded and while editing', async () => {
     server.use(
       http.get(ROWS_URL, ({ request }) => {
         const expand = new URL(request.url).searchParams.get('expand')
@@ -228,7 +228,7 @@ describe('RelBrowser', () => {
     await connectAndRender()
     await screen.findByText('ROW 1')
     expect(screen.queryByText('cart_ref · kv value')).not.toBeInTheDocument()
-    // Ohne Expand zeigt die Feld-Liste den rohen Key.
+    // Unexpanded, the field list shows the raw key.
     expect(within(document.querySelector('.rel-detail')!).getByText('cart_1')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'expand' }))
@@ -239,7 +239,7 @@ describe('RelBrowser', () => {
     expect(screen.getByText(/"name": "A. Roth"/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'open in kv browser →' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'open in json browser →' })).toBeInTheDocument()
-    // Die Sektion ersetzt die Key-Feldzeile — weder Label noch roher Key erscheinen doppelt (Nachtrag).
+    // The section replaces the key field row; neither label nor raw key appears twice.
     const detail = within(document.querySelector('.rel-detail')!)
     expect(detail.queryByText('cart_ref')).not.toBeInTheDocument()
     expect(detail.queryByText('cart_1')).not.toBeInTheDocument()
@@ -249,7 +249,7 @@ describe('RelBrowser', () => {
     expect(screen.queryByText('cart_ref · kv value')).not.toBeInTheDocument()
   })
 
-  it('renders a non-utf8 KVREF resolution as JSON, and skips the section entirely for a NULL link cell (spec data/009 §2)', async () => {
+  it('renders a non-utf8 KVREF resolution as JSON, and skips the section entirely for a NULL link cell', async () => {
     server.use(
       http.get(ROWS_URL, ({ request }) => {
         const expand = new URL(request.url).searchParams.get('expand')
@@ -278,11 +278,11 @@ describe('RelBrowser', () => {
     expect(screen.getByText(/"encoding": "base64"/)).toBeInTheDocument()
     expect(screen.getByText(/"value": "AAA="/)).toBeInTheDocument()
     expect(screen.queryByText('customer_ref · json document')).not.toBeInTheDocument()
-    // NULL-Zelle hat keine Sektion — ihre Feldzeile bleibt stehen.
+    // A NULL cell has no section; its field row stays.
     expect(within(document.querySelector('.rel-detail')!).getByText('customer_ref')).toBeInTheDocument()
   })
 
-  it('shows the dangling state in an expanded section (muted + docs link) without a jump action (spec data/009 §3/§5)', async () => {
+  it('shows the dangling state in an expanded section (muted + docs link) without a jump action', async () => {
     server.use(
       http.get(ROWS_URL, ({ request }) => {
         const expand = new URL(request.url).searchParams.get('expand')
@@ -317,7 +317,7 @@ describe('RelBrowser', () => {
     expect(await screen.findByTestId('docs-screen')).toHaveTextContent('docs: cross-engine-links')
   })
 
-  it('"open in kv browser" jumps to the KV browser with the linked key selected (spec data/009 §5)', async () => {
+  it('"open in kv browser" jumps to the KV browser with the linked key selected', async () => {
     server.use(
       http.get(ROWS_URL, ({ request }) => {
         const expand = new URL(request.url).searchParams.get('expand')
@@ -343,7 +343,7 @@ describe('RelBrowser', () => {
     await connectAndRender(`/data?engine=rel&table=${TABLE}`, [
       http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys`, () => HttpResponse.json(kvKeyScan(['cart_1', 'cart_2']))),
       http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys/cart_1`, () => new HttpResponse('cart-contents', { headers: { 'content-type': 'application/octet-stream' } })),
-      // Das KV-Detail liest seit data/012 auch /meta — unbehandelt ginge der Request an die echte Instanz (401 ⇒ globaler Disconnect).
+      // The KV detail also reads /meta; unhandled, the request would hit the real instance (401 ⇒ global disconnect).
       http.get(`${ORIGIN}/store-api/kv/${DOMAIN}/keys/cart_1/meta`, () => HttpResponse.text('404 Not Found', { status: 404 })),
     ])
     await screen.findByText('ROW 1')
@@ -378,7 +378,7 @@ describe('RelBrowser', () => {
 
     await waitFor(() => expect(postBody).toEqual({ total: 99.5 }))
     expect(await screen.findByText('ROW 3')).toBeInTheDocument()
-    // Der Explorer-Row-Count der Tabelle zieht mit (spec shell/010 §9).
+    // The explorer's row count for the table follows.
     await waitFor(() => expect(queryClient.getQueryState(countKey)?.isInvalidated).toBe(true))
   })
 
@@ -553,18 +553,18 @@ describe('RelBrowser', () => {
     expect(kvrefInput).toHaveAttribute('list', 'rel-row-form-kvref-options')
     await waitFor(() => expect(document.querySelectorAll('#rel-row-form-kvref-options option')).toHaveLength(2))
 
-    // Kein <select> — die datalist schlägt nur vor, freie Eingabe bleibt möglich.
+    // No <select>: the datalist only suggests, free input stays possible.
     fireEvent.change(jsonrefInput, { target: { value: 'doc_unlisted' } })
     expect(jsonrefInput).toHaveValue('doc_unlisted')
 
-    // PK/nicht-Link-Spalten bekommen keine datalist.
+    // PK and non-link columns get no datalist.
     expect(screen.getByLabelText('id')).not.toHaveAttribute('list')
   })
 
-  // "check links" öffnet seit spec 004 §4 einen Dialog per natives <dialog> + showModal() — in diesem jsdom
-  // (25.0.1) nicht implementiert (nur die `open`-IDL-Property wird reflektiert), ein Klick hier würde crashen
-  // (vgl. Explorer.test.tsx zum Create-Table-Assistenten). Der Report-Inhalt selbst ist <dialog>-frei in
-  // DanglingReport.test.tsx gegen DanglingReportContent getestet; hier nur der Einstiegspunkt (sichtbar/versteckt).
+  // "check links" opens a native <dialog> via showModal(), which this jsdom (25.0.1) does not implement
+  // (only the `open` IDL property is reflected), so a click here would crash (see Explorer.test.tsx for the
+  // create-table wizard). The report content itself is tested dialog-free against DanglingReportContent in
+  // DanglingReport.test.tsx; here only the entry point (visible/hidden).
   it('shows the "check links" entry point only when the table has link columns (KVREF/JSONREF/REFERENCES)', async () => {
     server.use(http.get(ROWS_URL, () => HttpResponse.json({ rows: [], row_count: 0, limit: 50, offset: 0, limit_applied: false })))
     await connectAndRender()

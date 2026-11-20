@@ -53,7 +53,7 @@ describe('relFileImport', () => {
       'col_7',
       'select_',
     ])
-    expect(normalizeHeader('Größe,😀x,İD,naïve name')).toEqual(['gr__e', '_x', 'i_d', 'na_ve_name'])
+    expect(normalizeHeader('Łódź,😀x,İD,naïve name')).toEqual(['__d_', '_x', 'i_d', 'na_ve_name'])
   })
 
   it('normalizeColumnName reproduces the example of the contract', () => {

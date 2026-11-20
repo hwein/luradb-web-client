@@ -13,7 +13,7 @@ function variantFor(status: number): Variant {
   return 'neutral'
 }
 
-/** Statuszahl mono, 2xx in --ok, 4xx/5xx (und Netzwerkfehler, status 0) in --err; optional Dauer `· 3.1 ms`. */
+/** Mono status, 2xx in --ok, 4xx/5xx (and network error, status 0) in --err; optional duration `· 3.1 ms`. */
 export function StatusCode({ status, ms }: StatusCodeProps) {
   return (
     <span className="status-code">

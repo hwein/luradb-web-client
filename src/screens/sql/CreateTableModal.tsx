@@ -59,7 +59,7 @@ function isPkEligibleType(type: ColumnType): boolean {
   return type === 'INTEGER' || type === 'TEXT'
 }
 
-/** Exportiert für den ALTER-TABLE-Assistenten (spec sql/004 §3) — dieselbe Typ-Eignung gilt für ADD COLUMN. */
+/** Exported for the alter-table wizard; the same type rules apply to ADD COLUMN. */
 export function typeAllowsDefault(type: ColumnType): boolean {
   return type !== 'KVREF' && type !== 'JSONREF'
 }
@@ -70,7 +70,7 @@ export function typeAllowsReferences(type: ColumnType): boolean {
 
 const PK_TYPE_ERROR = 'primary key must be INTEGER or TEXT — change the type or pick a different primary key'
 
-/** Exportiert für sql/004 (add column) — Hinweistext ist statement-unabhängig (beschreibt das Insert-Verhalten der Spalte). */
+/** Exported for add column; the hint is statement-independent (it describes the column's insert behavior). */
 export const REF_HINTS: Partial<Record<ColumnType, string>> = {
   KVREF: 'points to a kv key in this domain — insert validates it exists (409 if missing).',
   JSONREF: 'points to a json document key in this domain — insert validates it exists (409 if missing).',
@@ -82,7 +82,7 @@ function toDefaultDef(column: ColumnDraft): ColumnDefault | undefined {
   return { kind: 'literal', text: column.defaultText }
 }
 
-/** Leerer Literal-Wert wäre `DEFAULT ` (Syntaxfehler) bzw. `DEFAULT ''` auf TIMESTAMP (400) — nur TEXT darf leer sein. */
+/** An empty literal would be `DEFAULT ` (syntax error) or `DEFAULT ''` on TIMESTAMP (400); only TEXT may be empty. */
 function columnDefaultError(column: ColumnDraft): string | undefined {
   if (!column.defaultEnabled || !typeAllowsDefault(column.type) || column.type === 'TEXT') return undefined
   if (column.type === 'TIMESTAMP' && column.defaultCurrentTimestamp) return undefined
@@ -119,7 +119,7 @@ function DefaultControl({ column, index, onChange }: { column: ColumnDraft; inde
           checked={column.defaultEnabled}
           onChange={(event) => {
             const enabled = event.target.checked
-            // BOOLEAN zeigt sonst "true" an, ohne dass defaultText das je gesetzt hätte — leere Vorschau-DEFAULT-Klausel.
+            // Otherwise BOOLEAN shows "true" without defaultText ever set, leaving the preview DEFAULT clause empty.
             const initBoolean = enabled && column.type === 'BOOLEAN' && column.defaultText === ''
             onChange(initBoolean ? { defaultEnabled: enabled, defaultText: 'true' } : { defaultEnabled: enabled })
           }}
@@ -304,7 +304,7 @@ interface CreateTableFormProps {
   onFromFile: () => void
 }
 
-/** Formular-Inhalt des Create-Table-Assistenten (spec sql/002) — ohne <dialog>-Hülle, damit Tests ihn ohne `showModal()` mounten können. */
+/** Form content of the create-table wizard, without the <dialog> shell so tests can mount it without `showModal()`. */
 export function CreateTableForm({ domain, apiClient, onClose, onFromFile }: CreateTableFormProps) {
   const navigate = useNavigate()
   const enabled = apiClient !== undefined
@@ -479,7 +479,7 @@ interface CreateTableModalProps {
   onFromFile: () => void
 }
 
-/** Create-Table-Assistent (spec sql/002): natives `<dialog>` + `showModal()` (ESC/Fokus-Trap nativ) um `CreateTableForm`. */
+/** Create-table wizard: a native `<dialog>` + `showModal()` (native ESC/focus trap) around `CreateTableForm`. */
 export function CreateTableModal({ domain, apiClient, onClose, onFromFile }: CreateTableModalProps) {
   const dialogRef = useRef<HTMLDialogElement | null>(null)
   const onCloseRef = useRef(onClose)
@@ -488,8 +488,8 @@ export function CreateTableModal({ domain, apiClient, onClose, onFromFile }: Cre
   useEffect(() => {
     const dialog = dialogRef.current
     if (dialog === null) return
-    // `open`-Guard: der StrictMode-Zweitlauf trifft einen bereits offenen Dialog — showModal() würfe dann,
-    // bevor der close-Listener registriert ist (ESC bliebe wirkungslos).
+    // `open` guard: the StrictMode second run meets an already open dialog, and showModal() would throw
+    // before the close listener is registered (ESC would do nothing).
     if (!dialog.open) {
       dialog.showModal()
       dialog.querySelector('input')?.focus()

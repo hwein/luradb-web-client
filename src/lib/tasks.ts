@@ -48,15 +48,15 @@ function getSnapshot(): ReindexTask[] {
   return tasks
 }
 
-/** Client-gestartete Reindex-Tasks (spec engines/001 §4) — Session-Lebensdauer via sessionStorage, älteste zuerst. */
+/** Client-started reindex tasks; session lifetime via sessionStorage, oldest first. */
 export function useReindexTasks(): ReindexTask[] {
   return useSyncExternalStore(subscribe, getSnapshot)
 }
 
 /**
- * Matcht auf erfolgreiche `POST /store-api/json/{domain}/reindex`-Sends aus dem REST Explorer
- * (spec engines/001 Orchestrator-Hinweis 1): parst die Domäne aus dem Pfad und registriert den Task.
- * Kein Treffer (anderer Pfad, oder Response ohne `task_id`) ⇒ no-op.
+ * Matches successful `POST /store-api/json/{domain}/reindex` sends from the REST Explorer:
+ * parses the domain from the path and registers the task.
+ * No match (other path, or response without `task_id`) ⇒ no-op.
  */
 export function noteReindexStart(path: string, responseBody: unknown): void {
   const match = REINDEX_START_PATH.exec(path)
@@ -77,7 +77,7 @@ function statusEquals(a: ReindexTaskStatus, b: ReindexTaskStatus): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
-/** Übernimmt ein Poll-Ergebnis in die Registry; no-op bei unbekannter Id oder unverändertem Status (verhindert Render-Schleifen). */
+/** Takes a poll result into the registry; no-op for an unknown id or unchanged status (prevents render loops). */
 export function updateReindexTaskStatus(taskId: string, status: ReindexTaskStatus): void {
   const index = tasks.findIndex((task) => task.taskId === taskId)
   const current = tasks[index]
@@ -87,7 +87,7 @@ export function updateReindexTaskStatus(taskId: string, status: ReindexTaskStatu
   setTasks(next)
 }
 
-/** Nur für Tests. */
+/** Tests only. */
 export function resetReindexTasks(): void {
   setTasks([])
 }

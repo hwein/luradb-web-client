@@ -106,8 +106,8 @@ function DataRouteProbe() {
 
 async function connectAndRender(initialPath = '/engines', extraHandlers: RequestHandler[] = []) {
   server.use(...baseHandlers())
-  // Zweiter `.use()`-Aufruf (statt gemeinsam mit baseHandlers()): MSW priorisiert den zuletzt registrierten
-  // Handler je Route — so überschreiben testspezifische Routen die Defaults zuverlässig vor dem ersten Fetch.
+  // Second `.use()` call (instead of joining baseHandlers()): MSW prefers the most recently registered
+  // handler per route, so test-specific routes reliably override the defaults before the first fetch.
   if (extraHandlers.length > 0) server.use(...extraHandlers)
   await act(() => connect(makeConnection()))
   const queryClient = createAppQueryClient()
@@ -286,7 +286,7 @@ describe('EnginesScreen', () => {
     8000,
   )
 
-  describe('reindex trigger (spec engines/002)', () => {
+  describe('reindex trigger', () => {
     it('disables the reindex trigger with a reason when there are no domains', async () => {
       await connectAndRender('/engines', [http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([]))])
 
@@ -318,8 +318,8 @@ describe('EnginesScreen', () => {
           requestBody = await request.json()
           return HttpResponse.json({ task_id: 'task_xyz789' }, { status: 202 })
         }),
-        // Registrierung startet sofort den 2s-Status-Poll (engines/001) — mocken, sonst ginge der Request
-        // unhandled auf das echte Netzwerk (hängt, verhungert den Connection-Pool nachfolgender Tests).
+        // Registration starts the 2s status poll right away; mock it, or the request would go unhandled
+        // to the real network (hangs, starves the connection pool of later tests).
         http.get(`${ORIGIN}/store-api/json/shop/reindex/task_xyz789`, () => HttpResponse.json({ state: 'running', processed: 0, total_estimated: 0 })),
       )
       await connectAndRender()
@@ -331,7 +331,7 @@ describe('EnginesScreen', () => {
 
       expect(await screen.findByText('reindex shop')).toBeInTheDocument()
       expect(screen.queryByLabelText('reindex domain')).not.toBeInTheDocument()
-      expect(requestBody).toEqual({}) // "all indexes" default ⇒ field weggelassen
+      expect(requestBody).toEqual({}) // "all indexes" default ⇒ field omitted
 
       expect(document.querySelector('.engines__requests')?.textContent).toContain('/store-api/json/shop/reindex')
     })
@@ -372,8 +372,8 @@ describe('EnginesScreen', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'start reindex' }))
 
       expect(await screen.findByText("re-index already running for domain 'shop' (task 61ec3e5f)")).toBeInTheDocument()
-      expect(screen.getByLabelText('reindex domain')).toBeInTheDocument() // Formular bleibt offen
-      expect(screen.getByText('no client-started tasks')).toBeInTheDocument() // Registry unverändert
+      expect(screen.getByLabelText('reindex domain')).toBeInTheDocument() // form stays open
+      expect(screen.getByText('no client-started tasks')).toBeInTheDocument() // registry unchanged
     })
   })
 
@@ -409,7 +409,7 @@ describe('EnginesScreen', () => {
     expect(screen.queryByText('system-wide · derived from /store-api/metrics')).not.toBeInTheDocument()
   })
 
-  describe('health bar (spec s-c5d388f5)', () => {
+  describe('health bar', () => {
     const HEALTH_DEGRADED = {
       ...HEALTH,
       status: 'degraded',
@@ -521,7 +521,7 @@ describe('EnginesScreen', () => {
     const rows = () => Array.from(document.querySelectorAll('.engines__request-row'))
     await waitFor(() => expect(rows()).toHaveLength(20))
 
-    // Neueste zuerst: der zuletzt registrierte (stream) Call steht oben, danach der 409er.
+    // Newest first: the most recently registered (stream) call is on top, then the 409.
     expect(rows()[0]?.textContent).toContain('kv/shop/watch')
     expect(rows()[0]?.textContent).toContain('stream')
     expect(rows()[1]?.textContent).toContain('cus_1')

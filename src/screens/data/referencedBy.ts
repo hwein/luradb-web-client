@@ -8,11 +8,11 @@ type ColumnInfo = components['schemas']['ColumnInfo']
 export interface ReferencedByCard {
   table: string
   column: string
-  /** `undefined` während die COUNT(*)-Probe noch läuft — Karte zeigt dann einen Platzhalter statt einer Zahl. */
+  /** `undefined` while the COUNT(*) probe is running; the card then shows a placeholder instead of a number. */
   rowCount: number | undefined
 }
 
-/** PK-Spalte für die Probe-Query; ohne markierten PK die erste Spalte (orchestrator-Vorgabe). */
+/** PK column for the probe query; the first column when no PK is marked. */
 export function primaryKeyColumn(columns: ColumnInfo[]): string | undefined {
   return (columns.find((column) => column.primary_key) ?? columns[0])?.name
 }
@@ -22,12 +22,12 @@ export interface ReferenceProbeRequest {
   params: unknown[]
 }
 
-/** `SELECT COUNT(*) FROM <table> WHERE <col> = ?` — exakter Nutzungs-Count je Kandidat-Spalte (spec 004 §3). */
+/** `SELECT COUNT(*) FROM <table> WHERE <col> = ?`: the exact usage count per candidate column. */
 export function buildReferenceProbeRequest(table: string, column: string, documentKey: string): ReferenceProbeRequest {
   return { sql: `SELECT COUNT(*) FROM ${table} WHERE ${column} = ?`, params: [documentKey] }
 }
 
-/** COUNT(*) kommt als SELECT-Shape zurück (`{columns, rows, row_count, limit_applied}`) — der Zählwert steht in `rows[0][0]`, `row_count` wäre hier immer 1. */
+/** COUNT(*) returns a SELECT shape (`{columns, rows, row_count, limit_applied}`); the count is in `rows[0][0]`, `row_count` would always be 1. */
 export function parseRowCount(data: unknown): number {
   if (typeof data !== 'object' || data === null) return 0
   const rows = (data as Record<string, unknown>).rows
@@ -51,8 +51,8 @@ async function probeReference(apiClient: ApiClient, domain: string, table: strin
 }
 
 /**
- * JSONREF-Spalten aller rel-Tabellen der Domäne (geteilte rel-tables/-table-detail-Caches, shell/002) —
- * je Spalte eine COUNT(*)-Probe. Jede Kandidat-Spalte liefert eine Karte, auch bei 0 Treffern (spec 004 §3).
+ * JSONREF columns of all rel tables of the domain (shared rel-tables/-table-detail caches),
+ * one COUNT(*) probe per column. Every candidate column yields a card, even with 0 hits.
  */
 export function useReferencedBy(apiClient: ApiClient | undefined, domain: string, documentKey: string | undefined): ReferencedByCard[] {
   const tablesQuery = useQuery(relTablesQueryOptions(apiClient, domain, true))

@@ -20,7 +20,7 @@ describe('kvBulkCallPattern', () => {
 })
 
 describe('kvBulkConfirmText', () => {
-  it('matches the spec example for delete', () => {
+  it('words delete as count + domain', () => {
     expect(kvBulkConfirmText('delete', 138, 'sessions')).toBe('delete 138 keys in "sessions"?')
   })
 
@@ -31,7 +31,7 @@ describe('kvBulkConfirmText', () => {
 })
 
 describe('usesServerDelete', () => {
-  it('routes only delete with a non-empty prefix to the server endpoint (spec data/013 §1)', () => {
+  it('routes only delete with a non-empty prefix to the server endpoint', () => {
     expect(usesServerDelete('delete', { prefix: 'user-', contains: '' })).toBe(true)
     expect(usesServerDelete('delete', { prefix: '', contains: 'x' })).toBe(false)
     expect(usesServerDelete('clear', { prefix: 'user-', contains: '' })).toBe(false)
@@ -135,7 +135,7 @@ describe('runKvBulkOp', () => {
   })
 })
 
-/** Pollt Mikrotasks, bis `predicate` zutrifft — Fake-Timer-frei (spec §7), robust gegen Engine-Details der await-Tick-Zahl. */
+/** Polls microtasks until `predicate` holds; no fake timers, robust against engine details of the await tick count. */
 async function flushUntil(predicate: () => boolean): Promise<void> {
   for (let i = 0; i < 50 && !predicate(); i += 1) {
     await Promise.resolve()
@@ -180,7 +180,7 @@ describe('runKvBulk', () => {
 
     const runPromise = runKvBulk(keys, 2, executeOp, () => {})
 
-    // Der Worker-Pool startet seine ersten `concurrency` Ops synchron beim Aufruf — kein Flush nötig.
+    // The worker pool starts its first `concurrency` ops synchronously on the call; no flush needed.
     expect(executeOp).toHaveBeenCalledTimes(2)
     expect(inFlight).toBe(2)
 

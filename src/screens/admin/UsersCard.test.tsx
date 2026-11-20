@@ -630,7 +630,7 @@ describe('UsersCard', () => {
     await waitFor(() => expect(chip('alice · shop').textContent).toBe('read'))
   })
 
-  it('shows a red inline error on a 500 while the previously loaded matrix stays visible (spec admin/005 §2)', async () => {
+  it('shows a red inline error on a 500 while the previously loaded matrix stays visible', async () => {
     let call = 0
     server.use(
       versionHandler(),

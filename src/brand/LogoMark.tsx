@@ -2,7 +2,7 @@ interface LogoMarkProps {
   size: number
 }
 
-/** Markenzeichen „Slipstream Engines" (design-concept/logo): drei Layer in REL/JSON/KV, Neigung fix −14°. */
+/** Brand mark "Slipstream Engines": three layers for REL/JSON/KV, fixed slant of −14°. */
 export function LogoMark({ size }: LogoMarkProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 96 96" aria-hidden="true">

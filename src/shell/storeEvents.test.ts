@@ -5,7 +5,7 @@ import { DOMAINS_KEY } from './domains'
 import { invalidateAllStoreQueries, invalidationTargetsFor, parseStoreEvent, type StoreEvent } from './storeEvents'
 import { jsonIndexesQueryOptions, relTablesQueryOptions, relViewsQueryOptions } from './domainDetails'
 
-// An die Quelle gebunden (spec shell/009 §2): eine Key-Umbenennung in domainDetails.ts macht diesen Test rot, nicht den Stream still.
+// Bound to the source: renaming a key in domainDetails.ts turns this test red instead of silencing the stream.
 const REL_TABLES_KEY = relTablesQueryOptions(undefined, 'probe', false).queryKey
 const REL_VIEWS_KEY = relViewsQueryOptions(undefined, 'probe', false).queryKey
 const JSON_INDEXES_KEY = jsonIndexesQueryOptions(undefined, 'probe', false).queryKey

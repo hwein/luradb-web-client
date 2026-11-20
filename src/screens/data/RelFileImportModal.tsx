@@ -30,7 +30,7 @@ interface RelFileImportProps {
   onClose: () => void
 }
 
-/** Form of the file-import dialog (spec s-55d9034e) — without the <dialog> shell, so tests can mount it without `showModal()`. */
+/** Form of the file-import dialog, without the <dialog> shell so tests can mount it without `showModal()`. */
 export function RelFileImportForm({ domain, apiClient, onClose }: RelFileImportProps) {
   const enabled = apiClient !== undefined
   const navigate = useNavigate()
@@ -63,7 +63,7 @@ export function RelFileImportForm({ domain, apiClient, onClose }: RelFileImportP
   const result = mutation.data
 
   const existingNames = new Set([...(tablesQuery.data ?? []).map((table) => table.name), ...(viewsQuery.data ?? []).map((view) => view.name)])
-  // The table just created from this dialog is not a collision (F7), but it cannot be imported again either.
+  // The table just created from this dialog is not a collision, but it cannot be imported again either.
   const justCreated = result !== undefined && tableName === result.table
   const tableNameError =
     identifierError(tableName) ?? (existingNames.has(tableName) && !justCreated ? `"${tableName}" already exists (table or view)` : undefined)
@@ -254,7 +254,7 @@ export function RelFileImportForm({ domain, apiClient, onClose }: RelFileImportP
   )
 }
 
-/** File-import dialog (spec s-55d9034e): native `<dialog>` + `showModal()` around `RelFileImportForm`. */
+/** File-import dialog: native `<dialog>` + `showModal()` around `RelFileImportForm`. */
 export function RelFileImportModal({ domain, apiClient, onClose }: RelFileImportProps) {
   const dialogRef = useRef<HTMLDialogElement | null>(null)
   const onCloseRef = useRef(onClose)

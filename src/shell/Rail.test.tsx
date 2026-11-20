@@ -31,8 +31,8 @@ describe('Rail', () => {
   })
 
   it('mounts the about dialog on logo click', () => {
-    // jsdom kennt showModal() nicht (nur `open` wird reflektiert) — hier gestubbt, weil dieser Test den
-    // öffnenden Klick tatsächlich auslöst (anders als z. B. Explorer.test.tsx, das ihn meidet).
+    // jsdom lacks showModal() (only `open` is reflected); stubbed here because this test really
+    // triggers the opening click (unlike e.g. Explorer.test.tsx, which avoids it).
     HTMLDialogElement.prototype.showModal = function showModalStub(this: HTMLDialogElement) {
       this.setAttribute('open', '')
     }

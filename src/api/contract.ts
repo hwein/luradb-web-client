@@ -21,14 +21,14 @@ export function compareSemVer(a: SemVer, b: SemVer): number {
   return a.patch - b.patch
 }
 
-/** API-Contract, gegen den dieser Client gebaut wurde — rein informativ (About/Statusbar). */
+/** API contract this client was built against; informational only (About/Statusbar). */
 export const CONTRACT_VERSION: SemVer = parseSemVer(openapiDocument.info.version)
 
 /**
- * Niedrigste unterstützte LuraDB-Server-Version. Bewusst gepflegte Tatsache,
- * NICHT aus dem Contract abgeleitet: nur anheben, wenn der Client anfängt, etwas
- * zu nutzen, das ältere Server nicht können — im selben Commit, mit Begründung.
- * Ausschließlich manuelle Maintainer-Entscheidung.
+ * Lowest supported LuraDB server version. A deliberately maintained fact,
+ * NOT derived from the contract: raise it only when the client starts using
+ * something older servers cannot do, in the same commit, with a reason.
+ * Strictly a manual maintainer decision.
  */
 export const MIN_SERVER_VERSION = '0.7.1'
 const minServer = parseSemVer(MIN_SERVER_VERSION)
@@ -40,7 +40,7 @@ export interface CompatibilityResult {
 
 type VersionResponse = components['schemas']['VersionResponse']
 
-/** Verlässliches Verfahren: Server wird unterstützt gdw. seine Version >= MIN_SERVER_VERSION. */
+/** The server is supported if and only if its version is >= MIN_SERVER_VERSION. */
 export function checkCompatibility(versionResponse: VersionResponse): CompatibilityResult {
   const serverVersion = parseSemVer(versionResponse.server_version)
   if (compareSemVer(serverVersion, minServer) < 0) {

@@ -78,8 +78,8 @@ describe('metricsQueryOptions engines block', () => {
   })
 })
 
-describe('metricsQueryOptions recorder behaviour (general/012)', () => {
-  it('records the first load (Erst-Load), then stays silent on a refetch once the query already has cached data', async () => {
+describe('metricsQueryOptions recorder behaviour', () => {
+  it('records the first load, then stays silent on a refetch once the query already has cached data', async () => {
     let requests = 0
     server.use(
       http.get(`${BASE_URL}/store-api/metrics`, () => {
@@ -101,6 +101,6 @@ describe('metricsQueryOptions recorder behaviour (general/012)', () => {
 
     await result.current.refetch()
     expect(requests).toBe(2)
-    expect(calls).toHaveLength(1) // Folge-Tick blieb still
+    expect(calls).toHaveLength(1) // next tick was silent
   })
 })

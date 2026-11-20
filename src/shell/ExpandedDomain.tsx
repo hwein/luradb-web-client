@@ -35,7 +35,7 @@ function jsonSummaryText(count: number | undefined, indexCount: number | undefin
   return `${formatCount(count)} · idx ${indexCount}`
 }
 
-/** Eine Zeile je Engine: Farb-Punkt + muted Label + rechtsbündiger `+`, in jeder Aktivitätsstufe sichtbar (spec shell/006 §2/§3). */
+/** One row per engine: color dot + muted label + right-aligned `+`, visible at every activity level. */
 function SectionLabel({ tone, text, addLabel, onAdd }: { tone: 'rel' | 'json' | 'kv'; text: string; addLabel: string; onAdd: () => void }) {
   return (
     <div className="explorer__section-label-row">
@@ -68,7 +68,7 @@ function objectRowProps(selected: boolean): { className: string; 'aria-current':
   }
 }
 
-/** Tabellenzeile mit eigener Row-Count-Query (spec shell/010 §4): Zahl nur bei Erfolg — kein Platzhalter, keine `0` auf Verdacht. */
+/** Table row with its own row-count query: the number shows only on success, no placeholder and no guessed `0`. */
 function TableObjectRow({
   domain,
   table,
@@ -91,7 +91,7 @@ function TableObjectRow({
   )
 }
 
-/** RELATIONAL/JSON/KEY-VALUE-Abschnitte der genau einen expandierten Domäne (spec shell/002 §3) — Daten nur hier geladen. */
+/** RELATIONAL/JSON/KEY-VALUE sections of the single expanded domain; data is loaded only here. */
 export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -110,7 +110,7 @@ export function ExpandedDomain({ domain, apiClient }: ExpandedDomainProps) {
     void navigate(`/data?${params.toString()}`)
   }
 
-  /** Views haben keinen Rows-Endpunkt (spec data/003 §4) — Klick geht ehrlich über `/sql` statt den REL-Browser vorzutäuschen. */
+  /** Views have no rows endpoint; a click goes through `/sql` instead of pretending to be the REL browser. */
   function openViewInSql(view: string): void {
     addTab(`SELECT * FROM ${view} LIMIT 50;`)
     void navigate('/sql')

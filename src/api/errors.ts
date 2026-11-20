@@ -12,7 +12,7 @@ export class ApiError extends Error {
   }
 }
 
-/** Zieht die Message aus einem Fehler-Body-Objekt (`{error}`/`{message}`) — auch für openapi-fetch-`error`-Werte. */
+/** Extracts the message from an error body object (`{error}`/`{message}`), also for openapi-fetch `error` values. */
 export function messageFromBody(body: unknown): string | undefined {
   if (body !== null && typeof body === 'object') {
     const record = body as Record<string, unknown>
@@ -22,7 +22,7 @@ export function messageFromBody(body: unknown): string | undefined {
   return undefined
 }
 
-// LuraDB-Plaintext ist einzeilig kurz; der Deckel hält Fremd-Bodies (Proxy-HTML-Fehlerseiten) aus den Inline-Meldungen.
+// LuraDB plain-text errors are one short line; the cap keeps foreign bodies (proxy HTML pages) out of inline messages.
 const MAX_PLAINTEXT_MESSAGE = 300
 
 /** Seconds of a numeric `Retry-After` header, otherwise undefined. */
@@ -31,7 +31,7 @@ export function retryAfterSecs(response: Response): number | undefined {
   return /^\d+$/.test(header) ? Number(header) : undefined
 }
 
-/** Baut einen ApiError aus einer Nicht-2xx-Response; konsumiert den Body. LuraDB antwortet auf Fehler mit Plaintext `NNN Reason: Detail`. */
+/** Builds an ApiError from a non-2xx response; consumes the body. LuraDB answers errors with plain text `NNN Reason: Detail`. */
 export async function apiErrorFromResponse(response: Response): Promise<ApiError> {
   const text = await response.text().catch(() => '')
   const trimmed = text.trim()
@@ -54,7 +54,7 @@ export async function apiErrorFromResponse(response: Response): Promise<ApiError
   return new ApiError(response.status, named ? message : `${message} · retry in ${secs} s`, body, secs)
 }
 
-/** `cause` = Original-Fehlertext des Transports (z. B. Tauri-Scope-Denial) — er trägt die eigentliche Diagnose. */
+/** `cause` = original transport error text (e.g. a Tauri scope denial); it carries the actual diagnosis. */
 export function networkApiError(cause?: unknown): ApiError {
   const detail = cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : undefined
   return new ApiError(0, detail !== undefined && detail !== '' ? `server unreachable — ${detail}` : 'server unreachable')

@@ -34,7 +34,7 @@ function RequestRow({ call, onWhy }: { call: RecordedCall; onWhy: (status: numbe
   )
 }
 
-/** RECENT REQUESTS-Karte (spec engines/001 §5): Recorder-Liste, neueste zuerst, 4xx mit why?-Docs-Link. */
+/** RECENT REQUESTS card: recorder list, newest first, 4xx rows with a why? docs link. */
 export function RecentRequestsCard() {
   const navigate = useNavigate()
   const calls = useRecordedCalls()

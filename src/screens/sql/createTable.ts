@@ -1,4 +1,4 @@
-/** Die 7 kanonischen Spaltentypen (api/LURASQL.md) — keine Aliase im Generator/Modal. */
+/** The 7 canonical column types; no aliases in the generator/modal. */
 export type ColumnType = 'INTEGER' | 'REAL' | 'TEXT' | 'BOOLEAN' | 'TIMESTAMP' | 'KVREF' | 'JSONREF'
 
 export const COLUMN_TYPES: readonly ColumnType[] = ['INTEGER', 'REAL', 'TEXT', 'BOOLEAN', 'TIMESTAMP', 'KVREF', 'JSONREF']
@@ -32,7 +32,7 @@ function formatDefaultValue(type: ColumnType, value: ColumnDefault): string {
   return quoteLiteral(value.text)
 }
 
-/** Exportiert für den ALTER-TABLE-Generator (spec sql/004) — gleiche Constraint-Reihenfolge/Escaping für ADD COLUMN. */
+/** Exported for the alter-table generator; same constraint order/escaping for ADD COLUMN. */
 export function columnClause(column: ColumnDef): string {
   const parts = [column.name, column.type]
   if (column.primaryKey) {
@@ -46,7 +46,7 @@ export function columnClause(column: ColumnDef): string {
   return parts.join(' ')
 }
 
-/** Reine Formatierung (spec sql/002 §7) — Reihenfolge PRIMARY KEY [AUTOINCREMENT] → NOT NULL → UNIQUE → DEFAULT → REFERENCES, 2-Space-Indent, kein Kommentar. Regel-Validierung übernimmt das Modal. */
+/** Pure formatting: order PRIMARY KEY [AUTOINCREMENT] → NOT NULL → UNIQUE → DEFAULT → REFERENCES, 2-space indent, no comment. Rule validation is the modal's job. */
 export function buildCreateTableSql(def: TableDef): string {
   const lines = def.columns.map((column) => `  ${columnClause(column)}`)
   return `CREATE TABLE ${def.name} (\n${lines.join(',\n')}\n);`

@@ -16,7 +16,7 @@ function isEngine(value: unknown): value is NonNullable<StoreEvent['engine']> {
   return value === 'kv' || value === 'json' || value === 'rel'
 }
 
-/** Best effort: jeder Frame, der nicht als Store-Event lesbar ist, ergibt `undefined` — nie ein Wurf, nie eine Meldung. */
+/** Best effort: any frame that is not readable as a store event yields `undefined`; never a throw, never a message. */
 export function parseStoreEvent(frame: SseEvent): StoreEvent | undefined {
   let parsed: unknown
   try {
@@ -37,8 +37,8 @@ export function parseStoreEvent(frame: SseEvent): StoreEvent | undefined {
 }
 
 /**
- * Abbildung aus spec shell/009 §2. Unbekannte Typen invalidieren nichts (kein Sammel-Fallback), ebenso
- * `index_*` mit `engine: 'rel'`: der Explorer listet keine rel-Indexe. Dokument-/Key-Bestand trägt weiter das Intervall.
+ * Event type to query keys. Unknown types invalidate nothing (no catch-all fallback), nor does
+ * `index_*` with `engine: 'rel'`: the explorer lists no rel indexes. Document/key counts still ride on the interval.
  */
 export function invalidationTargetsFor(event: StoreEvent): QueryKey[] {
   switch (event.type) {
@@ -60,10 +60,10 @@ export function invalidationTargetsFor(event: StoreEvent): QueryKey[] {
   }
 }
 
-/** Alle stream-abhängigen Explorer-Queries (spec shell/009 §5) — benannte Liste statt globalem Invalidieren. */
+/** All stream-dependent explorer queries: a named list instead of invalidating globally. */
 const ALL_STORE_KEYS: QueryKey[] = [DOMAINS_KEY, REL_TABLES_PREFIX, REL_VIEWS_PREFIX, JSON_INDEXES_PREFIX]
 
-/** Voll-Resync nach `reset` oder Wiederverbindung: was der Stream trägt, wird neu gelesen — sonst nichts. */
+/** Full resync after `reset` or a reconnect: what the stream carries is re-read, nothing else. */
 export function invalidateAllStoreQueries(queryClient: QueryClient): void {
   for (const queryKey of ALL_STORE_KEYS) void queryClient.invalidateQueries({ queryKey })
 }

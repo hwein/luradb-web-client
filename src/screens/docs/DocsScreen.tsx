@@ -13,15 +13,15 @@ function hasFocusSearch(state: unknown): boolean {
   return (state as { focusSearch?: unknown }).focusSearch === true
 }
 
-/** Docs-Bereich (spec docs/001 §3): Tab-Strip + Suche/Kategorien + Artikel, Tab-/Suchzustand im Docs-Store. */
+/** Docs area: tab strip, search/categories and article; tab and search state live in the docs store. */
 export function DocsScreen() {
   const { tabs, activeId, search, anchors } = useDocsState()
   const location = useLocation()
   const navigate = useNavigate()
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  // F1 (shell/001) trägt {focusSearch:true} als Router-State — Suchfeld fokussieren und den State danach
-  // nicht erneut anwenden, sonst refokussiert jeder Re-Render.
+  // F1 carries {focusSearch:true} as router state: focus the search field, then clear the state so
+  // it is not applied again on every re-render.
   useEffect(() => {
     if (hasFocusSearch(location.state)) {
       searchInputRef.current?.focus()

@@ -108,8 +108,8 @@ describe('CommandPaletteContent', () => {
     await renderConnectedPalette(onClose)
     const input = screen.getByLabelText('command palette search')
 
-    // 7 Screens (Rail-Ziele) + "analytics" (alphabetisch erste Domäne, zugleich der Auto-Default der Explorer-Auswahl)
-    // davor — Index 8 ist "shop", damit der Test die Auswahl tatsächlich ändert statt den Default zu bestätigen.
+    // 7 screens (rail targets) + "analytics" (alphabetically first domain, also the explorer's auto-default)
+    // precede it; index 8 is "shop", so the test really changes the selection instead of confirming the default.
     for (let i = 0; i < 8; i += 1) fireEvent.keyDown(input, { key: 'ArrowDown' })
     fireEvent.keyDown(input, { key: 'Enter' })
 
@@ -132,7 +132,7 @@ describe('CommandPaletteContent', () => {
     await renderConnectedPalette(onClose)
     const input = screen.getByLabelText('command palette search')
 
-    // Leere Eingabe zeigt keine Docs — erst nach Eingabe erscheint der Treffer (spec §2).
+    // An empty query shows no docs; the hit appears only after typing.
     expect(screen.queryByText('Backup and restore')).not.toBeInTheDocument()
 
     fireEvent.change(input, { target: { value: 'backup' } })

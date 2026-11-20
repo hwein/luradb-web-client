@@ -91,7 +91,7 @@ describe('desktop capability file', () => {
   })
 
   it('grants the http plugin an unrestricted http/https scope, including explicit ports', () => {
-    // `http://**` allein erzwingt in der URLPattern-Semantik den Default-Port — `:*` ist für z. B. :3000 zwingend.
+    // In URLPattern semantics `http://**` alone forces the default port; `:*` is required for e.g. :3000.
     expect(capability.permissions).toContainEqual({
       identifier: 'http:default',
       allow: [{ url: 'http://**:*' }, { url: 'https://**:*' }],

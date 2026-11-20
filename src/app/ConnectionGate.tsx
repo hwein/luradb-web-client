@@ -6,7 +6,7 @@ import type { Connection, ConnectionEntry } from './connections'
 import { deleteConnection, loadConnections, upsertConnection } from './connections'
 import { connect, useSession } from './session'
 
-/** Vollflächiges Login-Gate = Verbindungsverwaltung (kein Design-Prototyp — Panel-/Mono-Ästhetik der Tokens). */
+/** Full-screen login gate = connection management (panel/mono look of the tokens). */
 export function ConnectionGate() {
   const session = useSession()
   const [entries, setEntries] = useState<ConnectionEntry[]>(() => loadConnections())

@@ -6,8 +6,6 @@
   height: 100%;
 }
 
-/* --- Index section: own scroll container, grid 390px/minmax(560px,1fr) --- */
-
 .admin-index {
   flex: 1;
   overflow: auto;
@@ -52,8 +50,6 @@
   min-width: 0;
 }
 
-/* --- Untere Zeile der rechten Spalte: BACKUPS | SERVER LOG (Prototyp Z. 225) --- */
-
 .admin-index__lower {
   display: grid;
   grid-template-columns: 1fr 1.2fr;
@@ -64,8 +60,6 @@
 .admin-index__lower > * {
   min-width: 0;
 }
-
-/* --- Karten-Grundgerüst, geteilt von DOMAINS/AUTH (Prototyp Z. 195/206) ------- */
 
 .admin-card {
   background: var(--panel);
@@ -103,8 +97,6 @@
   padding-top: 0;
   padding-bottom: 12px;
 }
-
-/* --- DOMAINS-Zeilen (Prototyp Z. 197–199) -------------------------------- */
 
 .admin-domains__row {
   display: flex;
@@ -229,8 +221,6 @@
   overflow-wrap: anywhere;
 }
 
-/* --- Create-Zeile (Prototyp Z. 200–202) --- */
-
 .admin-domains__create {
   padding: 11px 16px;
 }
@@ -273,8 +263,6 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
-
-/* --- AUTH-Zeilen (Prototyp Z. 208–211) ------------------------------------ */
 
 .admin-auth__row {
   display: flex;
@@ -325,8 +313,6 @@
   color: var(--err);
   overflow-wrap: anywhere;
 }
-
-/* --- USERS & PER-DOMAIN PERMISSIONS matrix (Prototyp Z. 215–222) --------- */
 
 /* Head and rows share one column grid; below its minimum width the card scrolls sideways instead of cutting chips. */
 .admin-users__scroll {
@@ -678,8 +664,6 @@
   white-space: nowrap;
 }
 
-/* --- Create-User-Zeile (Prototyp Z. 223, spec admin/002 §4) -------------- */
-
 .admin-users__create {
   display: flex;
   align-items: center;
@@ -718,8 +702,6 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
-
-/* --- BACKUPS-Karte (Prototyp Z. 225–231, spec admin/003) ----------------- */
 
 .admin-backups__row {
   display: flex;
@@ -937,8 +919,6 @@
   border: 0;
 }
 
-/* --- Inline-Formular "run backup now" (spec admin/003 §5) --- */
-
 .admin-backups__run-form {
   display: flex;
   flex-direction: column;
@@ -1040,8 +1020,6 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
-
-/* --- SERVER LOG-Karte (Prototyp Z. 232–235, spec admin/004) -------------- */
 
 .admin-log__controls {
   display: flex;

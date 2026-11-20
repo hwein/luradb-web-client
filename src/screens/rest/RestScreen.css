@@ -6,8 +6,6 @@
   grid-template-rows: minmax(0, 1fr);
 }
 
-/* --- Builder (linke Spalte) ------------------------------------------- */
-
 .rest__builder {
   display: flex;
   flex-direction: column;
@@ -186,8 +184,6 @@
 .rest__endpoint--active .rest__endpoint-path {
   color: var(--tx);
 }
-
-/* --- Response (rechte Spalte) ----------------------------------------- */
 
 .rest__response {
   display: flex;

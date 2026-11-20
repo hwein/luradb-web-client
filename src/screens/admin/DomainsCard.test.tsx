@@ -51,7 +51,7 @@ afterEach(() => {
 })
 
 describe('DomainsCard', () => {
-  it('renders engine dots based on activity (contains objects) and the object count summed across all engines (nachtrag admin/001)', async () => {
+  it('renders engine dots based on activity (contains objects) and the object count summed across all engines', async () => {
     server.use(
       http.get(`${ORIGIN}/store-api/domains`, () => HttpResponse.json([domainResponse('shop'), domainResponse('sessions')])),
       http.get(`${ORIGIN}/store-api/json/shop/documents/count`, () => HttpResponse.json({ count: 52123 })),
@@ -170,7 +170,7 @@ describe('DomainsCard', () => {
     expect(createCalls).toBe(1)
   })
 
-  it('shows a collective error line when the domain list query failed (spec admin/005 §2)', async () => {
+  it('shows a collective error line when the domain list query failed', async () => {
     server.use(http.get(`${ORIGIN}/store-api/domains`, () => new HttpResponse(null, { status: 500 })))
     await act(() => connect(makeConnection()))
     renderConnected()

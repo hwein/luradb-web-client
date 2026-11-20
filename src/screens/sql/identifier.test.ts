@@ -34,7 +34,7 @@ describe('identifierError', () => {
     expect(identifierError('a'.repeat(51))).toBeDefined()
   })
 
-  // Vollständige Blockliste api/LURASQL.md: Grammatik-Keywords + alle Typnamen/Aliase.
+  // Full block list: grammar keywords plus all type names/aliases.
   it.each([
     'create',
     'table',

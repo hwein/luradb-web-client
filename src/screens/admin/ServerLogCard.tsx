@@ -22,7 +22,7 @@ function isNoLogFileYet(error: unknown): boolean {
   return error instanceof ApiError && error.status === 500 && error.message.includes(NO_LOG_FILE_TEXT)
 }
 
-/** SERVER-LOG-Karte (spec admin/004, Prototyp Z. 232–235): Tail + Files-Listing über `fetchSilent`, Kopf bleibt Design-Copy. */
+/** SERVER LOG card: tail and file listing via `fetchSilent`. */
 export function ServerLogCard({ apiClient }: { apiClient: ApiClient | undefined }) {
   const queryClient = useQueryClient()
 
@@ -36,7 +36,7 @@ export function ServerLogCard({ apiClient }: { apiClient: ApiClient | undefined 
   const tailQuery = useQuery(serverLogTailQueryOptions(apiClient, lines, committedQuery, selectedFile))
   const filesQuery = useQuery(serverLogFilesQueryOptions(apiClient))
 
-  // Datei rotiert/gelöscht (404 mit file-Param, spec §5): zurück auf Default, Files-Listing invalidieren, Hinweis setzen.
+  // File rotated/deleted (404 with a file param): fall back to the default, invalidate the file listing, set the hint.
   useEffect(() => {
     const error = tailQuery.error
     if (error instanceof ApiError && error.status === 404 && selectedFile !== undefined) {
@@ -47,8 +47,8 @@ export function ServerLogCard({ apiClient }: { apiClient: ApiClient | undefined 
     }
   }, [tailQuery.error, selectedFile, queryClient])
 
-  // Hinweis verschwindet erst beim nächsten erfolgreichen Tail NACH dem Setzen (spec §5) —
-  // der Key-Wechsel zurück zum gecachten Default trägt ein älteres dataUpdatedAt und löscht nicht.
+  // The hint disappears only on the next successful tail AFTER it was set;
+  // the key switch back to the cached default carries an older dataUpdatedAt and does not clear it.
   useEffect(() => {
     if (tailQuery.dataUpdatedAt > hintSetAtRef.current) setFileGoneHint(false)
   }, [tailQuery.dataUpdatedAt])
@@ -57,7 +57,7 @@ export function ServerLogCard({ apiClient }: { apiClient: ApiClient | undefined 
   const atBottomRef = useRef(true)
   const lastKeyRef = useRef<string | undefined>(undefined)
 
-  // Auto-Scroll ans Ende: immer bei Controls-Wechsel/Erstladung, sonst nur wenn der Container schon am Ende stand (spec §1).
+  // Auto-scroll to the end: always on a controls change/first load, otherwise only if the container was already at the end.
   useEffect(() => {
     const el = bodyRef.current
     if (!el || tailQuery.data === undefined) return
@@ -65,7 +65,7 @@ export function ServerLogCard({ apiClient }: { apiClient: ApiClient | undefined 
     const keyChanged = lastKeyRef.current !== key
     lastKeyRef.current = key
     if (keyChanged || atBottomRef.current) el.scrollTop = el.scrollHeight
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Controls-Wechsel ändert den Query-Key und damit `data`; nur `data` soll triggern
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a controls change alters the query key and so `data`; only `data` should trigger
   }, [tailQuery.data])
 
   function handleScroll(): void {

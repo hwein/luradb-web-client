@@ -37,8 +37,6 @@
   border-radius: 2px;
 }
 
-/* --- Engine-Karten (spec §3) -------------------------------------------- */
-
 .engines__cards {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -189,8 +187,6 @@
 .engines__domain-link:hover {
   background: var(--panel2);
 }
-
-/* --- Tasks/Requests-Zeile (spec §4/§5) ----------------------------------- */
 
 .engines__bottom {
   display: grid;

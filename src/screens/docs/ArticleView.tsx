@@ -8,12 +8,11 @@ interface ArticleViewProps {
   article: Article
 }
 
-/** Artikel-Rendering (spec docs/001 §3): Kicker, Titel, Markdown-Rumpf, Chip-Zeile. */
+/** Article rendering: kicker, title, Markdown body, chip row. */
 export function ArticleView({ article }: ArticleViewProps) {
   const html = useMemo(() => renderArticleBody(article.body), [article.body])
 
-  // Event-Delegation für `docs:`-Links im Markdown-Rumpf (orchestrator hint #2) — der Renderer selbst
-  // führt keine Navigation aus.
+  // Event delegation for `docs:` links in the Markdown body; the renderer itself never navigates.
   function handleBodyClick(event: MouseEvent<HTMLDivElement>): void {
     if (!(event.target instanceof Element)) return
     const link = event.target.closest('[data-docs-link]')
@@ -27,7 +26,7 @@ export function ArticleView({ article }: ArticleViewProps) {
     <div className="docs__article-inner selectable">
       <div className="docs__kicker mono-label">{article.kicker}</div>
       <h1 className="docs__title">{article.title}</h1>
-      {/* Eigene, gebündelte Artikel (spec docs/001 §4) — kein User-Content, daher unbedenklich. */}
+      {/* Bundled articles, not user content, so injecting the HTML is safe. */}
       <div className="docs-article" onClick={handleBodyClick} dangerouslySetInnerHTML={{ __html: html }} />
       {article.chips.length > 0 && (
         <div className="docs__chips">

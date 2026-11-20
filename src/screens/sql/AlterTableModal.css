@@ -1,6 +1,4 @@
-/* --- Alter-Table-Assistent (spec sql/004) — gleiche Modal-Mechanik wie CreateTableModal (sql/002) --- */
-
-/* Author-display würde sonst das UA-`display:none` geschlossener Dialoge überstimmen. */
+/* An author-set display would otherwise override the UA `display:none` of closed dialogs. */
 .atm:not([open]) {
   display: none;
 }

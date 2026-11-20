@@ -93,7 +93,7 @@ describe('kvKeysQueryOptions', () => {
     expect(urls[0]?.searchParams.get('offset')).toBe('0')
     expect(options.getNextPageParam(first.pages[0]!, first.pages, 0, [0])).toBe(2)
 
-    // `pages: 2` holt die erste Seite erneut und hängt die zweite ab `offset + keys.length` an.
+    // `pages: 2` refetches the first page and appends the second from `offset + keys.length`.
     const second = await queryClient.fetchInfiniteQuery({ ...options, pages: 2 })
     expect(urls.map((url) => url.searchParams.get('offset'))).toEqual(['0', '0', '2'])
     expect(second.pages.flatMap((page) => page.keys)).toEqual(['a', 'b', 'c'])
@@ -173,7 +173,7 @@ describe('kvValueQueryOptions', () => {
   })
 })
 
-describe('kvMetaQueryOptions (spec data/012 §1)', () => {
+describe('kvMetaQueryOptions', () => {
   it('keys by domain and key and is disabled without a connection or key', () => {
     expect(kvMetaQueryOptions(undefined, 'shop', 'cart:1').queryKey).toEqual(['kv-meta', 'shop', 'cart:1'])
     expect(kvMetaQueryOptions(undefined, 'shop', 'cart:1').enabled).toBe(false)
@@ -199,7 +199,7 @@ describe('kvMetaQueryOptions (spec data/012 §1)', () => {
   })
 })
 
-describe('formatShortDuration (spec data/012 §2)', () => {
+describe('formatShortDuration', () => {
   it('switches units at the 60 / 3600 / 86400 boundaries', () => {
     expect(formatShortDuration(0)).toBe('0s')
     expect(formatShortDuration(59)).toBe('59s')
@@ -266,7 +266,7 @@ describe('conditional writes', () => {
 })
 
 describe('parseTtlSeconds', () => {
-  it('treats empty (trimmed) input as no param — unbefristet', () => {
+  it('treats empty (trimmed) input as no param (no expiry)', () => {
     expect(parseTtlSeconds('')).toEqual({ ok: true, seconds: undefined })
     expect(parseTtlSeconds('   ')).toEqual({ ok: true, seconds: undefined })
   })

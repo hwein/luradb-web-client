@@ -46,8 +46,8 @@ function DocsRouteProbe() {
   return <p data-testid="docs-screen">docs: {docs.activeId ?? ''}</p>
 }
 
-// `extraHandlers` kommen vor den Basis-Handlern in denselben `server.use()`-Aufruf (MSW: pro Aufruf gewinnt die
-// zuerst gelistete Route) — sonst würde `baseHandlers`' fixe `GET …/indexes → []` jeden Test-Override verdecken.
+// `extraHandlers` go before the base handlers in the same `server.use()` call (MSW: per call the first listed
+// route wins), otherwise the fixed `GET …/indexes → []` of `baseHandlers` would shadow every test override.
 async function connectAndRender(extraHandlers: Parameters<typeof server.use> = [], initialPath = '/data') {
   server.use(...extraHandlers, ...baseHandlers())
   await act(() => connect(makeConnection()))
@@ -89,7 +89,7 @@ async function openIndexPanel(): Promise<void> {
 }
 
 describe('JsonBrowser', () => {
-  it('arrives with ?key= (cross-engine jump from the rel row detail): selects that document initially, loaded independently of the listed page (spec data/009 §5)', async () => {
+  it('arrives with ?key= (cross-engine jump from the rel row detail): selects that document initially, loaded independently of the listed page', async () => {
     await connectAndRender(
       [
         http.get(DOCS_URL, () =>
@@ -110,8 +110,8 @@ describe('JsonBrowser', () => {
     expect(screen.getByText(/"name": "M. Keller"/)).toBeInTheDocument()
   })
 
-  it('keeps the ?key= arrival selection when the document list is already in the query cache (nachtrag data/009: auto-select overwrote it)', async () => {
-    // Erster Besuch ohne ?key= füllt den Query-Cache (Auto-Select auf das erste Dokument), dann Ankunft per Jump.
+  it('keeps the ?key= arrival selection when the document list is already in the query cache (auto-select must not overwrite it)', async () => {
+    // First visit without ?key= fills the query cache (auto-select picks the first document), then the jump arrives.
     const { queryClient, unmount } = await connectAndRender([
       http.get(DOCS_URL, () =>
         HttpResponse.json({
@@ -261,7 +261,7 @@ describe('JsonBrowser', () => {
     fireEvent.click(screen.getByRole('button', { name: 'save' }))
 
     expect(await screen.findByText(/version conflict — the document changed on the server/)).toBeInTheDocument()
-    // Der Editor bleibt offen (kein stilles Überschreiben) statt zur Pretty-Ansicht zurückzuspringen.
+    // The editor stays open (no silent overwrite) instead of jumping back to the pretty view.
     expect(screen.getByLabelText('document editor')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'docs' }))
@@ -434,7 +434,7 @@ describe('JsonBrowser', () => {
     expect(await screen.findByText('v2')).toBeInTheDocument()
   })
 
-  it('unwraps a scalar _content document and writes the bare scalar back (general/013 §6)', async () => {
+  it('unwraps a scalar _content document and writes the bare scalar back', async () => {
     let sentBody: string | undefined
     server.use(
       http.get(DOCS_URL, () =>
@@ -457,7 +457,7 @@ describe('JsonBrowser', () => {
     await connectAndRender()
 
     expect(await screen.findByText('DOCUMENT scalar')).toBeInTheDocument()
-    // Listen-Preview und Detail zeigen beide den Skalar, nicht den `_content`-Wrapper.
+    // List preview and detail both show the scalar, not the `_content` wrapper.
     expect(screen.getAllByText('42')).toHaveLength(2)
     expect(screen.queryByText(/_content/)).not.toBeInTheDocument()
 
@@ -465,7 +465,7 @@ describe('JsonBrowser', () => {
     expect(await screen.findByLabelText('document editor')).toHaveTextContent('42')
     fireEvent.click(screen.getByRole('button', { name: 'save' }))
 
-    // Der Editor war mit dem Skalar vorbelegt — gespeichert wird er ohne `_content`-Wrapper (sonst 400).
+    // The editor was prefilled with the scalar; it is saved without the `_content` wrapper (else 400).
     await waitFor(() => expect(sentBody).toBe('42'))
   })
 
@@ -650,7 +650,7 @@ describe('JsonBrowser', () => {
       ),
       http.post(`${ORIGIN}/store-api/rel/${DOMAIN}/sql`, async ({ request }) => {
         const body = (await request.json()) as { sql: string }
-        // Referenced-by-Probe (data/004 §3) und die Filter-Ankunft des REL-Browsers (data/003) teilen sich den Endpunkt.
+        // The referenced-by probe and the REL browser's filter arrival share the endpoint.
         if (body.sql.startsWith('SELECT COUNT(*)')) {
           expect(body).toEqual({ sql: 'SELECT COUNT(*) FROM orders WHERE customer_ref = ?', params: ['cus_8102'] })
           return HttpResponse.json({
@@ -683,7 +683,7 @@ describe('JsonBrowser', () => {
 
     expect(await screen.findByText('shop / orders')).toBeInTheDocument()
     expect(await screen.findByText(/filtered: customer_ref = cus_8102/)).toBeInTheDocument()
-    // Endzustand: Filterbar-Wert + zwei Grid-Zellen — auf die Anzahl pollen statt einen Übergangszustand zu erwischen.
+    // Final state: filter bar value + two grid cells; poll on the count instead of catching a transitional state.
     await waitFor(() => expect(screen.getAllByText('cus_8102')).toHaveLength(3))
   })
 
@@ -721,7 +721,7 @@ describe('JsonBrowser', () => {
     expect(await screen.findByText('orders.customer_ref · 0 rows')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /orders\.customer_ref/ })).toBeDisabled()
 
-    // Armed delete-guard bleibt still ohne N>0-Karten (0 rows blockiert und nennt sich nicht).
+    // Armed delete guard stays silent without N>0 cards (0 rows neither blocks nor is named).
     fireEvent.click(screen.getByRole('button', { name: 'delete' }))
     expect(screen.queryByText(/referenced by/)).not.toBeInTheDocument()
   })
@@ -822,9 +822,9 @@ describe('JsonBrowser', () => {
     expect(await screen.findByText('domain not found')).toBeInTheDocument()
   })
 
-  // Bulk-Import öffnet seit spec data/007 §1 ein Modal per natives <dialog> + showModal() — in diesem jsdom
-  // nicht implementiert (vgl. RelBrowser.test.tsx zu "check links"). Der Formular-/Ergebnis-Flow selbst ist
-  // <dialog>-frei in BulkImportModal.test.tsx gegen BulkImportForm getestet; hier nur der Einstiegspunkt.
+  // Bulk import opens a modal via native <dialog> + showModal(), which this jsdom lacks (see RelBrowser.test.tsx,
+  // "check links"). The form/result flow is tested without <dialog> against BulkImportForm in
+  // BulkImportModal.test.tsx; only the entry point is tested here.
   it('shows the "import ndjson ↑" entry point next to export', async () => {
     server.use(http.get(DOCS_URL, () => HttpResponse.json({ documents: [], keys: [], total: 0, offset: 0, limit: 50 })))
     await connectAndRender()
@@ -833,7 +833,7 @@ describe('JsonBrowser', () => {
     expect(screen.getByRole('button', { name: 'import ndjson ↑' })).toBeInTheDocument()
   })
 
-  describe('index panel (spec data/006)', () => {
+  describe('index panel', () => {
     const emptyDocs = http.get(DOCS_URL, () => HttpResponse.json({ documents: [], keys: [], total: 0, offset: 0, limit: 50 }))
 
     it('toggles the idx pill open and renders the index list in contract form (field · type · created)', async () => {

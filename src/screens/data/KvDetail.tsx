@@ -44,14 +44,14 @@ function formatBytes(bytes: number): string {
   return `${bytes.toLocaleString('en-US')} ${bytes === 1 ? 'byte' : 'bytes'}`
 }
 
-/** Pretty-printed wenn als JSON parsebar, sonst der Roh-Text unverändert (spec §3) — Werte sind Roh-Bytes, kein JSON-Zwang. */
+/** Pretty-printed if it parses as JSON, else the raw text unchanged; values are raw bytes, no JSON coercion. */
 function renderValue(text: string): string {
   const parsed = tryParseJson(text)
   return parsed !== undefined ? JSON.stringify(parsed, null, 2) : text
 }
 
-/** Zusätze der Meta-Zeile (spec data/012 §3) als Momentaufnahme des Renders — kein Ticker; ohne Metadaten (lädt/404) bleibt die Zeile wie zuvor.
- *  Expiry nur im Wert-Fall: ein Null-Write löscht die TTL (Probe-Fakt), das Null-Segment trägt daher nie eines. */
+/** Additions to the meta line, a snapshot of the render, no ticker; without metadata (loading/404) the line stays as before.
+ *  Expiry only for a value: a null write clears the TTL, so the null segment never carries one. */
 function metaSuffix(meta: KvMeta | null | undefined, withExpiry: boolean): string {
   if (meta === null || meta === undefined) return ''
   const nowSecs = Date.now() / 1000
@@ -64,7 +64,7 @@ function metaSuffix(meta: KvMeta | null | undefined, withExpiry: boolean): strin
   return parts.map((part) => ` · ${part}`).join('')
 }
 
-/** Detail-Spalte (spec §3): Ansicht/Edit/Set-null/Delete eines Keys, "new key"-Formular, Raw-Pfad-Fuß. */
+/** Detail column: view/edit/set-null/delete of a key, "new key" form, raw path footer. */
 export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDetailProps) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -88,7 +88,7 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
   const [newTtlText, setNewTtlText] = useState('')
   const [newError, setNewError] = useState<string | undefined>(undefined)
 
-  // Jeder Write ändert `last_modified_at` und setzt/löscht die TTL — die Meta-Query zieht mit dem Value mit (spec data/012 §4).
+  // Every write changes `last_modified_at` and sets/clears the TTL, so the meta query follows the value.
   function invalidate(key: string): void {
     void queryClient.invalidateQueries({ queryKey: ['kv-value', domain, key] })
     void queryClient.invalidateQueries({ queryKey: ['kv-meta', domain, key] })
@@ -163,8 +163,8 @@ export function KvDetail({ domain, apiClient, mode, onCreated, onClear }: KvDeta
     },
   })
 
-  // 404 ⇒ Key existiert nicht (gelöscht ist gelöscht, Autor-Entscheid 2026-07-18) — Liste invalidieren und die Auswahl räumen.
-  // Die Liste selbst beweist mit Paginierung nichts mehr: ein fehlender Key kann jenseits der geladenen Seiten liegen (spec data/011 §6).
+  // 404 ⇒ the key does not exist (deleted stays deleted): invalidate the list and clear the selection.
+  // With pagination the list alone proves nothing: a missing key can lie beyond the loaded pages.
   // The cached not-found goes too, so a key created again under that name reads fresh.
   useEffect(() => {
     if (valueQuery.data?.state !== 'not-found' || viewKey === undefined) return

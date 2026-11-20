@@ -21,7 +21,7 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'request failed'
 }
 
-/** Blob+Anchor-Download-Muster wie SqlScreen.tsx — lokal, kein Shared-Util (spec data/005). */
+/** Blob + anchor download pattern as in SqlScreen.tsx; kept local, no shared util. */
 function downloadNdjson(domain: string, text: string): void {
   const blob = new Blob([text], { type: 'application/x-ndjson' })
   const url = URL.createObjectURL(blob)
@@ -34,15 +34,15 @@ function downloadNdjson(domain: string, text: string): void {
   URL.revokeObjectURL(url)
 }
 
-/** JSON-Modus des Data Browsers (spec data/001): Kopf mit Idx/Filter/Search, Master-Detail, Footer-CallLine. */
+/** JSON mode of the data browser: header with idx/filter/search, master-detail, footer CallLine. */
 export function JsonBrowser({ domain, apiClient, initialKey }: JsonBrowserProps) {
   const navigate = useNavigate()
 
   const [filterText, setFilterText] = useState('')
   const [filterError, setFilterError] = useState<string | undefined>(undefined)
   const [committedFilter, setCommittedFilter] = useState<ParsedFilter | undefined>(undefined)
-  // Ankunft mit ?key= (spec data/009 §5) als Initial-State: als nachgezogener Effekt verlor die Selektion
-  // gegen den Auto-Select, sobald die Dokument-Liste bereits im Query-Cache lag (Nachtrag data/009).
+  // Arrival with ?key= is initial state: as a follow-up effect the selection lost against auto-select
+  // once the document list was already in the query cache.
   const [mode, setMode] = useState<DetailMode>(() => (initialKey === undefined ? { kind: 'empty' } : { kind: 'view', key: initialKey }))
   const [indexPanelOpen, setIndexPanelOpen] = useState(false)
 
@@ -61,8 +61,8 @@ export function JsonBrowser({ domain, apiClient, initialKey }: JsonBrowserProps)
   const documents = pages.flatMap((page) => page.documents)
   const lastPage = pages[pages.length - 1]
 
-  // Neuer Domänen-/Filterkontext ⇒ Auswahl verwerfen, dann greift Auto-Select auf das erste Ergebnis.
-  // Beim Mount übersprungen, sonst räumte er die Ankunfts-Selektion.
+  // New domain/filter context => drop the selection, then auto-select picks the first result.
+  // Skipped on mount, otherwise it would clear the arrival selection.
   const contextRef = useRef({ domain, committedFilter })
   useEffect(() => {
     if (contextRef.current.domain === domain && contextRef.current.committedFilter === committedFilter) return

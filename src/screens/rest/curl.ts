@@ -1,13 +1,13 @@
 export interface CurlRequest {
   baseUrl: string
   method: string
-  /** Konkreter Pfad (Parameter bereits eingesetzt). */
+  /** Concrete path (parameters already filled in). */
   path: string
   hasBody: boolean
   body: string
 }
 
-/** Platzhalter statt echtem Key — der API-Key erscheint nie im curl (spec §4). */
+/** Placeholder instead of the real key — the API key never appears in curl. */
 export const CURL_KEY_PLACEHOLDER = 'Bearer $LURADB_KEY'
 
 export function buildCurl(request: CurlRequest): string {

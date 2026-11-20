@@ -99,8 +99,8 @@ describe('connect', () => {
   })
 })
 
-// Der Transport läuft unter __TAURI_INTERNALS__ übers Plugin statt über HTTP — MSW greift dort nicht,
-// deshalb steuert @tauri-apps/plugin-http hier direkt per Mock (spec 009).
+// Under __TAURI_INTERNALS__ the transport goes through the plugin instead of HTTP — MSW does not see it,
+// so @tauri-apps/plugin-http is mocked directly here.
 describe('self-signed certificate hint (desktop, unreachable https://)', () => {
   function stubDesktop(): void {
     vi.stubGlobal('__TAURI_INTERNALS__', {})

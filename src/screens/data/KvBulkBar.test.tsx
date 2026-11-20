@@ -43,7 +43,7 @@ function Harness({ prefix, initialContains }: { prefix: string; initialContains:
   return <KvBulkBar domain={DOMAIN} apiClient={apiClient} scan={{ prefix, contains: initialContains }} />
 }
 
-/** Server-Scan der Leiste: filtert wie der echte Server nach `contains` (Substring, case-sensitiv), `total` = Treffer vor `limit`. */
+/** Bar's server scan: filters by `contains` like the real server (substring, case-sensitive), `total` = matches before `limit`. */
 function keysHandler(keys: string[], onRequest?: (url: URL) => void) {
   return http.get(KEYS_URL, ({ request }) => {
     const url = new URL(request.url)
@@ -91,7 +91,7 @@ describe('KvBulkBar', () => {
     expect(urls[0]?.searchParams.get('prefix')).toBe('session')
     expect(urls[0]?.searchParams.has('contains')).toBe(false)
 
-    // Tippen allein ändert die Selektion nicht — erst apply schickt den Filter.
+    // Typing alone does not change the selection; only apply sends the filter.
     fireEvent.change(screen.getByLabelText('bulk key filter'), { target: { value: ':1' } })
     expect(screen.getByText('3 keys selected')).toBeInTheDocument()
     expect(urls).toHaveLength(1)
@@ -121,7 +121,7 @@ describe('KvBulkBar', () => {
     server.use(http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['a', 'b', 'c'], { total: 12000, limit: 10000 }))))
     await renderBar()
 
-    // Die Zeile nennt die tatsächlich geladene Zahl (am Cap 10,000), nicht die angefragte.
+    // The line names the count actually loaded (at the 10,000 cap), not the requested one.
     expect(await screen.findByText('3 of 12,000 matching keys loaded — the run covers the loaded keys only')).toBeInTheDocument()
     expect(textOf('.kv-bulk__scope')).toBe('3 of 12,000 matching keys')
     fireEvent.click(screen.getByLabelText('delete'))
@@ -188,12 +188,12 @@ describe('KvBulkBar', () => {
     expect(await screen.findByText(/ok 3/)).toBeInTheDocument()
     expect(screen.getByText('failed 0')).toBeInTheDocument()
     expect(deleteCalls).toBe(3)
-    // Leerer Prefix ⇒ kein Server-Endpunkt (spec data/013 §1), der Fanout bleibt.
+    // Empty prefix ⇒ no server endpoint, the fan-out stays.
     expect(serverDeletes).toBe(0)
-    // Fanout läuft ohne withCall/Recorder (spec §5) — RECENT REQUESTS sieht trotz 3 echter DELETEs keinen (nur den Scan-Refetch).
+    // Fan-out runs without withCall/recorder: RECENT REQUESTS sees none of the 3 real DELETEs (only the scan refetch).
     expect(recordedDeletes()).toBe(0)
     await waitFor(() => expect(queryClient.getQueryState(['kv-keys', DOMAIN, '', ''])?.isInvalidated).toBe(true))
-    // Die eigene Selektionsgrundlage zieht mit (aktiv beobachtet ⇒ sofortiger Refetch) — sonst stünde die Leiste nach ihrem Lauf auf altem Stand (spec data/011 §8).
+    // The bar's own selection basis follows (actively observed ⇒ immediate refetch); otherwise the bar would show stale data after its run.
     await waitFor(() => expect(scanCalls).toBe(2))
   })
 
@@ -260,7 +260,7 @@ describe('KvBulkBar', () => {
     expect(screen.getByText('rate-limited · rate limit exceeded, retry in 2s')).toBeInTheDocument()
   })
 
-  describe('server-side delete (spec data/013)', () => {
+  describe('server-side delete', () => {
     it('with a scan prefix, delete runs as one DELETE …/keys?prefix= (recorded), names the criterion, shows the server count and invalidates', async () => {
       const serverDeletes: URL[] = []
       let keyDeletes = 0
@@ -297,7 +297,7 @@ describe('KvBulkBar', () => {
       expect(serverDeletes[0]?.searchParams.get('prefix')).toBe('user-')
       expect(serverDeletes[0]?.searchParams.has('contains')).toBe(false)
       expect(keyDeletes).toBe(0)
-      // Ein Call, bewusste Mutation ⇒ aufgezeichnet (spec data/013 §4), im Gegensatz zum Fanout.
+      // One call, deliberate mutation ⇒ recorded, unlike the fan-out.
       expect(getRecordedCalls().filter((call) => call.method === 'DELETE').length).toBe(recordedBefore + 1)
       await waitFor(() => expect(queryClient.getQueryState(['kv-keys', DOMAIN, 'user-', ''])?.isInvalidated).toBe(true))
       await waitFor(() => expect(queryClient.getQueryState(['kv-value', DOMAIN, 'user-1'])?.isInvalidated).toBe(true))

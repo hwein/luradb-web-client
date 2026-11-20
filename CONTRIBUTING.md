@@ -31,8 +31,8 @@ never simulated.
 - **Bug reports** — open an issue with the client version, the server version
   (`GET /version`), reproduction steps, expected vs. observed behavior, and any
   relevant console output.
-- **Feature contributions** — open a PR (see §3) and argue the feature bar from
-  §1 in writing.
+- **Feature contributions** — open a PR (see section 3) and argue the feature bar from
+  section 1 in writing.
 - **Documentation fixes** — open a PR.
 
 The maintainer does not hold design discussions. The written case belongs in the

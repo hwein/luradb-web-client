@@ -21,7 +21,7 @@ export function domainResponse(name: string, overrides?: Partial<DomainResponse>
   return { name, created_at: 1, state: 'active', require_conditional_writes: { kv: false, json: false }, ...overrides }
 }
 
-/** Envelope von `GET /store-api/kv/{domain}/keys` (Contract 0.6.1) — Tests nennen nur die Keys; `total`/`offset`/`limit` sind überschreibbar (Paging-Tests). */
+/** Envelope of `GET /store-api/kv/{domain}/keys` (Contract 0.6.1); tests pass only the keys, `total`/`offset`/`limit` can be overridden (paging tests). */
 export function kvKeyScan(keys: string[], envelope: Partial<Omit<KeyScanResponse, 'keys'>> = {}): KeyScanResponse {
   return { keys, total: keys.length, offset: 0, limit: 10000, ...envelope }
 }

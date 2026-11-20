@@ -6,7 +6,7 @@ interface ScreenPlaceholderProps {
   children?: ReactNode
 }
 
-/** Platzhalter, bis die jeweilige Bereichs-Spec den Screen füllt. */
+/** Placeholder until the screen is implemented. */
 export function ScreenPlaceholder({ title, children }: ScreenPlaceholderProps) {
   return (
     <div className="screen-placeholder">

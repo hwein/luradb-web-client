@@ -12,8 +12,6 @@
   min-height: 0;
 }
 
-/* --- Tab strip (Prototyp Z. 63–66) ----------------------------------- */
-
 .sql-tabs {
   display: flex;
   align-items: stretch;
@@ -88,8 +86,6 @@
   background: var(--panel2);
   color: var(--tx);
 }
-
-/* --- Toolbar (Prototyp Z. 68–74) ------------------------------------- */
 
 .sql-toolbar {
   display: flex;
@@ -215,8 +211,6 @@
   color: var(--accT);
 }
 
-/* --- Save as view bar (spec §6) -------------------------------------- */
-
 .sql-saveview {
   display: flex;
   align-items: center;
@@ -271,8 +265,6 @@
   background: var(--panel);
 }
 
-/* --- Editor surface (Prototyp Z. 76) --------------------------------- */
-
 .sql__editor {
   flex: 1;
   min-height: 0;
@@ -280,14 +272,12 @@
   background: var(--edbg);
 }
 
-/* Der geteilte CodeEditor deckelt sonst auf 220px (rest/001) — hier soll er die Fläche füllen. */
+/* The shared CodeEditor otherwise caps at 220px; here it should fill the area. */
 .sql__editor .code-editor,
 .sql__editor .code-editor .cm-editor {
   height: 100%;
   max-height: none;
 }
-
-/* --- Results panel (Prototyp Z. 80–88) ------------------------------- */
 
 .sql-results {
   height: 34%;
@@ -364,8 +354,6 @@
   padding: 10px 14px;
   color: var(--err);
 }
-
-/* --- Result grid ----------------------------------------------------- */
 
 .sql-grid {
   width: 100%;
@@ -460,8 +448,6 @@
 .sql-grid tbody tr:hover .sql-link:hover {
   background: var(--panel);
 }
-
-/* --- Docs split (Prototyp Z. 91–109) --------------------------------- */
 
 .sql-docs {
   width: clamp(300px, 28vw, 390px);

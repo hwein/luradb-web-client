@@ -30,7 +30,7 @@ function refTone(column: ColumnInfo): 'json' | 'kv' | undefined {
   return undefined
 }
 
-/** REL-Modus des Data Browsers (spec data/003): Schema-Kopf, Zeilen-Grid mit Expand-Toggle, Row-CRUD, Filter-Ankunft aus Referenced-by. */
+/** REL mode of the data browser: schema head, row grid with expand toggle, row CRUD, filter arrival from referenced-by. */
 export function RelBrowser({ domain, apiClient, table, filterCol, filterVal }: RelBrowserProps) {
   const navigate = useNavigate()
   const filterActive = filterCol !== undefined && filterVal !== undefined
@@ -39,7 +39,7 @@ export function RelBrowser({ domain, apiClient, table, filterCol, filterVal }: R
   const [mode, setMode] = useState<RelDetailMode>({ kind: 'empty' })
   const [alterModalOpen, setAlterModalOpen] = useState(false)
 
-  // Cached list (same query key as the Explorer) for the alter-table assistant (spec sql/004 §3).
+  // Cached list (same query key as the Explorer) for the alter-table assistant.
   const domainSummary = useDomainSummaries(apiClient).find((entry) => entry.name === domain) ?? { name: domain, conditionalWrites: [] }
 
   const schemaQuery = useQuery(relTableDetailQueryOptions(apiClient, domain, table, apiClient !== undefined))
@@ -59,7 +59,7 @@ export function RelBrowser({ domain, apiClient, table, filterCol, filterVal }: R
   const columns = schemaQuery.data?.columns ?? []
   const pkColumn = primaryKeyColumn(columns)
 
-  // Neuer Tabellen-/Filterkontext ⇒ Auswahl verwerfen, dann greift Auto-Select auf die erste Zeile (Expand-Toggle bleibt bewusst außen vor).
+  // New table/filter context => drop the selection, then auto-select picks the first row (the expand toggle is deliberately left out).
   useEffect(() => {
     setMode({ kind: 'empty' })
   }, [domain, table, filterCol, filterVal])
@@ -78,7 +78,7 @@ export function RelBrowser({ domain, apiClient, table, filterCol, filterVal }: R
     void navigate('/docs')
   }
 
-  // Absprung zum Ziel-Objekt (spec 009 §5): Ankunftsparam analog zur Filter-Ankunft, den KvBrowser/JsonBrowser als initiale Detail-Selektion übernehmen.
+  // Jump to the target object: an arrival param like the filter arrival, taken by KvBrowser/JsonBrowser as the initial detail selection.
   function openLinkedKey(engine: 'json' | 'kv', key: string): void {
     void navigate(`/data?${new URLSearchParams({ engine, key }).toString()}`)
   }
@@ -168,7 +168,7 @@ export function RelBrowser({ domain, apiClient, table, filterCol, filterVal }: R
           onOpenDoc={goToLinkDocs}
         />
         <RelRowDetail
-          // Remount je Modus/Zeile setzt Edit-/Bestätigungs-Zustände zurück (statt eines Reset-Effects, der mit schnellen Folge-Klicks racte).
+          // Remounting per mode/row resets edit/confirmation state (instead of a reset effect that raced with quick follow-up clicks).
           key={mode.kind === 'view' ? `view:${mode.pk}` : mode.kind}
           domain={domain}
           apiClient={apiClient}

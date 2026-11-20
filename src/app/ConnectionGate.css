@@ -7,7 +7,7 @@
   padding: 24px;
 }
 
-/* margin:auto statt align/justify-center: zentriert und bleibt bei Overflow scrollbar */
+/* margin:auto, not align/justify-center: centers and stays scrollable on overflow */
 .connection-gate__stack {
   margin: auto;
   display: flex;
@@ -29,7 +29,7 @@
   padding: 22px;
 }
 
-/* Lockup nach Logo-Guide 02: Mark + Wortmarke + Produkt-Chip, Proportionen ~40:32 hochskaliert */
+/* Lockup: mark + wordmark + product chip, proportions ~40:32 scaled up */
 .connection-gate__brand {
   display: flex;
   align-items: center;

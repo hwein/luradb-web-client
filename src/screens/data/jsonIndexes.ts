@@ -10,7 +10,7 @@ export const INDEX_TYPES: readonly IndexType[] = ['string', 'number', 'boolean']
 export type CreateIndexOutcome = { status: 'ok'; call: CallMeta; index: IndexResponse } | { status: 'error'; call: CallMeta; message: string }
 export type DeleteIndexOutcome = { status: 'ok'; call: CallMeta } | { status: 'error'; call: CallMeta; message: string }
 
-/** Anlage über den typisierten Client (spec data/006 §3); Fehlertext wie reindexStart.ts/sqlRun.ts — 400/409 sind text/plain (live geprüft). */
+/** Create via the typed client; error text like reindexStart.ts/sqlRun.ts, since 400/409 are text/plain (verified live). */
 export async function createIndex(apiClient: ApiClient, domain: string, field: string, type: IndexType): Promise<CreateIndexOutcome> {
   let errorBody: unknown
   const { data, call } = await withCall<IndexResponse>('POST', async () => {
@@ -25,7 +25,7 @@ export async function createIndex(apiClient: ApiClient, domain: string, field: s
   return { status: 'error', call, message: messageFromError(errorBody, call.status) }
 }
 
-/** `field` geht unverändert (Dot-Notation) in den Pfad — openapi-fetch encodiert Params selbst, `.` bleibt dabei unescaped (live geprüft). */
+/** `field` goes into the path unchanged (dot notation); openapi-fetch encodes params itself and leaves `.` unescaped (verified live). */
 export async function deleteIndex(apiClient: ApiClient, domain: string, field: string): Promise<DeleteIndexOutcome> {
   let errorBody: unknown
   const { call } = await withCall('DELETE', async () => {
@@ -39,7 +39,7 @@ export async function deleteIndex(apiClient: ApiClient, domain: string, field: s
   return { status: 'error', call, message: messageFromError(errorBody, call.status) }
 }
 
-/** Contract liefert Unix-Sekunden — UTC-Datum, locale-unabhängig (Panel-Zeile "field · type · created"). */
+/** The contract returns Unix seconds; UTC date, locale-independent (panel row "field · type · created"). */
 export function formatIndexCreatedAt(unixSeconds: number): string {
   return new Date(unixSeconds * 1000).toISOString().slice(0, 10)
 }

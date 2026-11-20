@@ -15,7 +15,7 @@ export function isJsonObject(value: unknown): value is Record<string, unknown> {
 
 export type ParseResult = { ok: true; value: unknown } | { ok: false; error: string }
 
-/** Zentrale JSON.parse-Stelle (Filter, Edit, New) — Fehlermeldung inline, nie ein stiller Request. */
+/** Central JSON.parse site (filter, edit, new): error shown inline, never a silent request. */
 export function safeJsonParse(text: string): ParseResult {
   try {
     return { ok: true, value: JSON.parse(text) }
@@ -42,7 +42,7 @@ function documentContent(doc: DocumentResponse): unknown {
   return names.length === 1 && names[0] === '_content' ? fields._content : fields
 }
 
-/** Kompaktiertes JSON ohne Metafelder, erste ~60 Zeichen (spec §3). */
+/** Compact JSON without meta fields, first ~60 characters. */
 export function documentPreview(doc: DocumentResponse): string {
   const compact = JSON.stringify(documentContent(doc))
   return compact.length > 60 ? `${compact.slice(0, 60)}…` : compact
@@ -115,7 +115,7 @@ async function fetchSearchPage(
   return { documents: data.documents.map(toSummary), total: data.total, offset: data.offset, limit: data.limit, call }
 }
 
-/** Liste (leerer Filter) oder Suche (Filter gesetzt), Seiten hängen sich an — Query-Key trägt Domäne+Filtertext (spec §2/§3). */
+/** List (empty filter) or search (filter set), pages append; the query key carries domain + filter text. */
 export function jsonDocumentsQueryOptions(apiClient: ApiClient | undefined, domain: string, filter: ParsedFilter | undefined) {
   return infiniteQueryOptions({
     queryKey: ['json-documents', domain, filter?.text ?? ''] as const,
@@ -137,7 +137,7 @@ export function jsonDocumentsQueryOptions(apiClient: ApiClient | undefined, doma
 export interface DocumentDetail {
   key: string
   version: number
-  /** Dokumentinhalt ohne Metafelder — Anzeige- und Edit-Grundlage (spec §4); skalar bei `_content`-Dokumenten (general/013 §6). */
+  /** Document content without meta fields, the basis for display and edit; scalar for `_content` documents. */
   fields: unknown
   etag: string | undefined
 }
@@ -146,7 +146,7 @@ export function documentPath(domain: string, key: string): string {
   return `${BASE_PATH}/json/${encodeURIComponent(domain)}/documents/${encodeURIComponent(key)}`
 }
 
-/** GET Einzeldokument bleibt auf `fetchRaw`: der typisierte Client reicht den `ETag`-Header nicht durch und wirft auf 404. */
+/** Single-document GET stays on `fetchRaw`: the typed client does not pass the `ETag` header through and throws on 404. */
 export function jsonDocumentQueryOptions(apiClient: ApiClient | undefined, domain: string, key: string | undefined) {
   return queryOptions({
     queryKey: ['json-document', domain, key ?? ''] as const,
@@ -162,14 +162,14 @@ export function jsonDocumentQueryOptions(apiClient: ApiClient | undefined, domai
   })
 }
 
-/** Schreibpfade bleiben auf `fetchRaw`: der Contract typisiert den Request-Body als `Record<string, never>` — der typisierte Client brächte nur einen Cast. */
+/** Write paths stay on `fetchRaw`: the contract types the request body as `Record<string, never>`, so the typed client would only add a cast. */
 export async function putDocument(apiClient: ApiClient, domain: string, key: string, etag: string | undefined, fields: unknown): Promise<void> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (etag !== undefined) headers['If-Match'] = etag
   await apiClient.fetchRaw(documentPath(domain, key), { method: 'PUT', headers, body: JSON.stringify(fields) })
 }
 
-/** Server vergibt den Key; die 201-Antwort trägt das angelegte Dokument inkl. `_key`. */
+/** Server assigns the key; the 201 response holds the created document incl. `_key`. */
 export async function createDocument(apiClient: ApiClient, domain: string, fields: unknown): Promise<string> {
   const response = await apiClient.fetchRaw(`${BASE_PATH}/json/${encodeURIComponent(domain)}/documents`, {
     method: 'POST',

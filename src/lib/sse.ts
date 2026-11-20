@@ -1,7 +1,7 @@
 /**
- * Events sind Invalidierungssignale — das Re-Read der betroffenen Daten bleibt verbindlich.
- * IDs ordnen den Stream, nicht die Writes.
- * ID-Lücken sind bei gefilterten Abos Normalbetrieb und nie ein Verlust-Indiz — daraus wird nie eine Nachlade-Logik abgeleitet.
+ * Events are invalidation signals; re-reading the affected data stays authoritative.
+ * IDs order the stream, not the writes.
+ * ID gaps are normal with filtered subscriptions and never a sign of loss; no catch-up logic is ever derived from them.
  */
 
 export type SseConnectionState = 'connected' | 'reconnecting' | 'closed'
@@ -9,40 +9,40 @@ export type SseConnectionState = 'connected' | 'reconnecting' | 'closed'
 export type SseResetReason = 'restart' | 'window_exceeded' | 'lagged' | 'unknown_id' | 'unknown'
 
 export interface SseEvent {
-  /** Event-Name aus `event:`; Default 'message' wenn keine event-Zeile im Frame steht. */
+  /** Event name from `event:`; defaults to 'message' when the frame has no event line. */
   event: string
-  /** Zusammengeführte `data:`-Zeilen (mit \n verbunden). */
+  /** Merged `data:` lines (joined with \n). */
   data: string
-  /** `id:`-Feld des Frames; `undefined`, wenn der Frame keins (oder ein leeres) trägt. */
+  /** `id:` field of the frame; `undefined` if the frame has none (or an empty one). */
   id?: string
 }
 
 export interface SseOpenContext {
-  /** Zuletzt gesehene nicht-leere Frame-ID dieses Aufrufs; `undefined` beim Erst-Open und solange keine ID kam. */
+  /** Last non-empty frame ID seen by this call; `undefined` on the first open and until an ID arrives. */
   lastEventId?: string
-  /** Erst-Open `false`, jeder weitere Versuch `true` — auch ohne ID. */
+  /** First open `false`, each retry `true`, even without an ID. */
   reconnect: boolean
 }
 
 export interface SseStreamOptions {
-  /** Öffnet die Response (Client-Infrastruktur aus general/003) — Accept/Auth/Recorder liegen dort. */
+  /** Opens the response (client infrastructure); Accept/Auth/recorder live there. */
   open: (path: string, context: SseOpenContext) => Promise<Response>
-  /** Beendet Stream, Reconnects und Backoff-Timer endgültig. */
+  /** Ends stream, reconnects and backoff timers for good. */
   signal: AbortSignal
   onEvent: (event: SseEvent) => void
-  /** `event: reset` — verwirf, was aus dem Stream abgeleitet wurde, und lies neu. Kein Event, sondern ein Zustandsbefehl. */
+  /** `event: reset`: discard what was derived from the stream and re-read. A state command, not an event. */
   onReset?: (reason: SseResetReason) => void
   onStateChange?: (state: SseConnectionState) => void
-  /** 401: Server-Key ungültig — der Aufrufer invalidiert die Session (wie der QueryClient-Handler). */
+  /** 401: server key invalid; the caller invalidates the session (like the QueryClient handler). */
   onUnauthorized?: () => void
 }
 
 const STABLE_RESET_MS = 60_000
 
-/** 3× Server-Keep-Alive (~15 s): danach gilt der Stream als tot — eine halboffene Verbindung meldet sich nie von selbst. */
+/** 3x server keep-alive (~15 s): after that the stream counts as dead; a half-open connection never reports itself. */
 const SSE_IDLE_TIMEOUT_MS = 45_000
 
-/** `data` des reset-Frames ist best effort — jeder unbekannte, fehlende oder kaputte Wert wird 'unknown', nie ein Wurf. */
+/** `data` of the reset frame is best effort: any unknown, missing or broken value becomes 'unknown', never a throw. */
 function resetReasonOf(data: string): SseResetReason {
   let parsed: unknown
   try {
@@ -62,14 +62,14 @@ function resetReasonOf(data: string): SseResetReason {
   }
 }
 
-/** Backoff-Ladder 1s → 2s → 5s (danach konstant 5s). */
+/** Backoff ladder 1s → 2s → 5s (then 5s constant). */
 function backoffDelay(attempt: number): number {
   if (attempt <= 0) return 1000
   if (attempt === 1) return 2000
   return 5000
 }
 
-/** setTimeout, das bei Abort sofort auflöst und keinen Zombie-Timer hinterlässt. Resolve `true` = durchgelaufen. */
+/** setTimeout that resolves immediately on abort and leaves no zombie timer. `true` = ran to completion. */
 function abortableDelay(ms: number, signal: AbortSignal): Promise<boolean> {
   if (signal.aborted) return Promise.resolve(false)
   return new Promise((resolve) => {
@@ -86,9 +86,9 @@ function abortableDelay(ms: number, signal: AbortSignal): Promise<boolean> {
 }
 
 /**
- * Liest den Body zeilenweise und dispatcht SSE-Frames; kehrt zurück, wenn der Server schließt,
- * `SSE_IDLE_TIMEOUT_MS` ohne Chunk vergehen oder `signal` abbricht (Abbruch cancelt den Reader — der
- * Signal wird nie an fetch gereicht, damit fremde AbortSignal-Realms wie jsdom/undici nicht kollidieren).
+ * Reads the body line by line and dispatches SSE frames; returns when the server closes,
+ * `SSE_IDLE_TIMEOUT_MS` passes without a chunk, or `signal` aborts (abort cancels the reader; the
+ * signal is never passed to fetch, so foreign AbortSignal realms like jsdom/undici do not collide).
  */
 async function readFrames(
   body: ReadableStream<Uint8Array>,
@@ -144,7 +144,7 @@ async function readFrames(
           dispatch()
           continue
         }
-        if (line.startsWith(':')) continue // Kommentar / Keep-Alive-Ping
+        if (line.startsWith(':')) continue // comment / keep-alive ping
         const colon = line.indexOf(':')
         const field = colon === -1 ? line : line.slice(0, colon)
         let val = colon === -1 ? '' : line.slice(colon + 1)
@@ -152,7 +152,7 @@ async function readFrames(
         if (field === 'event') eventType = val
         else if (field === 'data') dataLines.push(val)
         else if (field === 'id') eventId = val
-        // retry ignoriert — der Server sendet keins, die Backoff-Ladder unten bleibt maßgeblich.
+        // retry is ignored: the server sends none, the backoff ladder below stays authoritative.
       }
     }
   } finally {
@@ -162,23 +162,23 @@ async function readFrames(
 }
 
 /**
- * Hält einen SSE-Stream offen: parst Frames, nimmt nach Abbruch mit `last_event_id` wieder auf und verbindet
- * mit Backoff 1s→2s→5s neu (Reset nach stabiler Minute), endet endgültig bei 410 (Domäne gelöscht),
- * 403 (Key ohne Stream-Recht) und 401 (Session ungültig).
- * Auslöser des Reconnects ist entweder ein Stream-Ende oder 45 s ohne Chunk — eine halboffene Verbindung
- * (Server-Neustart hinter einem Proxy) bliebe sonst für immer auf `connected` stehen.
- * Der übergebene `signal` beendet alles — auch laufende Backoff-Timer.
+ * Keeps an SSE stream open: parses frames, resumes with `last_event_id` after a drop and reconnects
+ * with backoff 1s→2s→5s (reset after a stable minute), ends for good on 410 (domain deleted),
+ * 403 (key without stream permission) and 401 (session invalid).
+ * A reconnect is triggered either by the stream ending or by 45 s without a chunk; a half-open connection
+ * (server restart behind a proxy) would otherwise stay on `connected` forever.
+ * The passed `signal` ends everything, including running backoff timers.
  */
 export async function sseStream(path: string, options: SseStreamOptions): Promise<void> {
   const { open, signal, onEvent, onReset, onStateChange, onUnauthorized } = options
-  // Ladder-Position über Reconnects hinweg; nur nach stabiler Minute zurück auf 0.
+  // Ladder position across reconnects; back to 0 only after a stable minute.
   let attempt = 0
-  // Resume-Punkt nur für diesen Aufruf — ein Domänen-/Prefix-Wechsel startet bewusst ohne ID neu.
+  // Resume point for this call only; a domain/prefix change deliberately restarts without an ID.
   let lastEventId: string | undefined
   let opened = false
 
   const handleFrame = (frame: SseEvent): void => {
-    // Auch der reset-Frame trägt eine ID (den aktuellen Kopf) — ohne Übernahme liefe der nächste Open in eine Reset-Schleife.
+    // The reset frame also carries an ID (the current head); without adopting it the next open would loop on reset.
     if (frame.id !== undefined) lastEventId = frame.id
     if (frame.event === 'reset') {
       onReset?.(resetReasonOf(frame.data))
@@ -209,7 +209,7 @@ export async function sseStream(path: string, options: SseStreamOptions): Promis
       return
     }
 
-    // 410: Domäne gelöscht. 403: dieser Key darf den Stream nicht — beides ändert kein Reconnect.
+    // 410: domain deleted. 403: this key may not read the stream. A reconnect changes neither.
     if (response.status === 410 || response.status === 403) {
       onStateChange?.('closed')
       return
@@ -229,7 +229,7 @@ export async function sseStream(path: string, options: SseStreamOptions): Promis
     try {
       await readFrames(response.body, handleFrame, signal)
     } catch {
-      // Lese-/Netzwerkabbruch mitten im Stream — wie ein normales Stream-Ende behandeln (reconnect).
+      // Read/network failure mid-stream: treat like a normal stream end (reconnect).
     }
     if (signal.aborted) return
     if (Date.now() - connectedAt >= STABLE_RESET_MS) attempt = 0

@@ -7,9 +7,9 @@ export type AdminCapability = 'yes' | 'no' | 'pending' | 'error'
 
 export interface Capabilities {
   admin: AdminCapability
-  /** Nur gesetzt bei `admin === 'error'` — Text für die Gate-Meldung (spec admin/005 §3). */
+  /** Only set when `admin === 'error'` — text for the gate message. */
   adminError?: string
-  /** Nur gesetzt, wenn whoami mit 200 und einem Namen geantwortet hat (spec general/014 §2). */
+  /** Only set when whoami answered 200 with a name. */
   identity?: { name: string; role: string }
 }
 
@@ -22,9 +22,8 @@ function messageOf(error: unknown): string {
 }
 
 /**
- * queryFn wirft NUR bei echten Fehlern (5xx, 404, Netzfehler) — 401/403 sind ein reguläres "keine Identität"-
- * Ergebnis und geben `null` zurück statt zu werfen, sonst würde ein Retry/isError das Gate fälschlich als
- * Fehler statt als Rollen-Gate zeigen (spec admin/005 §3, general/014 §1).
+ * queryFn throws ONLY on real errors (5xx, 404, network); 401/403 is a regular "no identity" result and
+ * returns `null`, otherwise a retry/isError would show the gate as an error instead of a role gate.
  */
 export function whoamiQueryOptions(apiClient: ApiClient | undefined) {
   return queryOptions({
@@ -42,14 +41,12 @@ export function whoamiQueryOptions(apiClient: ApiClient | undefined) {
 }
 
 /**
- * Rechte-Fassade: Screens fragen ausschließlich diesen Hook, nie Rollen-Strings oder Auth-Details.
- * Ableitung aus `GET /auth/whoami` (spec general/014): `Admin` und `Disabled` (offener Server) ⇒ yes, jede
- * andere Rolle sowie 401/403 ⇒ no (least privilege).
- * Vierwertig statt boolesch (spec admin/005 §Entscheidungen): `pending` (lädt, auch ohne Verbindung — die
- * Query ist dann `enabled: false` und bleibt TanStack-seitig für immer `isPending`) und `error` (Anfrage
- * scheiterte, kein 401/403) dürfen nie zu "kein Admin" kollabieren.
- * Erweiterungspunkt: feingranulare Rechte je Domäne/Objekt kommen mit dem künftigen
- * Server-Auth-Modell (admin/002, Server-Konzept steht aus) — dann wächst dieses Interface additiv.
+ * Permissions facade: screens ask only this hook, never role strings or auth details.
+ * Derived from `GET /auth/whoami`: `Admin` and `Disabled` (open server) ⇒ yes, any other role and 401/403 ⇒ no
+ * (least privilege).
+ * Four-valued, not boolean: `pending` (loading, also without a connection — the query is then `enabled: false`
+ * and stays `isPending` forever) and `error` (request failed, not 401/403) must never collapse to "not admin".
+ * Extension point: per-domain/object permissions will extend this interface additively.
  */
 export function useCapabilities(): Capabilities {
   const connected = useConnectedSession()

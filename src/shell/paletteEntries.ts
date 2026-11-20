@@ -14,7 +14,7 @@ export type PaletteEntry =
 export interface PaletteGroup {
   label: 'SCREENS' | 'DOMAINS' | 'DOCS'
   entries: PaletteEntry[]
-  /** Nur DOMAINS ohne aktive Session (spec shell/008 §5): stumme Zeile statt echter Treffer. */
+  /** Only DOMAINS without an active session: a silent row instead of real hits. */
   emptyMessage?: string
 }
 
@@ -23,8 +23,8 @@ function matches(haystack: string, needle: string): boolean {
 }
 
 /**
- * Trefferberechnung der Command-Palette (spec shell/008 §3/§6): case-insensitiver Substring-Match, kein
- * Fuzzy-Scoring. Sortiert nicht selbst — Eingabe-Arrays liefern bereits Registry- bzw. Alphabet-Reihenfolge.
+ * Hit computation of the command palette: case-insensitive substring match, no fuzzy scoring.
+ * Does not sort itself; the input arrays already come in registry or alphabetical order.
  */
 export function paletteEntries(
   query: string,
@@ -48,7 +48,7 @@ export function paletteEntries(
           .map((domain): PaletteEntry => ({ kind: 'domain', domain })),
       }
 
-  // Leere Eingabe zeigt keine Docs (KISS-Startbild, spec §2) — ein Substring-Match auf '' träfe sonst alle Artikel.
+  // An empty query shows no docs (keeps the start view simple); a substring match on '' would hit every article.
   const docEntries: PaletteEntry[] =
     needle === ''
       ? []

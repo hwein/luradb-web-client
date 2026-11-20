@@ -11,10 +11,10 @@ interface KvMasterListProps {
   onLoadMore: () => void
 }
 
-/** Master list (spec §2): keys from the server-side scan, the selected row keeps the hover surface, offset-based "load more" (spec data/011). */
+/** Master list: keys from the server-side scan, the selected row keeps the hover surface, offset-based "load more". */
 export function KvMasterList({ keys, selectedKey, onSelect, onNew, loading, hasMore, loadingMore, onLoadMore }: KvMasterListProps) {
-  // Einmal je Selektion zur Zeile scrollen, sobald sie gerendert ist (?key=-Ankunft liegt tief in der Liste);
-  // 'nearest' macht sichtbare Zeilen zum No-Op, und "load more" scrollt nie zurück (scrolledFor-Guard).
+  // Scroll to the row once per selection as soon as it is rendered (a ?key= arrival can sit deep in the list);
+  // 'nearest' makes visible rows a no-op, and "load more" never scrolls back (scrolledFor guard).
   const selectedRef = useRef<HTMLButtonElement>(null)
   const scrolledForRef = useRef<string | undefined>(undefined)
   useEffect(() => {
@@ -36,7 +36,7 @@ export function KvMasterList({ keys, selectedKey, onSelect, onNew, loading, hasM
       ) : keys.length === 0 ? (
         <div className="kv-list__hint">no keys</div>
       ) : (
-        // Index im React-Key: Offset-Paging kann bei parallelen Writes dieselbe Zeile auf zwei Seiten liefern (kvEntries.ts).
+        // Index in the React key: offset paging can return the same row on two pages under parallel writes (kvEntries.ts).
         keys.map((key, index) => (
           <button
             key={`${index}:${key}`}

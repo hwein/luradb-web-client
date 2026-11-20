@@ -12,9 +12,9 @@ export interface CallResult<T> {
 }
 
 /**
- * Führt einen typisierten Client-Call aus (`api.GET/POST/…`) und liefert die Call-Metadaten dazu,
- * damit der Aufrufer seine eigene `<CallLine>`/`<StatusCode>` exakt füllen kann — race-frei bei
- * parallelen Queries, da nicht im Recorder nach „dem letzten Call" gesucht wird.
+ * Runs a typed client call (`api.GET/POST/…`) and returns the call metadata with it,
+ * so the caller can fill its own `<CallLine>`/`<StatusCode>` exactly; race-free with
+ * parallel queries because the recorder is never searched for "the last call".
  */
 export async function withCall<T>(
   method: string,

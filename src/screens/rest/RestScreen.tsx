@@ -74,7 +74,7 @@ async function successResult(response: Response, ms: number, curl: string): Prom
       const parsed: unknown = JSON.parse(raw)
       return { status: response.status, ms, ok: true, bodyText: JSON.stringify(parsed, null, 2), extra: contextualInfo(parsed), curl }
     } catch {
-      // kein gültiges JSON trotz Header — als Rohtext zeigen
+      // not valid JSON despite the header — show as raw text
     }
   }
   return { status: response.status, ms, ok: true, bodyText: raw, curl }
@@ -86,7 +86,7 @@ function errorResult(error: ApiError, ms: number, curl: string): SendResult {
   return { status: error.status, ms, ok: false, bodyText, curl }
 }
 
-/** REST Explorer (spec rest/001): Request-Builder über den gebündelten Contract + Roh-Response. */
+/** REST explorer: request builder over the bundled contract + raw response. */
 export function RestScreen() {
   const session = useSession()
   const apiClient = session.status === 'connected' ? session.apiClient : undefined
@@ -104,7 +104,7 @@ export function RestScreen() {
   const bodyExtensions = useMemo(() => [json()], [])
   const paramNames = pathParamNames(path)
 
-  // Methoden-/Pfadwechsel entwaffnet den destruktiven Guard.
+  // Changing method or path disarms the destructive guard.
   useEffect(() => {
     setArmed(false)
   }, [method, path])
@@ -115,8 +115,8 @@ export function RestScreen() {
     return name === 'domain' ? (selected ?? '') : ''
   }
 
-  // Request komplett als mutate-Variablen: TanStack aktualisiert die mutationFn erst im Effect — Closures
-  // über method/path/selected wären direkt nach einem Commit einen Render alt (Muster: JsonDetail/SqlScreen).
+  // Whole request as mutate variables: TanStack updates the mutationFn only in an effect, so
+  // closures over method/path/selected would be one render stale right after a commit (as in JsonDetail/SqlScreen).
   interface SendRequest {
     client: NonNullable<typeof apiClient>
     method: HttpMethod
@@ -129,13 +129,13 @@ export function RestScreen() {
       const start = performance.now()
       try {
         const response = await client.fetchRaw(concretePath, requestInit)
-        // Task-Erwerb (spec engines/001 Orchestrator-Hinweis 1): matcht intern auf reindex-Pfade,
-        // no-op für jeden anderen POST — daher unbedingt versucht, nicht nur bei bekanntem Endpunkt.
+        // Task capture: matches reindex paths internally, a no-op for any other POST — so always attempted,
+        // not only for a known endpoint.
         if (sendMethod === 'POST') {
           try {
             noteReindexStart(concretePath, await response.clone().json())
           } catch {
-            // kein JSON-Body — kein Reindex-Response, nichts zu registrieren
+            // no JSON body — not a reindex response, nothing to register
           }
         }
         return await successResult(response, performance.now() - start, curl)

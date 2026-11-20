@@ -15,7 +15,7 @@ interface IndexPanelProps {
   loading: boolean
 }
 
-/** idx-Pill-Panel (spec data/006 §1/§2): Index-Liste + Anlage-Formular + Post-Create-Reindex-Hinweis — dokumentierte Ergänzung im Karten-Stil. */
+/** idx pill panel: index list + create form + post-create reindex hint, in card style. */
 export function IndexPanel({ domain, apiClient, indexes, loading }: IndexPanelProps) {
   const queryClient = useQueryClient()
   const [field, setField] = useState('')

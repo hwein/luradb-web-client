@@ -32,7 +32,7 @@ describe('AboutContent', () => {
     })
   })
 
-  it('never shows a version pattern in either library list (hardening invariant spec shell/005 §1)', () => {
+  it('never shows a version pattern in either library list (hardening invariant)', () => {
     render(<AboutContent onClose={() => {}} />)
 
     const entries = [

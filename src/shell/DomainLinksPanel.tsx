@@ -14,7 +14,7 @@ interface LinkEntry {
   type: 'KVREF' | 'JSONREF'
 }
 
-/** "LINKS IN {DOMAIN}" (spec shell/002 §5): KVREF-/JSONREF-Spalten aller rel-Tabellen der expandierten Domäne. */
+/** "LINKS IN {DOMAIN}": KVREF/JSONREF columns of all rel tables of the expanded domain. */
 export function DomainLinksPanel({ apiClient, domain }: DomainLinksPanelProps) {
   const tablesQuery = useQuery(relTablesQueryOptions(apiClient, domain.name, true))
   const tables = tablesQuery.data ?? []

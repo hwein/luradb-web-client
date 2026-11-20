@@ -11,7 +11,7 @@ interface SqlTabStripProps {
   onAdd: () => void
 }
 
-/** Editor-Tab-Strip (Prototyp Z. 63–66): aktiver Tab auf `--edbg` mit Top-Border, Umbenennen per Doppelklick, × schließt. */
+/** Editor tab strip: the active tab sits on `--edbg` with a top border, double-click renames, × closes. */
 export function SqlTabStrip({ tabs, activeId, domainName, onSelect, onClose, onRename, onAdd }: SqlTabStripProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')

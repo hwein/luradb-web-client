@@ -7,12 +7,10 @@ import { ConnectionGate } from './ConnectionGate'
 import { createAppQueryClient } from './queryClient'
 import { useSession } from './session'
 
-// Alt-Key der entfernten Configuration-Seite (spec config/003 §5, Seite selbst entfernt in config/005) —
-// enthielt den TOML-Klartext samt api_key. Purge beim App-Start, unabhängig vom Screen-Rückbau.
+// Legacy key of the removed configuration page; it held plaintext TOML including the api_key. Purged on start.
 const LEGACY_TOML_STORAGE_KEY = 'luradb.toml'
 
-// Kein Autoconnect (Autor-Vorgabe 2026-07-17): App-Neustart heißt neue Sitzung — Start immer im Gate,
-// Verbinden ist ein bewusster Klick (mit gemerktem Key genau einer).
+// No autoconnect: every app start begins at the gate and connecting is a deliberate click.
 function AppContent() {
   const session = useSession()
   return session.status === 'connected' ? <AppShell /> : <ConnectionGate />
@@ -27,7 +25,7 @@ export function App() {
     try {
       localStorage.removeItem(LEGACY_TOML_STORAGE_KEY)
     } catch {
-      // best-effort (Storage deaktiviert) — Cleanup ist optional.
+      // best-effort (storage disabled) — cleanup is optional.
     }
   }, [])
 

@@ -36,7 +36,7 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'request failed'
 }
 
-/** Detail-Spalte (spec §4): Ansicht/Edit/Delete eines Dokuments, "new document"-Formular, Referenced-by-Karten. */
+/** Detail column: view/edit/delete of a document, "new document" form, referenced-by cards. */
 export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOpenRelTable }: JsonDetailProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -57,7 +57,7 @@ export function JsonDetail({ domain, apiClient, mode, onSelectKey, onClear, onOp
   const [newText, setNewText] = useState(NEW_DOCUMENT_TEXT)
   const [newError, setNewError] = useState<string | undefined>(undefined)
 
-  // Key/ETag als Mutation-Variablen (nicht aus dem Closure) — bleibt korrekt, falls die Auswahl wechselt, während der Request läuft.
+  // Key/ETag are mutation variables (not closure state), so they stay correct if the selection changes mid-request.
   const saveMutation = useMutation<void, unknown, { key: string; etag: string | undefined; fields: unknown }>({
     mutationFn: async ({ key, etag, fields }) => {
       if (!apiClient) throw new Error('no active connection')

@@ -15,7 +15,7 @@ interface KvBrowserProps {
   initialKey: string | undefined
 }
 
-/** KV-Modus des Data Browsers (spec data/002): Kopf mit Prefix-/Contains-Scan und Watch-Toggle, Master-Detail, optionales Feed-Panel, Footer-CallLine. */
+/** KV mode of the data browser: header with prefix/contains scan and watch toggle, master-detail, optional feed panel, footer CallLine. */
 export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
   const queryClient = useQueryClient()
   const [prefixText, setPrefixText] = useState('')
@@ -23,11 +23,11 @@ export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
   const [committed, setCommitted] = useState<KvKeyFilter>(EMPTY_KV_KEY_FILTER)
   const [watchOn, setWatchOn] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
-  // Ankunft mit ?key= (spec data/009 §5) als Initial-State: als nachgezogener Effekt verlor die Selektion
-  // gegen den Auto-Select, sobald die Key-Liste bereits im Query-Cache lag (Nachtrag data/009).
+  // Arrival with ?key= as initial state: as a follow-up effect the selection lost
+  // against auto-select once the key list was already in the query cache.
   const [mode, setMode] = useState<KvDetailMode>(() => (initialKey === undefined ? { kind: 'empty' } : { kind: 'view', key: initialKey }))
 
-  // Stabil, weil KvDetail ihn als Effekt-Abhängigkeit führt (404-Räumung).
+  // Stable, as KvDetail uses it as an effect dependency (404 clearing).
   const clearMode = useCallback(() => setMode({ kind: 'empty' }), [])
 
   const keysQuery = useInfiniteQuery(kvKeysQueryOptions(apiClient, domain, committed))
@@ -35,8 +35,8 @@ export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
   const keys = pages.flatMap((page) => page.keys)
   const lastPage = pages[pages.length - 1]
 
-  // Neuer Domänen-/Filterkontext ⇒ Auswahl verwerfen, dann greift Auto-Select.
-  // Beim Mount übersprungen, sonst räumte er die Ankunfts-Selektion.
+  // New domain/filter context ⇒ drop the selection, then auto-select applies.
+  // Skipped on mount, otherwise it would clear the arrival selection.
   const contextRef = useRef({ domain, committed })
   useEffect(() => {
     if (contextRef.current.domain === domain && contextRef.current.committed === committed) return
@@ -44,8 +44,8 @@ export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
     setMode({ kind: 'empty' })
   }, [domain, committed])
 
-  // Nicht während eines Refetches: nach einem Value-404 räumt KvDetail die Auswahl und invalidiert die Liste —
-  // die noch alte Liste würde denselben Key sofort wieder wählen (Schleife bis zur frischen Seite).
+  // Not during a refetch: after a value 404 KvDetail clears the selection and invalidates the list;
+  // the still-old list would select the same key again at once (loop until the fresh page).
   useEffect(() => {
     const first = keys[0]
     if (mode.kind === 'empty' && first !== undefined && !keysQuery.isFetching) setMode({ kind: 'view', key: first })
@@ -54,8 +54,8 @@ export function KvBrowser({ domain, apiClient, initialKey }: KvBrowserProps) {
   function submitScan(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault()
     const next: KvKeyFilter = { prefix: prefixText.trim(), contains: containsText.trim() }
-    // Unveränderte Filter wären ein State-No-Op ohne Request — Scan soll aber immer den frischen Stand holen (z. B. nach TTL-Ablauf).
-    // Das offene Detail zieht mit (Wert + Metadaten): erst dessen 404 räumt die Auswahl, die Liste beweist mit Paginierung nichts mehr (spec data/011 §6).
+    // Unchanged filters would be a state no-op without a request, but a scan must always fetch fresh data (e.g. after a TTL expiry).
+    // The open detail follows (value + metadata): only its 404 clears the selection; with pagination the list proves nothing anymore.
     if (next.prefix === committed.prefix && next.contains === committed.contains) {
       invalidateKvKeys(queryClient, domain)
       void queryClient.invalidateQueries({ queryKey: ['kv-value', domain] })

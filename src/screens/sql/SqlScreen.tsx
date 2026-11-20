@@ -58,7 +58,7 @@ function SaveViewBar({ onSubmit, onCancel }: { onSubmit: (name: string) => void;
   )
 }
 
-/** LuraSQL-Konsole (spec sql/001): Editor-Tabs, Run, Expand-Chips, Ergebnis-Grid, togglebarer Docs-Split. */
+/** LuraSQL console: editor tabs, run, expand chips, result grid, toggleable docs split. */
 export function SqlScreen() {
   const session = useSession()
   const apiClient = session.status === 'connected' ? session.apiClient : undefined
@@ -74,33 +74,33 @@ export function SqlScreen() {
   const [docsArticle, setDocsArticle] = useState('lurasql')
   const [savingView, setSavingView] = useState(false)
 
-  // Alle Request-Parameter als mutate-Variablen: TanStack aktualisiert die mutationFn erst im Effect —
-  // eine Closure über apiClient/selected wäre direkt nach einem Commit einen Render alt (Muster: JsonDetail).
+  // All request parameters are mutate variables: TanStack only updates the mutationFn in an effect,
+  // so a closure over apiClient/selected would be one render stale right after a commit.
   const run = useMutation<SqlOutcome, Error, { apiClient: ApiClient; domain: string; sql: string; expand: string[]; params: unknown[] }>({
     mutationFn: ({ apiClient: client, domain, sql, expand, params }) => executeSql(client, domain, sql, expand, params),
     onSuccess: (outcome, variables) => {
       if (outcome.status !== 'ok') return
-      // Schema-Änderungen (u. a. save-as-view) frisch in den Explorer spiegeln (spec §6).
+      // Reflect schema changes (e.g. save-as-view) in the explorer.
       if (outcome.result.kind === 'ddl') {
         void queryClient.invalidateQueries({ queryKey: relTablesKey(variables.domain) })
         void queryClient.invalidateQueries({ queryKey: relViewsKey(variables.domain) })
       }
-      // Row-Counts der Domäne (spec shell/010 §9) — das Ergebnis nennt die betroffene Tabelle nicht, daher Präfix über alle.
+      // Row counts of the domain; the result does not name the affected table, so invalidate by prefix.
       if (outcome.result.kind === 'ddl' || outcome.result.kind === 'dml') {
         void queryClient.invalidateQueries({ queryKey: relTableCountDomainPrefix(variables.domain) })
       }
     },
   })
 
-  // Rohtext-Feld, geparst für Run-Guard und Body (spec sql/003 §2/§4); leer/Whitespace ⇒ ok mit [].
+  // Raw text field, parsed for the run guard and the body; empty/whitespace gives ok with [].
   const paramsResult = parseParams(activeTab?.params ?? '')
   const paramsError = paramsResult.ok ? undefined : paramsResult.error
 
-  // Eine Quelle für Button-disabled UND Klick-Guard — sonst verpufft ein Klick im Fenster zwischen
-  // Domänen-Query und Default-Selektion still (Button schon enabled, selected noch null).
+  // One source for button-disabled AND the click guard, or a click between the domains query and
+  // the default selection is silently lost (button already enabled, selected still null).
   const canRun = domainListed && apiClient !== undefined && selected !== null && activeTab !== undefined && paramsError === undefined && !run.isPending
 
-  // Live-Handler in Refs, damit die (stabile) CodeMirror-Keymap immer den aktuellen Tab-Stand nutzt.
+  // Live handlers in refs so the (stable) CodeMirror keymap always sees the current tab state.
   const runRef = useRef<() => void>(() => {})
   const saveRef = useRef<() => void>(() => {})
   runRef.current = () => {

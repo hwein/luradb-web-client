@@ -37,7 +37,7 @@ function DocsSearchButton() {
   )
 }
 
-/** Persistente Explorer-Spalte (spec shell/002): Domänenliste mit Engine-Sektionen, Links-Panel, Domain-Anlage, Docs-Suche. */
+/** Persistent explorer column: domain list with engine sections, links panel, domain creation, docs search. */
 export function Explorer() {
   const session = useSession()
   const apiClient: ApiClient | undefined = session.status === 'connected' ? session.apiClient : undefined

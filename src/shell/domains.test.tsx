@@ -37,11 +37,11 @@ function renderProbe(apiClient: ApiClient) {
 }
 
 describe('domainsQueryOptions', () => {
-  it('polls every 30s so foreign changes to the domain list surface without user action (spec shell/007 §1)', () => {
+  it('polls every 30s so foreign changes to the domain list surface without user action', () => {
     expect(domainsQueryOptions(undefined).refetchInterval).toBe(30_000)
   })
 
-  it('records the first load (Erst-Load), then stays silent on a refetch once the query already has cached data', async () => {
+  it('records the first load, then stays silent on a refetch once the query already has cached data', async () => {
     let requests = 0
     server.use(
       http.get(`${BASE_URL}/store-api/domains`, () => {
@@ -63,7 +63,7 @@ describe('domainsQueryOptions', () => {
 
     await result.current.refetch()
     expect(requests).toBe(2)
-    expect(calls).toHaveLength(1) // Folge-Tick blieb still
+    expect(calls).toHaveLength(1) // next tick was silent
   })
 })
 

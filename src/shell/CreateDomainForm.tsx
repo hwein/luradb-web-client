@@ -19,7 +19,7 @@ function messageOf(error: Error): string {
   return error instanceof ApiError ? `${error.status} ${error.message}` : error.message
 }
 
-/** Inline form "+ create domain" (spec shell/002 §6, shell/003 §1): one POST; success closes it, an error keeps it open with the error inline. */
+/** Inline form "+ create domain": one POST; success closes it, an error keeps it open with the error inline. */
 export function CreateDomainForm({ apiClient, onClose }: CreateDomainFormProps) {
   const queryClient = useQueryClient()
   const [name, setName] = useState('')

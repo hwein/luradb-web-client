@@ -1,21 +1,21 @@
-# Abhängigkeiten & Build
+# Dependencies and build
 node_modules/
 dist/
 coverage/
 
-# Playwright-Artefakte (Screenshots/Traces, HTML-Report)
+# Playwright artifacts (screenshots/traces, HTML report)
 test-results/
 playwright-report/
 
-# Lokale Umgebung & Secrets (Admin-Key liegt in .env.local)
+# Local env and secrets (admin key lives in .env.local)
 .env.local
 .env.*.local
 
-# KI-/Agent-Dateien bleiben lokal, nie ins Public-Repo
+# AI/agent files stay local, never in the public repo
 .claude/
 
-# Nur lokal gepflegte Arbeitsstände (Autoren-Entscheidung 2026-07-16):
-# Konzepte/Specs, Design-Handoff und API-Contract-Kopie bleiben unversioniert.
+# Locally maintained working material stays unversioned:
+# concepts and specs, design drafts and the API contract copy.
 concept/
 design-concept/
 /api/

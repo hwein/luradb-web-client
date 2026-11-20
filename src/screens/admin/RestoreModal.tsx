@@ -60,7 +60,7 @@ function Facts({ detail }: { detail: BackupDetail }) {
   )
 }
 
-/** Sicht auf `GET /restores/{id}` — der Status lebt nur im Query-Cache, die Registry hält bloß die Identität (spec §6). */
+/** View of `GET /restores/{id}`: the status lives only in the query cache, the registry holds just the identity. */
 function RestoreStatusView({ apiClient, restoreId }: { apiClient: ApiClient | undefined; restoreId: string }) {
   const statusQuery = useQuery(restoreStatusQueryOptions(apiClient, restoreId))
   const result = statusQuery.data
@@ -101,7 +101,7 @@ interface RestoreFormProps {
   onClose: () => void
 }
 
-/** Optionen + Status eines Restores (spec §7) — ohne `<dialog>`-Hülle, damit Tests ihn ohne `showModal()` mounten können. */
+/** Options and status of a restore, without the `<dialog>` shell so tests can mount it without `showModal()`. */
 export function RestoreForm({ apiClient, backupId, onClose }: RestoreFormProps) {
   const queryClient = useQueryClient()
   const connectionId = useConnectedSession()?.connectionId
@@ -144,7 +144,7 @@ export function RestoreForm({ apiClient, backupId, onClose }: RestoreFormProps) 
 
   const scope = detail?.scope ?? ''
   const singleDomain = SINGLE_DOMAIN_SCOPE.test(scope)
-  // Auch die JSON-Engine legt eine default-Domäne automatisch an (live verifiziert) — der Hinweis gilt für alle Ganz-Engine-Scopes.
+  // The JSON engine also auto-creates a default domain (verified live), so the hint applies to all whole-engine scopes.
   const wholeEngine = scope === 'all' || scope === 'kv' || scope === 'json'
   const intoDomainValid = intoDomain === '' || (intoDomain.length <= 50 && NAME_PATTERN.test(intoDomain))
   const activeRestoreId = entry !== undefined && entry.backup_id === backupId ? entry.restore_id : undefined
@@ -244,7 +244,7 @@ export function RestoreForm({ apiClient, backupId, onClose }: RestoreFormProps) 
   )
 }
 
-/** Natives `<dialog>` + `showModal()` um `RestoreForm` (Muster BulkImportModal) — jederzeit schließbar. */
+/** Native `<dialog>` + `showModal()` around `RestoreForm` (like BulkImportModal); closable at any time. */
 export function RestoreModal({ apiClient, backupId, onClose }: RestoreFormProps) {
   const dialogRef = useRef<HTMLDialogElement | null>(null)
   const onCloseRef = useRef(onClose)

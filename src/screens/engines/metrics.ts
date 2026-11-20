@@ -106,7 +106,7 @@ function parseMetrics(body: unknown): MetricsSnapshot {
   }
 }
 
-/** `GET /store-api/metrics` hat im Contract kein Response-Schema — `fetchRaw` + manuelles Parsen wie `health.ts`. */
+/** `GET /store-api/metrics` has no contract response schema, so `fetchRaw` + manual parsing as in `health.ts`. */
 export function metricsQueryOptions(apiClient: ApiClient | undefined) {
   return queryOptions({
     queryKey: ['metrics'] as const,

@@ -17,23 +17,23 @@ function formatTime(ts: number): string {
 }
 
 /**
- * Eigene Komponente, nur gemountet wenn der Watch-Toggle aktiv ist (spec §4) — so läuft `useKvWatch` bei Mount,
- * ohne den Hook im Elternteil bedingt aufzurufen. Events invalidieren die Key-Liste debounced (ein Timer, ~300ms).
+ * Separate component, mounted only while the watch toggle is on, so `useKvWatch` runs on mount
+ * without calling the hook conditionally in the parent. Events invalidate the key list debounced (one timer, ~300ms).
  */
 export function KvWatchFeed({ domain, prefix }: KvWatchFeedProps) {
   const queryClient = useQueryClient()
   const { events, connectionState, resetCount } = useKvWatch(domain, prefix)
 
-  // 410 (Domäne wird gelöscht) beendet den Stream endgültig mit `closed` — dieselbe `closed`-State ist aber auch der
-  // initiale Default vor dem ersten Verbindungsversuch. Nur nach mindestens einem 'connected'/'reconnecting' zählt
-  // ein Rücksprung auf 'closed' als "vom Server beendet", sonst würde jeder Toggle-Start kurz die Hinweiszeile zeigen.
+  // 410 (domain being deleted) ends the stream for good with `closed`, but `closed` is also the
+  // initial default before the first connection attempt. Only after at least one 'connected'/'reconnecting' does
+  // a fall back to 'closed' count as "ended by the server", else every toggle start would briefly show the hint line.
   const [everConnected, setEverConnected] = useState(false)
   useEffect(() => {
     if (connectionState === 'connected' || connectionState === 'reconnecting') setEverConnected(true)
   }, [connectionState])
   const endedByServer = everConnected && connectionState === 'closed'
 
-  // Ein `reset` heißt "Lücke nicht garantierbar" — dieselbe Invalidierung wie nach einem Event, ohne eigene Anzeige.
+  // A `reset` means "no gap-free guarantee": same invalidation as after an event, without its own display.
   const latestTs = events[0]?.ts
   useEffect(() => {
     if (latestTs === undefined && resetCount === 0) return

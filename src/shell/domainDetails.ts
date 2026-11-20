@@ -32,7 +32,7 @@ export function relTablesKey(domain: string) {
   return [...REL_TABLES_PREFIX, domain] as const
 }
 
-/** Detail queries of a domain (spec shell/002 §3/§5) — active only when `enabled`. */
+/** Detail queries of a domain; active only when `enabled`. */
 export function relTablesQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
     queryKey: relTablesKey(domain),
@@ -71,7 +71,7 @@ export function relViewsQueryOptions(apiClient: ApiClient | undefined, domain: s
   })
 }
 
-/** Tabellen-Detail (Spalten) einer einzelnen Tabelle — gecacht je (domain, table), gemeinsam genutzt von der REL-Sektion und dem Links-Panel. */
+/** Detail (columns) of a single table, cached per (domain, table) and shared by the REL section and the links panel. */
 export function relTableDetailQueryOptions(apiClient: ApiClient | undefined, domain: string, table: string, enabled: boolean) {
   return queryOptions({
     queryKey: ['rel-table-detail', domain, table] as const,
@@ -132,9 +132,9 @@ export function kvCountKey(domain: string) {
 }
 
 /**
- * Domänen-Key-Zähler für die Aktivitäts-Ableitung (spec shell/004 §1) über `GET …/kv/{domain}/count` (Contract 0.6.1,
- * spec shell/010 §1) — ohne `prefix`, ohne Key-Transfer. Erst-Load aufgezeichnet, Folge-Ticks still (general/012);
- * der KV-Browser (data/002) nutzt einen eigenen recorded Scan (kvEntries.ts).
+ * Domain key counter for deriving activity, via `GET …/kv/{domain}/count` (contract 0.6.1);
+ * no `prefix`, no key transfer. First load is recorded, follow-up ticks are silent;
+ * the KV browser uses its own recorded scan (kvEntries.ts).
  */
 export function kvKeyCountQueryOptions(apiClient: ApiClient | undefined, domain: string, enabled: boolean) {
   return queryOptions({
@@ -162,7 +162,7 @@ export function relTableCountKey(domain: string, table: string) {
   return [...REL_TABLE_COUNT_PREFIX, domain, table] as const
 }
 
-/** Row-Count je Tabelle (spec shell/010 §4) — nur die Tabellenzeilen der expandierten Domäne halten diese Query. */
+/** Row count per table; only the table rows of the expanded domain hold this query. */
 export function relTableRowCountQueryOptions(apiClient: ApiClient | undefined, domain: string, table: string) {
   return queryOptions({
     queryKey: relTableCountKey(domain, table),

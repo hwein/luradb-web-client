@@ -2,11 +2,11 @@ import createClient, { type Client, type Middleware } from 'openapi-fetch'
 import type { paths } from './schema'
 import { apiErrorFromResponse, networkApiError } from './errors'
 
-// FetchOptions (openapi-fetch) erweitert RequestInit — die Augmentation macht `silentRecord` überall typisiert,
-// von `api.GET(path, { silentRecord: true })` bis zu den init-Parametern von fetchRaw (general/012).
+// openapi-fetch's FetchOptions extends RequestInit, so this augmentation types `silentRecord` everywhere,
+// from `api.GET(path, { silentRecord: true })` to the init parameters of fetchRaw.
 declare global {
   interface RequestInit {
-    /** Opt-out je Call: unterdrückt den onCall-Recorder-Eintrag (general/012). Default: aufgezeichnet. */
+    /** Per-call opt-out: suppresses the onCall recorder entry. Default: recorded. */
     silentRecord?: boolean
   }
 }
@@ -14,7 +14,7 @@ declare global {
 export interface CallInfo {
   method: string
   path: string
-  /** Numerischer HTTP-Status, oder 'stream' für einen offenen SSE-Stream (general/006). */
+  /** Numeric HTTP status, or 'stream' for an open SSE stream. */
   status: number | 'stream'
   ms: number
   ok: boolean
@@ -23,38 +23,37 @@ export interface CallInfo {
 export type OnCallListener = (info: CallInfo) => void
 
 export interface CreateApiOptions {
-  /** Vollständiger Header-Wert (z. B. "Bearer <key>") oder undefined für unauthentifizierte Calls. */
+  /** Full header value (e.g. "Bearer <key>"), or undefined for unauthenticated calls. */
   getAuthHeader: () => string | undefined
   baseUrl: string
   fetchImpl: typeof fetch
 }
 
 export interface ApiClient {
-  /** Typisierter openapi-fetch-Client, z. B. `api.GET('/store-api/domains')`. */
+  /** Typed openapi-fetch client, e.g. `api.GET('/store-api/domains')`. */
   api: Client<paths>
   onCall: (listener: OnCallListener) => () => void
-  /** Für Nicht-JSON-Endpunkte (z. B. KV-Values); wirft ApiError bei Nicht-2xx. Pfad inkl. BASE_PATH. `init.silentRecord` unterdrückt den Recorder-Eintrag. */
+  /** For non-JSON endpoints (e.g. KV values); throws ApiError on non-2xx. Path includes BASE_PATH. `init.silentRecord` suppresses the recorder entry. */
   fetchRaw: (path: string, init?: RequestInit) => Promise<Response>
-  /** GET mit Accept: application/x-ndjson, z. B. `/store-api/json/{domain}/export`. */
+  /** GET with Accept: application/x-ndjson, e.g. `/store-api/json/{domain}/export`. */
   fetchNdjson: (path: string, options?: { silentRecord?: boolean }) => Promise<Response>
   /**
-   * POST mit `Content-Type: text/plain` — Gegenrichtung zu `fetchNdjson` (Bulk-Import). Liefert die Response
-   * immer zurück, auch bei Nicht-2xx (wie `openStream`): der Bulk-Endpunkt trägt Teilerfolge im 200-Body,
-   * 404/503 kommen als Klartext-Body (live geprüft) — der Aufrufer entscheidet über die Interpretation.
+   * POST with `Content-Type: text/plain`, the counterpart of `fetchNdjson` (bulk import). Always returns the
+   * response, even on non-2xx (like `openStream`): the bulk endpoint reports partial success in the 200 body,
+   * 404/503 arrive as plain-text bodies (checked live); the caller decides how to interpret them.
    */
   postNdjson: (path: string, body: string, options?: { silentRecord?: boolean }) => Promise<Response>
   /**
-   * Öffnet einen SSE-Stream (`Accept: text/event-stream`) und liefert die Response mit intaktem
-   * Body-Stream zurück — auch bei Nicht-2xx (der Aufrufer entscheidet über 401/410). Der Recorder
-   * sieht den Stream-Start als Call mit Status 'stream' (general/006). Abbruch läuft über das
-   * Canceln des Body-Readers, nicht über ein fetch-Signal. `lastEventId` hängt `last_event_id=` an
-   * (SSE-Resume, general/015) — im Recorder steht weiterhin nur der Pfad ohne Query.
+   * Opens an SSE stream (`Accept: text/event-stream`) and returns the response with its body stream
+   * intact, even on non-2xx (the caller decides on 401/410). The recorder sees the stream start as a
+   * call with status 'stream'. Cancelling goes through the body reader, not a fetch signal.
+   * `lastEventId` appends `last_event_id=` (SSE resume); the recorder still shows only the path without query.
    */
   openStream: (path: string, options?: { silentRecord?: boolean; lastEventId?: string }) => Promise<Response>
   /**
-   * Wie `fetchRaw`, aber ohne `notify()` — der einzige Weg an `apiClient.onCall(record)` vorbei
-   * (jeder andere Pfad, typisiert oder roh, meldet sich beim Recorder). Für Fanout-Läufe, die
-   * RECENT REQUESTS sonst fluten würden (data/008 §5); wirft nie auf Nicht-2xx, nur bei Netzfehlern.
+   * Like `fetchRaw`, but without `notify()`: the only way around `apiClient.onCall(record)`
+   * (every other path, typed or raw, reports to the recorder). For fan-out runs that would
+   * otherwise flood RECENT REQUESTS; never throws on non-2xx, only on network errors.
    */
   fetchSilent: (path: string, init?: RequestInit) => Promise<Response>
   /** Like `fetchSilent`, but without the Authorization header, for probes that only work anonymously. Never recorded. */
@@ -65,7 +64,7 @@ function pathnameOf(url: string): string {
   return new URL(url).pathname
 }
 
-/** SSE-Resume als Query-Parameter (nicht als `Last-Event-ID`-Header: der ist nicht CORS-safelisted, general/015). */
+/** SSE resume as a query parameter (not the `Last-Event-ID` header: it is not CORS-safelisted). */
 function withLastEventId(path: string, lastEventId: string | undefined): string {
   if (lastEventId === undefined || lastEventId === '') return path
   return `${path}${path.includes('?') ? '&' : '?'}last_event_id=${encodeURIComponent(lastEventId)}`
@@ -92,8 +91,8 @@ export function createApi({ getAuthHeader, baseUrl, fetchImpl }: CreateApiOption
     return start === undefined ? 0 : performance.now() - start
   }
 
-  // openapi-fetch kopiert unbekannte init-Felder auf das Request-Objekt (dasselbe Objekt in allen drei Hooks) —
-  // `silentRecord` landet so als Custom-Property auf `request`, kein eigenes RequestInit-Feld der Fetch-API.
+  // openapi-fetch copies unknown init fields onto the Request object (the same object in all three hooks),
+  // so `silentRecord` ends up as a custom property on `request`, not a RequestInit field of the Fetch API.
   function isSilentRequest(request: Request): boolean {
     return (request as Request & { silentRecord?: boolean }).silentRecord === true
   }

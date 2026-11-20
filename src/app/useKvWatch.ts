@@ -11,16 +11,16 @@ export interface KvWatchEvent {
   ts: number
   type: 'set' | 'delete'
   key: string
-  /** Rohes `data:`-Feld des Frames — beim KV-Watch der Key selbst (kein Value, siehe general/006). */
+  /** Raw `data:` field of the frame — for the KV watch the key itself (no value). */
   dataRaw: string
 }
 
 export interface KvWatchResult {
   events: KvWatchEvent[]
   connectionState: SseConnectionState
-  /** Zählt die `reset`-Frames des Streams: der Server kann keine Lückenfreiheit garantieren, abhängiger Zustand ist neu zu lesen. */
+  /** Counts the stream's `reset` frames: the server cannot guarantee gap-free delivery, so dependent state must be re-read. */
   resetCount: number
-  /** Leert nur die Event-Liste, nicht die Verbindung. */
+  /** Clears only the event list, not the connection. */
   clear: () => void
 }
 
@@ -30,15 +30,15 @@ function watchPath(domain: string, prefix?: string): string {
 }
 
 /**
- * Server-Format: `event: set|delete`, `data:` = Key. Andere Frames (z. B. Pings) liefern keinen Event.
- * TTL-Expiries kommen als `delete` an und werden nicht gesondert markiert (der Frame trägt keinen Grund).
+ * Server format: `event: set|delete`, `data:` = key. Other frames (e.g. pings) yield no event.
+ * TTL expiries arrive as `delete` and are not marked separately (the frame carries no reason).
  */
 function toKvEvent(frame: SseEvent): KvWatchEvent | undefined {
   if (frame.event !== 'set' && frame.event !== 'delete') return undefined
   return { ts: Date.now(), type: frame.event, key: frame.data, dataRaw: frame.data }
 }
 
-/** Öffnet den KV-Watch-Stream für Mount/Domäne/Prefix; Wechsel bricht den alten Stream ab und startet neu. */
+/** Opens the KV watch stream for mount/domain/prefix; a change aborts the old stream and starts a new one. */
 export function useKvWatch(domain: string, prefix?: string): KvWatchResult {
   const session = useSession()
   const queryClient = useQueryClient()

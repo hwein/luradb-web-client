@@ -5,8 +5,6 @@
   min-height: 0;
 }
 
-/* --- Tab-Strip ---------------------------------------------------------- */
-
 .docs__tabs {
   display: flex;
   align-items: stretch;
@@ -60,8 +58,6 @@
   padding-right: 14px;
   color: var(--mut);
 }
-
-/* --- Body: Sidebar + Artikel --------------------------------------------- */
 
 .docs__body {
   flex: 1;
@@ -172,8 +168,6 @@
   font-size: var(--fs-data);
 }
 
-/* --- Artikel -------------------------------------------------------------- */
-
 .docs__article {
   overflow: auto;
   padding: 26px 34px;
@@ -252,8 +246,8 @@
   color: var(--tx);
 }
 
-/* Hängender Einzug statt flex: marked rendert li-Inhalt als lose Inline-Knoten,
-   die als Flex-Items zu Spalten zerfallen würden. */
+/* Hanging indent instead of flex: marked renders li content as loose inline nodes
+   that would split into columns as flex items. */
 .docs-article ol > li {
   counter-increment: docs-rule;
   position: relative;

@@ -54,7 +54,7 @@
   white-space: nowrap;
 }
 
-/* Kein eigenes Warn-Token in tokens.css — nutzt den amber-Farbton des JSON-Engine-Hues (Design-Amber). */
+/* No dedicated warning token in tokens.css; uses the amber of the JSON engine hue. */
 .statusbar__warning {
   color: var(--eng-json-label);
 }

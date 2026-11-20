@@ -15,7 +15,7 @@ function notify(): void {
   for (const listener of listeners) listener()
 }
 
-/** onCall-Listener-Signatur — mit `apiClient.onCall(record)` an der aktiven Verbindung registrieren. */
+/** onCall listener signature; register it with `apiClient.onCall(record)` on the active connection. */
 export function record(info: CallInfo): void {
   const entry: RecordedCall = { ...info, id: crypto.randomUUID(), ts: Date.now() }
   const next = [...entries, entry]
@@ -23,7 +23,7 @@ export function record(info: CallInfo): void {
   notify()
 }
 
-/** Verbindungswechsel: RECENT REQUESTS darf keine Calls des vorigen Servers weiterzeigen. */
+/** On connection change, RECENT REQUESTS must not show calls of the previous server. */
 export function clearRecordedCalls(): void {
   entries = []
   notify()
@@ -38,7 +38,7 @@ export function getRecordedCalls(): RecordedCall[] {
   return entries
 }
 
-/** Letzte 200 Client-Calls, älteste zuerst; flüchtig (kein Storage, keine Server-Historie). */
+/** Last 200 client calls, oldest first; volatile (no storage, no server history). */
 export function useRecordedCalls(): RecordedCall[] {
   return useSyncExternalStore(subscribeRecorder, getRecordedCalls)
 }

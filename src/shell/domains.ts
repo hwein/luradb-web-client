@@ -19,7 +19,7 @@ export function conditionalWritesTitle(domain: DomainSummary): string | undefine
 
 export const DOMAINS_KEY = ['domains'] as const
 
-/** Geteilte Query-Options: Explorer und Screens nutzen denselben Key + dieselbe queryFn — ein Cache-Eintrag. */
+/** Shared query options: explorer and screens use the same key and queryFn, so one cache entry. */
 export function domainsQueryOptions(apiClient: ApiClient | undefined) {
   return queryOptions({
     queryKey: DOMAINS_KEY,
@@ -53,7 +53,7 @@ export function useDomainSummaries(apiClient: ApiClient | undefined): DomainSumm
 }
 
 /**
- * For the explorer empty state (spec shell/003 §3): true while the list is loading.
+ * For the explorer empty state: true while the list is loading.
  * Without a connection the query is disabled and stays `isPending`, which keeps the hint suppressed.
  */
 export function useDomainsPending(apiClient: ApiClient | undefined): boolean {

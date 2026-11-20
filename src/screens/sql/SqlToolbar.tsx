@@ -7,7 +7,7 @@ interface SqlToolbarProps {
   apiClient: ApiClient | undefined
   domainName: string | null
   domainListed: boolean
-  /** Spiegelt exakt den Klick-Guard des Screens (canRun) — enabled heißt: der Klick wirkt. */
+  /** Mirrors the screen's click guard (canRun) exactly: enabled means the click works. */
   runDisabled: boolean
   expand: string[]
   onExpandChange: (expand: string[]) => void
@@ -41,7 +41,7 @@ function ExpandFreetext({ onAdd }: { onAdd: (column: string) => void }) {
   )
 }
 
-/** Toolbar (Prototyp Z. 68–74): Run, Expand-Chips (KVREF/JSONREF/REFERENCES-Spalten der Domäne), Shortcut-Hinweis, docs-Toggle. */
+/** Toolbar: run, expand chips (KVREF/JSONREF/REFERENCES columns of the domain), shortcut hint, docs toggle. */
 export function SqlToolbar({
   apiClient,
   domainName,

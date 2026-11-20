@@ -24,7 +24,7 @@ function toBulkImportResult(body: unknown): BulkImportResult {
   return { imported: body.imported, failed: body.failed, errors: body.errors.filter(isBulkImportError) }
 }
 
-/** Wie openapi-fetch selbst (live geprüft): 404/503 kommen text/plain — Versuch JSON, sonst Rohtext, dann `messageFromError` (sqlRun.ts). */
+/** Like openapi-fetch itself (verified live): 404/503 come as text/plain; try JSON, else raw text, then `messageFromError` (sqlRun.ts). */
 async function errorBodyOf(response: Response): Promise<unknown> {
   const text = await response.text()
   try {
@@ -34,14 +34,14 @@ async function errorBodyOf(response: Response): Promise<unknown> {
   }
 }
 
-/** Bulk-Import (spec data/007 §3): Raw-POST `text/plain`-Body über den Recorder-gehookten Transport — Gegenrichtung zum Export (data/005). */
+/** Bulk import: raw POST with a `text/plain` body over the recorder-hooked transport; the counterpart of the export. */
 export async function runBulkImport(apiClient: ApiClient, domain: string, ndjson: string): Promise<BulkImportResult> {
   const response = await apiClient.postNdjson(`${BASE_PATH}/json/${encodeURIComponent(domain)}/bulk`, ndjson)
   if (!response.ok) throw new ApiError(response.status, messageFromError(await errorBodyOf(response), response.status))
   return toBulkImportResult(await response.json())
 }
 
-/** Zeilenzähler der Textarea (spec §2) — einzige Client-Vorprüfung, zählt nicht-leere Zeilen ohne jede JSON-Validierung. */
+/** Line counter of the textarea: the only client-side precheck, counts non-empty lines without any JSON validation. */
 export function countNonEmptyLines(text: string): number {
   return text.split('\n').filter((line) => line.trim() !== '').length
 }

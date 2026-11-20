@@ -1,6 +1,4 @@
-/* --- Command-Palette (spec shell/008) --- */
-
-/* Author-display würde sonst das UA-`display:none` geschlossener Dialoge überstimmen. */
+/* Author `display` would otherwise override the UA `display:none` of closed dialogs. */
 .cmdk:not([open]) {
   display: none;
 }
@@ -10,7 +8,7 @@
   flex-direction: column;
   width: min(560px, 92vw);
   max-height: min(420px, 70vh);
-  /* Zentriert per UA-`margin:auto`, aber oberes Drittel statt Bildschirmmitte (spec §2). */
+  /* Centered via UA `margin:auto`, but in the upper third rather than the screen middle. */
   margin: 12vh auto auto;
   padding: 0;
   background: var(--panel);
