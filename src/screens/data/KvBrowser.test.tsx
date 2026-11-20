@@ -803,6 +803,74 @@ describe('KvBrowser', () => {
     10000,
   )
 
+  it(
+    'ends the watch feed with a permission line on 403 after being connected',
+    async () => {
+      let call = 0
+      let closeStream: (() => void) | undefined
+      server.use(
+        http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha']))),
+        http.get(keyUrl('alpha'), () => rawValue('a')),
+        http.get(WATCH_URL, () => {
+          call += 1
+          if (call === 1) {
+            const body = new ReadableStream<Uint8Array>({
+              start(controller) {
+                closeStream = () => controller.close()
+              },
+            })
+            return new HttpResponse(body, { headers: { 'Content-Type': 'text/event-stream' } })
+          }
+          return new HttpResponse('Forbidden', { status: 403 })
+        }),
+      )
+      await connectAndRender()
+      await screen.findByText('alpha')
+
+      fireEvent.click(screen.getByRole('button', { name: '● live' }))
+      await waitFor(() => expect(screen.getByText('live')).toBeInTheDocument())
+
+      closeStream?.()
+
+      await waitFor(
+        () => expect(screen.getByText("this key may not read this domain's keys — watch ended")).toBeInTheDocument(),
+        { timeout: 3000 },
+      )
+      expect(screen.queryByText('domain is being deleted — watch ended')).not.toBeInTheDocument()
+    },
+    10000,
+  )
+
+  it('ends the watch feed with a permission line on 403 at the first open', async () => {
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha']))),
+      http.get(keyUrl('alpha'), () => rawValue('a')),
+      http.get(WATCH_URL, () => new HttpResponse('Forbidden', { status: 403 })),
+    )
+    await connectAndRender()
+    await screen.findByText('alpha')
+
+    fireEvent.click(screen.getByRole('button', { name: '● live' }))
+
+    expect(await screen.findByText("this key may not read this domain's keys — watch ended")).toBeInTheDocument()
+    expect(screen.queryByText('waiting for events…')).not.toBeInTheDocument()
+  })
+
+  it('ends the watch feed with the deletion line on 410 at the first open', async () => {
+    server.use(
+      http.get(KEYS_URL, () => HttpResponse.json(kvKeyScan(['alpha']))),
+      http.get(keyUrl('alpha'), () => rawValue('a')),
+      http.get(WATCH_URL, () => new HttpResponse(null, { status: 410 })),
+    )
+    await connectAndRender()
+    await screen.findByText('alpha')
+
+    fireEvent.click(screen.getByRole('button', { name: '● live' }))
+
+    expect(await screen.findByText('domain is being deleted — watch ended')).toBeInTheDocument()
+    expect(screen.queryByText('waiting for events…')).not.toBeInTheDocument()
+  })
+
   it('sends ?ttl= on create only when a value is entered; empty means no expiry (no param)', async () => {
     let noTtlUrl: string | undefined
     let withTtlUrl: string | undefined

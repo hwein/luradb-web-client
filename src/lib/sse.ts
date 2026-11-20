@@ -8,6 +8,8 @@ export type SseConnectionState = 'connected' | 'reconnecting' | 'closed'
 
 export type SseResetReason = 'restart' | 'window_exceeded' | 'lagged' | 'unknown_id' | 'unknown'
 
+export type SseCloseReason = 'gone' | 'forbidden'
+
 export interface SseEvent {
   /** Event name from `event:`; defaults to 'message' when the frame has no event line. */
   event: string
@@ -33,6 +35,8 @@ export interface SseStreamOptions {
   /** `event: reset`: discard what was derived from the stream and re-read. A state command, not an event. */
   onReset?: (reason: SseResetReason) => void
   onStateChange?: (state: SseConnectionState) => void
+  /** Why the server ended the stream for good, called before `onStateChange('closed')`: 410 `gone`, 403 `forbidden`. */
+  onClosed?: (reason: SseCloseReason) => void
   /** 401: server key invalid; the caller invalidates the session (like the QueryClient handler). */
   onUnauthorized?: () => void
 }
@@ -163,14 +167,14 @@ async function readFrames(
 
 /**
  * Keeps an SSE stream open: parses frames, resumes with `last_event_id` after a drop and reconnects
- * with backoff 1s→2s→5s (reset after a stable minute), ends for good on 410 (domain deleted),
- * 403 (key without stream permission) and 401 (session invalid).
+ * with backoff 1s→2s→5s (reset after a stable minute), ends for good on 410 (domain deleted, reported
+ * as `gone`), 403 (key may not read the stream, reported as `forbidden`) and 401 (session invalid, no reason).
  * A reconnect is triggered either by the stream ending or by 45 s without a chunk; a half-open connection
  * (server restart behind a proxy) would otherwise stay on `connected` forever.
  * The passed `signal` ends everything, including running backoff timers.
  */
 export async function sseStream(path: string, options: SseStreamOptions): Promise<void> {
-  const { open, signal, onEvent, onReset, onStateChange, onUnauthorized } = options
+  const { open, signal, onEvent, onReset, onStateChange, onClosed, onUnauthorized } = options
   // Ladder position across reconnects; back to 0 only after a stable minute.
   let attempt = 0
   // Resume point for this call only; a domain/prefix change deliberately restarts without an ID.
@@ -209,8 +213,9 @@ export async function sseStream(path: string, options: SseStreamOptions): Promis
       return
     }
 
-    // 410: domain deleted. 403: this key may not read the stream. A reconnect changes neither.
+    // 410: domain deleted (`gone`). 403: this key may not read the stream (`forbidden`). A reconnect changes neither.
     if (response.status === 410 || response.status === 403) {
+      onClosed?.(response.status === 410 ? 'gone' : 'forbidden')
       onStateChange?.('closed')
       return
     }

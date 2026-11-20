@@ -54,6 +54,16 @@ function WatchProbe({ prefix }: { prefix?: string }) {
   )
 }
 
+function DomainProbe({ domain }: { domain: string }) {
+  const { connectionState, endReason } = useKvWatch(domain)
+  return (
+    <div>
+      <span data-testid="state">{connectionState}</span>
+      <span data-testid="reason">{endReason ?? 'none'}</span>
+    </div>
+  )
+}
+
 function renderProbe(prefix?: string) {
   const queryClient = createAppQueryClient()
   return render(
@@ -146,5 +156,33 @@ describe('useKvWatch', () => {
 
     await waitFor(() => expect(screen.getByTestId('session')).toHaveTextContent('unauthenticated'))
     expect(screen.getByTestId('state')).toHaveTextContent('closed')
+  })
+
+  it('clears the end reason when the domain changes', async () => {
+    await connectSession()
+    server.use(
+      http.get(`${ORIGIN}/store-api/kv/a/watch`, () => new HttpResponse('Forbidden', { status: 403 })),
+      http.get(`${ORIGIN}/store-api/kv/b/watch`, () => {
+        const body = new ReadableStream<Uint8Array>({ start() {} })
+        return new HttpResponse(body, { headers: { 'Content-Type': 'text/event-stream' } })
+      }),
+    )
+    const queryClient = createAppQueryClient()
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <DomainProbe domain="a" />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByTestId('reason')).toHaveTextContent('forbidden'))
+
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <DomainProbe domain="b" />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('connected'))
+    expect(screen.getByTestId('reason')).toHaveTextContent('none')
   })
 })

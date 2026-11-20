@@ -426,6 +426,73 @@ describe('sseStream terminal statuses', () => {
     expect(open).toHaveBeenCalledTimes(1)
     expect(states).toEqual(['closed'])
   })
+
+  it('reports gone on 410', async () => {
+    const calls: string[] = []
+    const open = vi.fn(async () => new Response(null, { status: 410 }))
+
+    await sseStream('/watch', {
+      open,
+      signal: new AbortController().signal,
+      onEvent: () => {},
+      onStateChange: (s) => calls.push(`state:${s}`),
+      onClosed: (reason) => calls.push(`closed:${reason}`),
+    })
+
+    expect(calls).toEqual(['closed:gone', 'state:closed'])
+  })
+
+  it('reports forbidden on 403 at the first open', async () => {
+    const calls: string[] = []
+    const open = vi.fn(async () => new Response('Forbidden', { status: 403 }))
+
+    await sseStream('/watch', {
+      open,
+      signal: new AbortController().signal,
+      onEvent: () => {},
+      onStateChange: (s) => calls.push(`state:${s}`),
+      onClosed: (reason) => calls.push(`closed:${reason}`),
+    })
+
+    expect(calls).toEqual(['closed:forbidden', 'state:closed'])
+  })
+
+  it('reports forbidden on 403 at a reconnect', async () => {
+    vi.useFakeTimers()
+    const calls: string[] = []
+    const open = vi
+      .fn<(path: string) => Promise<Response>>()
+      .mockResolvedValueOnce(closedStream('event: set\ndata: k1\n\n'))
+      .mockResolvedValue(new Response('Forbidden', { status: 403 }))
+
+    const promise = sseStream('/watch', {
+      open,
+      signal: new AbortController().signal,
+      onEvent: () => {},
+      onStateChange: (s) => calls.push(`state:${s}`),
+      onClosed: (reason) => calls.push(`closed:${reason}`),
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    await promise
+
+    expect(open).toHaveBeenCalledTimes(2)
+    expect(calls).toEqual(['state:connected', 'state:reconnecting', 'closed:forbidden', 'state:closed'])
+  })
+
+  it('does not report a close reason on 401', async () => {
+    const onClosed = vi.fn()
+    const open = vi.fn(async () => new Response(null, { status: 401 }))
+
+    await sseStream('/watch', {
+      open,
+      signal: new AbortController().signal,
+      onEvent: () => {},
+      onUnauthorized: () => {},
+      onClosed,
+    })
+
+    expect(onClosed).not.toHaveBeenCalled()
+  })
 })
 
 describe('sseStream abort', () => {

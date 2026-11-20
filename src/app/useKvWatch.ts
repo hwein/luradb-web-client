@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { BASE_PATH } from '../api'
-import { sseStream, type SseConnectionState, type SseEvent } from '../lib/sse'
+import { sseStream, type SseCloseReason, type SseConnectionState, type SseEvent } from '../lib/sse'
 import { endSession } from './queryClient'
 import { useSession } from './session'
 
@@ -20,6 +20,8 @@ export interface KvWatchResult {
   connectionState: SseConnectionState
   /** Counts the stream's `reset` frames: the server cannot guarantee gap-free delivery, so dependent state must be re-read. */
   resetCount: number
+  /** Why the server ended the watch for good; `undefined` while it runs or after a 401. */
+  endReason: SseCloseReason | undefined
   /** Clears only the event list, not the connection. */
   clear: () => void
 }
@@ -47,6 +49,7 @@ export function useKvWatch(domain: string, prefix?: string): KvWatchResult {
   const [events, setEvents] = useState<KvWatchEvent[]>([])
   const [resetCount, setResetCount] = useState(0)
   const [connectionState, setConnectionState] = useState<SseConnectionState>('closed')
+  const [endReason, setEndReason] = useState<SseCloseReason | undefined>(undefined)
 
   const clear = useCallback(() => setEvents([]), [])
 
@@ -55,6 +58,7 @@ export function useKvWatch(domain: string, prefix?: string): KvWatchResult {
     const controller = new AbortController()
     setEvents([])
     setResetCount(0)
+    setEndReason(undefined)
 
     void sseStream(watchPath(domain, prefix), {
       open: (path, { lastEventId }) => apiClient.openStream(path, { lastEventId }),
@@ -65,11 +69,12 @@ export function useKvWatch(domain: string, prefix?: string): KvWatchResult {
       },
       onReset: () => setResetCount((count) => count + 1),
       onStateChange: setConnectionState,
+      onClosed: setEndReason,
       onUnauthorized: () => endSession(queryClient),
     })
 
     return () => controller.abort()
   }, [apiClient, domain, prefix, queryClient])
 
-  return { events, connectionState, resetCount, clear }
+  return { events, connectionState, resetCount, endReason, clear }
 }

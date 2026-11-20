@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useKvWatch } from '../../app/useKvWatch'
 import { invalidateKvKeys } from './kvEntries'
 
@@ -22,16 +22,7 @@ function formatTime(ts: number): string {
  */
 export function KvWatchFeed({ domain, prefix }: KvWatchFeedProps) {
   const queryClient = useQueryClient()
-  const { events, connectionState, resetCount } = useKvWatch(domain, prefix)
-
-  // 410 (domain being deleted) ends the stream for good with `closed`, but `closed` is also the
-  // initial default before the first connection attempt. Only after at least one 'connected'/'reconnecting' does
-  // a fall back to 'closed' count as "ended by the server", else every toggle start would briefly show the hint line.
-  const [everConnected, setEverConnected] = useState(false)
-  useEffect(() => {
-    if (connectionState === 'connected' || connectionState === 'reconnecting') setEverConnected(true)
-  }, [connectionState])
-  const endedByServer = everConnected && connectionState === 'closed'
+  const { events, connectionState, resetCount, endReason } = useKvWatch(domain, prefix)
 
   // A `reset` means "no gap-free guarantee": same invalidation as after an event, without its own display.
   const latestTs = events[0]?.ts
@@ -51,7 +42,7 @@ export function KvWatchFeed({ domain, prefix }: KvWatchFeedProps) {
           {connectionState === 'connected' ? 'live' : connectionState === 'reconnecting' ? 'reconnecting…' : ''}
         </span>
       </div>
-      {events.length === 0 && !endedByServer && <div className="kv-feed__hint">waiting for events…</div>}
+      {events.length === 0 && endReason === undefined && <div className="kv-feed__hint">waiting for events…</div>}
       {events.map((event, index) => (
         <div key={index} className="kv-feed__row">
           <span className="kv-feed__time">{formatTime(event.ts)}</span>
@@ -59,7 +50,10 @@ export function KvWatchFeed({ domain, prefix }: KvWatchFeedProps) {
           <span className="kv-feed__key">{event.key}</span>
         </div>
       ))}
-      {endedByServer && <div className="kv-feed__ended">domain is being deleted — watch ended</div>}
+      {endReason === 'gone' && <div className="kv-feed__ended">domain is being deleted — watch ended</div>}
+      {endReason === 'forbidden' && (
+        <div className="kv-feed__ended">this key may not read this domain's keys — watch ended</div>
+      )}
     </div>
   )
 }

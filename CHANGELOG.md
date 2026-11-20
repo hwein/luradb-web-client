@@ -8,6 +8,7 @@ format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - KV bulk actions set value, set null and delete without prefix work on domains that require conditional writes.
+- KV watch feed shows a watch the server refuses or ends as such, with a line for a key without read permission, instead of a deleted domain or an endless wait.
 
 ## [0.2.0] - 2026-11-17
 
