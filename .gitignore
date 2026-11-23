@@ -13,6 +13,7 @@ playwright-report/
 
 # AI/agent files stay local, never in the public repo
 .claude/
+.rgignore
 
 # Locally maintained working material stays unversioned:
 # concepts and specs, design drafts and the API contract copy.
